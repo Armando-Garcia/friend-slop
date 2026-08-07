@@ -10,6 +10,7 @@ func run() -> int:
 	failures += _test_pick_nearest_target()
 	failures += _test_resolve_state()
 	failures += _test_chase_eyes_visible()
+	failures += _test_lookdev_eyes_visible()
 	failures += _test_patrol_and_velocity_helpers()
 	failures += _test_proximity_and_prefer_interest()
 	return failures
@@ -82,6 +83,16 @@ func _test_chase_eyes_visible() -> int:
 		return 1
 	if not MonsterAIScript.chase_eyes_visible(MonsterAIScript.State.CHASE):
 		push_error("Expected eyes visible while chasing")
+		return 1
+	return 0
+
+
+func _test_lookdev_eyes_visible() -> int:
+	if MonsterAIScript.lookdev_eyes_visible(MonsterAIScript.LookdevPose.PATROL):
+		push_error("Expected lookdev patrol to hide eyes")
+		return 1
+	if not MonsterAIScript.lookdev_eyes_visible(MonsterAIScript.LookdevPose.CHASE):
+		push_error("Expected lookdev chase to show eyes")
 		return 1
 	return 0
 

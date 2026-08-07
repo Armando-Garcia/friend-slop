@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="MonsterSummonEntry" load_steps=3 format=3 uid="uid://monster_entry_wretch"]
+[gd_resource type="Resource" script_class="MonsterSummonEntry" format=3 uid="uid://bj0vyt4uvwla8"]
 
-[ext_resource type="Script" path="res://scripts/ui/book/monster/monster_summon_entry.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://bmonster001" path="res://scenes/monsters/monster.tscn" id="2"]
+[ext_resource type="Script" uid="uid://byba5sgpdlik8" path="res://scripts/ui/book/monster/monster_summon_entry.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://bwretch001" path="res://scenes/monsters/wretch.tscn" id="2"]
 
 [resource]
 script = ExtResource("1")
@@ -10,4 +10,4 @@ display_name = "Wretch"
 description = "A hungry maze-stalker. Chases light and noise."
 monster_scene = ExtResource("2")
 tint = Color(0.72, 0.28, 0.22, 1)
-eye_glow_color = Color(0.2, 0.55, 1, 1)
+eye_glow_color = Color(0.25, 1, 0.35, 1)

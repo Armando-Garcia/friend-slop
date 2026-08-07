@@ -4,6 +4,8 @@ extends RefCounted
 ## Pure helpers for Monster FSM / targeting / interest preferencing.
 
 enum State { IDLE, PATROL, CHASE }
+## Lookdev pose → eyes. Chase shows eyes; Patrol hides them.
+enum LookdevPose { PATROL, CHASE }
 
 
 static func apply_damage(current_health: float, amount: float) -> float:
@@ -79,6 +81,10 @@ static func resolve_state(current: State, has_chase_target: bool) -> State:
 ## Eyes are a chase-only tell — hidden in IDLE/PATROL.
 static func chase_eyes_visible(state: State) -> bool:
 	return state == State.CHASE
+
+
+static func lookdev_eyes_visible(pose: LookdevPose) -> bool:
+	return pose == LookdevPose.CHASE
 
 
 static func random_patrol_point(

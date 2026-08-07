@@ -9,6 +9,7 @@ func run() -> int:
 	failures += _test_has_pages()
 	failures += _test_entry_fields()
 	failures += _test_eye_glow_colors_by_id()
+	failures += _test_type_scene_paths_by_id()
 	return failures
 
 
@@ -38,8 +39,8 @@ func _test_eye_glow_colors_by_id() -> int:
 	for entry in CatalogScript.entries():
 		by_id[str(entry.get("id", ""))] = entry.get("eye_glow_color")
 	var expected := {
-		"wretch": Color(0.2, 0.55, 1.0, 1.0),
-		"ash_wretch": Color(0.25, 1.0, 0.35, 1.0),
+		"wretch": Color(0.25, 1.0, 0.35, 1.0),
+		"ash_wretch": Color(0.55, 0.55, 0.58, 1.0),
 		"ember_wretch": Color(1.0, 0.12, 0.08, 1.0),
 	}
 	for id in expected:
@@ -50,5 +51,22 @@ func _test_eye_glow_colors_by_id() -> int:
 		var want: Color = expected[id]
 		if not got.is_equal_approx(want):
 			push_error("Unexpected eye_glow_color for %s: %s" % [id, got])
+			return 1
+	return 0
+
+
+func _test_type_scene_paths_by_id() -> int:
+	var expected := {
+		"wretch": "res://scenes/monsters/wretch.tscn",
+		"ash_wretch": "res://scenes/monsters/ash_wretch.tscn",
+		"ember_wretch": "res://scenes/monsters/ember_wretch.tscn",
+	}
+	for entry in CatalogScript.entries():
+		var id := str(entry.get("id", ""))
+		if not expected.has(id):
+			continue
+		var path := str(entry.get("scene_path", ""))
+		if path != expected[id]:
+			push_error("Expected %s scene_path %s, got %s" % [id, expected[id], path])
 			return 1
 	return 0

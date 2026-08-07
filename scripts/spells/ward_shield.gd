@@ -2,7 +2,7 @@
 class_name WardShield
 extends Node3D
 
-## Forward-facing spherical-cap blue shield. Blocks one fireball, then shatters.
+## Forward-facing spherical-cap blue shield. Blocks one incoming spell, then shatters.
 ## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
 ## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
 
@@ -322,7 +322,7 @@ func _process(delta: float) -> void:
 
 
 func notify_spell_blocked() -> void:
-	## One fireball (or similar) spends the ward.
+	## One incoming spell spends the ward.
 	if _spent:
 		return
 	_spent = true

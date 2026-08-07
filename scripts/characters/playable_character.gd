@@ -20,6 +20,7 @@ const TargetedObjectControlScript := preload("res://scripts/spells/targeted_obje
 const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -675,6 +676,50 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	_knockback_vel = impulse
 	_knockback_timer = 0.35
 	velocity += impulse
+
+
+func apply_ember_halo_hit(hit_dir: Vector3) -> void:
+	## Jump launch + light horizontal knockback + slow (60% speed for 0.5s).
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
+	var flat := Vector3(hit_dir.x, 0.0, hit_dir.z)
+	if flat.length_squared() > 0.0001:
+		flat = flat.normalized()
+		var impulse := flat * EmberHaloFlightScript.HIT_KNOCKBACK_SPEED
+		_knockback_vel = impulse
+		_knockback_timer = 0.25
+		velocity.x += impulse.x
+		velocity.z += impulse.z
+	apply_speed_boost(
+		EmberHaloFlightScript.SLOW_DURATION_SEC,
+		EmberHaloFlightScript.SLOW_MULTIPLIER
+	)
+
+
+func apply_wretch_command_hit(hit_dir: Vector3) -> void:
+	## Strong horizontal knockback + heavy slow (20% speed for 1s).
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 16.0 + Vector3.UP * 4.5
+	_knockback_vel = impulse
+	_knockback_timer = 0.55
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(1.0, 0.2)
 
 
 func _get_broom_flight() -> Node:
