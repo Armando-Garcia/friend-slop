@@ -47,6 +47,8 @@ var _material: StandardMaterial3D
 var _spent := false
 var _lifetime := 0.0
 var _lifetime_active := false
+## Instance duration; defaults to DURATION_SEC (player ward). Monster casts may extend.
+var _duration_sec: float = DURATION_SEC
 var _wand_origin := Vector3.ZERO
 var _body_collision_layer := 1
 var _beam: MeshInstance3D
@@ -66,6 +68,9 @@ static func spawn(parent: Node, origin: Vector3, direction: Vector3) -> Node:
 		ward.call("setup_cast", origin, direction)
 	return ward
 
+
+func set_duration_sec(seconds: float) -> void:
+	_duration_sec = maxf(seconds, 0.05)
 
 func _ready() -> void:
 	_cache_nodes()
@@ -313,11 +318,12 @@ func _process(delta: float) -> void:
 	if not _lifetime_active or _spent:
 		return
 	_lifetime += delta
+	var duration := maxf(_duration_sec, 0.05)
 	if _material != null:
-		var fade := clampf(1.0 - (_lifetime / DURATION_SEC), 0.0, 1.0)
+		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
 		_material.albedo_color.a = SHIELD_BLUE.a * fade
 		_material.emission = SHIELD_EDGE * (0.35 + 0.4 * fade)
-	if _lifetime >= DURATION_SEC and not _spent:
+	if _lifetime >= duration and not _spent:
 		_dissolve()
 
 

@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://bashwretch01"]
+[gd_scene load_steps=6 format=3 uid="uid://bashwretch01"]
 
 [ext_resource type="PackedScene" uid="uid://bmonster001" path="res://scenes/monsters/monster.tscn" id="1_monster"]
-[ext_resource type="Script" path="res://scripts/monsters/monster_ability_placeholder.gd" id="2_ability"]
+[ext_resource type="Script" path="res://scripts/monsters/abilities/ash_ice_ability.gd" id="2_ice"]
+[ext_resource type="Script" path="res://scripts/monsters/abilities/ash_ward_ability.gd" id="3_ward"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_hand"]
 radius = 0.06
@@ -13,7 +14,7 @@ metallic = 0.05
 roughness = 0.62
 
 [node name="AshWretch" instance=ExtResource("1_monster")]
-editor_description = "Pre-baked Ash Wretch. Grey chase eyes, close-in chase, placeholder abilities."
+editor_description = "Ash Wretch. Grey chase eyes. Right hand Ice Bolt (2-shot burst), left hand 3s Ward."
 body_tint = Color(0.42, 0.4, 0.48, 1)
 eye_glow_color = Color(0.55, 0.55, 0.58, 1)
 lookdev_pose = 0
@@ -26,7 +27,7 @@ touch_damage = 7.0
 chase_style = 0
 
 [node name="Hands" type="Node3D" parent="Body"]
-editor_description = "Cast hands. Right = ability 1, Left = ability 2."
+editor_description = "Cast hands. Right = Ice Bolt, Left = Ward."
 
 [node name="RightHand" type="MeshInstance3D" parent="Body/Hands"]
 unique_name_in_owner = true
@@ -43,22 +44,32 @@ surface_material_override/0 = SubResource("StandardMaterial3D_hand")
 cast_shadow = 1
 
 [node name="Abilities" type="Node3D" parent="."]
-editor_description = "Placeholder abilities — Preview Cast from each child inspector."
+editor_description = "Ability 1 RightHand Ice Bolt. Ability 2 LeftHand Ash Ward."
 
-[node name="AshCloud" type="Node3D" parent="Abilities"]
-script = ExtResource("2_ability")
-ability_id = "ash_cloud"
-display_name = "Ash Cloud"
-description = "Grey obscuring puff around the wretch."
+[node name="IceBolt" type="Node3D" parent="Abilities"]
+script = ExtResource("2_ice")
+ability_id = "ash_ice"
+display_name = "Ice Bolt"
+description = "Two curved ice bolts 0.5s apart, then cooldown. Path rises and veers aside toward the player."
 cooldown_sec = 6.0
-telegraph_color = Color(0.55, 0.58, 0.62, 1)
-preview_radius = 1.5
+windup_sec = 0.5
+telegraph_color = Color(0.45, 0.8, 1, 1)
+hand_side = 0
+min_cast_range = 3.0
+max_cast_range = 14.0
+shots_per_burst = 2
+burst_gap_sec = 0.5
 
-[node name="Stalk" type="Node3D" parent="Abilities"]
-script = ExtResource("2_ability")
-ability_id = "stalk"
-display_name = "Stalk"
-description = "Dim patient stance pulse before closing in."
-cooldown_sec = 8.0
-telegraph_color = Color(0.3, 0.85, 0.45, 1)
-preview_radius = 1.1
+[node name="AshWard" type="Node3D" parent="Abilities"]
+script = ExtResource("3_ward")
+ability_id = "ash_ward"
+display_name = "Ash Ward"
+description = "Left-hand ward shield lasting 3 seconds. Blocks one incoming spell."
+cooldown_sec = 7.0
+windup_sec = 0.45
+telegraph_color = Color(0.4, 0.7, 1, 1)
+hand_side = 1
+requires_chase_target = true
+min_cast_range = 0.0
+max_cast_range = 20.0
+ward_duration_sec = 3.0

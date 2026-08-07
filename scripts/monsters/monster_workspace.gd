@@ -1,8 +1,8 @@
 @tool
 extends Node3D
 
-## Monster look-dev: pick a type from the dropdown, flip patrol/chase, preview abilities,
-## cast fireball. Works in the editor via lookdev flight, and in Play (F6) — Space also casts.
+## Monster look-dev: all three type scenes side-by-side. Dropdown picks the active
+## target for pose / abilities / fireball. Works in the editor and Play (F6).
 
 const MONSTER_PICK_WRETCH := 0
 const MONSTER_PICK_ASH_WRETCH := 1
@@ -15,18 +15,21 @@ const FireballProjectileScript := preload("res://scripts/spells/fireball_project
 const FireballSpell := preload("res://resources/spells/fireball.tres")
 const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 
+## Horizontal spacing between the three type previews.
+const GALLERY_SPACING := 3.5
+
 @export_group("Monster")
-## Dropdown of authored type scenes (same set as the summon book).
+## Which gallery monster tools (pose / abilities / fireball) target.
 @export_enum("Wretch", "Ash Wretch", "Ember Wretch")
 var monster_type: int = MONSTER_PICK_WRETCH:
 	set(value):
 		monster_type = value
 		if is_inside_tree():
-			_respawn_monster_from_scene()
+			_focus_selected_monster()
 
-@export_tool_button("Reload Selected Monster", "Callable")
+@export_tool_button("Reload All Monsters", "Callable")
 var reload_monster_action := reload_selected_monster
-@export_tool_button("Ensure One Monster", "Callable")
+@export_tool_button("Ensure Gallery", "Callable")
 var ensure_monster_action := ensure_one_monster
 @export_tool_button("Clear Monster + Corpses", "Callable")
 var clear_monsters_action := clear_monsters_and_corpses
@@ -41,7 +44,7 @@ var set_chase_pose_action := set_chase_pose
 @export var show_combat_ranges: bool = true
 
 @export_group("Abilities")
-## Filled from the live type scene (Right / Left hand).
+## Filled from the active type scene (Right / Left hand).
 @export var ability_1_name: String = "—"
 @export var ability_2_name: String = "—"
 @export_tool_button("Preview Ability 1", "Callable")
@@ -57,8 +60,9 @@ var cast_fireball_action := cast_fireball_at_monster
 var _spawn_root: Node3D
 
 
-func get_monster_scene() -> PackedScene:
-	match monster_type:
+func get_monster_scene(pick: int = -1) -> PackedScene:
+	var which := monster_type if pick < 0 else pick
+	match which:
 		MONSTER_PICK_ASH_WRETCH:
 			return AshWretchScene
 		MONSTER_PICK_EMBER_WRETCH:
@@ -104,12 +108,8 @@ func ensure_one_monster() -> void:
 	_cache_spawn_root()
 	if _spawn_root == null:
 		return
-	var living := _living_monster()
-	if living != null and _monster_matches_selected(living):
-		living.process_mode = Node.PROCESS_MODE_ALWAYS
-		_apply_preview_stats(living)
-		_enable_lookdev(living)
-		_refresh_ability_labels(living)
+	if _gallery_is_complete():
+		_focus_selected_monster()
 		return
 	_respawn_monster_from_scene()
 
@@ -194,12 +194,18 @@ func _respawn_monster_from_scene() -> void:
 		return
 	_clear_spawn_root_immediate()
 	_clear_bucket("AbilityPreview")
-	var packed: PackedScene = get_monster_scene()
+	for pick in [
+		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
+	]:
+		_spawn_gallery_monster(pick)
+	_focus_selected_monster()
+
+
+func _spawn_gallery_monster(pick: int) -> Node:
+	var packed: PackedScene = get_monster_scene(pick)
 	if packed == null:
-		push_warning("MonsterWorkspace: no scene for monster_type %s" % monster_type)
-		ability_1_name = "—"
-		ability_2_name = "—"
-		return
+		push_warning("MonsterWorkspace: no scene for pick %s" % pick)
+		return null
 	## Fresh pack so inspector edits to type scenes show up immediately.
 	if packed.resource_path != "":
 		packed = load(packed.resource_path) as PackedScene
@@ -211,10 +217,8 @@ func _respawn_monster_from_scene() -> void:
 		if edited != null:
 			monster.owner = edited
 	if monster is Node3D:
-		(monster as Node3D).global_position = _spawn_root.global_position
-	_apply_preview_stats(monster)
+		(monster as Node3D).position = _gallery_offset(pick)
 	_enable_lookdev(monster)
-	_refresh_ability_labels(monster)
 	if (
 		monster.has_method("apply_summon_appearance")
 		and "body_tint" in monster
@@ -225,6 +229,37 @@ func _respawn_monster_from_scene() -> void:
 			monster.get("body_tint"),
 			monster.get("eye_glow_color")
 		)
+	return monster
+
+
+func _gallery_offset(pick: int) -> Vector3:
+	match pick:
+		MONSTER_PICK_WRETCH:
+			return Vector3(-GALLERY_SPACING, 0.0, 0.0)
+		MONSTER_PICK_EMBER_WRETCH:
+			return Vector3(GALLERY_SPACING, 0.0, 0.0)
+		_:
+			return Vector3.ZERO
+
+
+func _focus_selected_monster() -> void:
+	var monster := _living_monster()
+	if monster == null:
+		ability_1_name = "—"
+		ability_2_name = "—"
+		return
+	_apply_preview_stats(monster)
+	_enable_lookdev(monster)
+	_refresh_ability_labels(monster)
+
+
+func _gallery_is_complete() -> bool:
+	for pick in [
+		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
+	]:
+		if _find_gallery_monster(pick) == null:
+			return false
+	return true
 
 
 func _enable_lookdev(node: Node) -> void:
@@ -317,24 +352,46 @@ func _preview_ability_at(index: int) -> void:
 
 
 func _monster_matches_selected(node: Node) -> bool:
+	return _monster_matches_pick(node, monster_type)
+
+
+func _monster_matches_pick(node: Node, pick: int) -> bool:
 	if node == null:
 		return false
-	var packed := get_monster_scene()
+	var packed := get_monster_scene(pick)
 	if packed == null:
 		return false
 	var path := str(node.get("scene_file_path"))
 	if path.is_empty() or path != packed.resource_path:
 		return false
-	## Reject stale workspace overrides that swapped the type script for base Monster.
-	if monster_type == MONSTER_PICK_WRETCH:
-		var script: Script = node.get_script()
-		if script == null:
-			return false
-		return str(script.resource_path).ends_with("wretch.gd")
-	return true
+	## Reject stale workspace overrides that swapped the type script.
+	var script: Script = node.get_script()
+	var script_path := "" if script == null else str(script.resource_path)
+	var ok := false
+	match pick:
+		MONSTER_PICK_WRETCH:
+			ok = (
+				script_path.ends_with("wretch.gd")
+				and not script_path.ends_with("ash_wretch.gd")
+			)
+		MONSTER_PICK_ASH_WRETCH:
+			## Ash uses the base Monster script on its type scene (like Ember).
+			ok = (
+				script_path.ends_with("monster.gd")
+				or script_path.ends_with("ash_wretch.gd")
+			)
+		MONSTER_PICK_EMBER_WRETCH:
+			## Ember still uses the base Monster script on its type scene.
+			ok = (
+				script_path.ends_with("monster.gd")
+				or script_path.ends_with("ember_wretch.gd")
+			)
+		_:
+			ok = true
+	return ok
 
 
-func _living_monster() -> Node:
+func _find_gallery_monster(pick: int) -> Node:
 	_cache_spawn_root()
 	if _spawn_root == null:
 		return null
@@ -346,8 +403,13 @@ func _living_monster() -> Node:
 		var alive = child.get("is_alive")
 		if alive != null and not bool(alive):
 			continue
-		return child
+		if _monster_matches_pick(child, pick):
+			return child
 	return null
+
+
+func _living_monster() -> Node:
+	return _find_gallery_monster(monster_type)
 
 
 func _apply_preview_stats(node: Node) -> void:
