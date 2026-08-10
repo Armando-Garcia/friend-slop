@@ -9,16 +9,25 @@ signal summons_changed
 @export var default_leash_radius: float = 10.0
 
 var _summons: Array[Node] = []
+var _pending_spawns: int = 0
 
 
 func can_spawn() -> bool:
 	_prune()
-	return _summons.size() < max_summons
+	return (_summons.size() + _pending_spawns) < max_summons
 
 
 func summon_count() -> int:
 	_prune()
 	return _summons.size()
+
+
+func begin_pending_spawn() -> void:
+	_pending_spawns += 1
+
+
+func complete_pending_spawn() -> void:
+	_pending_spawns = maxi(0, _pending_spawns - 1)
 
 
 func register_summon(summon: Node) -> void:

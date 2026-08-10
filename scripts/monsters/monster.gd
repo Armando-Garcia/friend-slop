@@ -5,10 +5,11 @@ extends Character
 ## Combat-ready AI character. Extends Character (not PlayableCharacter):
 ## no camera, wand, "player" group, or multiplayer authority.
 ##
-## AI: senses append interest candidates → _prefer_interest → IDLE/PATROL/CHASE.
+## AI: senses append interest candidates → _prefer_interest → IDLE/PATROL/CHASE/ALERT.
 ## Override _prefer_interest / _append_default_interest_candidates on children;
 ## add MonsterSense nodes under Senses to customize perception without forking the FSM.
-## Eyes (Head/Eyes) glow only while chasing — color from body_tint / eye_glow exports.
+## Eyes (Head/Eyes) glow while chasing or alert — color from body_tint / eye_glow exports.
+## Glow darkens and dims with missing health so hits read without an HP bar.
 ## Lookdev: set lookdev_override + lookdev_pose to preview chase/patrol in the editor.
 
 enum ChaseStyle { CLOSE_IN, KEEP_AWAY }
@@ -28,6 +29,11 @@ const DEATH_IMPULSE_SCALE := 1.35
 const EYE_EMISSION_ENERGY := 5.5
 const EYE_LIGHT_ENERGY := 2.6
 const RANGE_DISC_HEIGHT := 0.02
+const HURT_UP_IMPULSE := 5.0
+const HURT_KNOCKBACK_TIMER_SEC := 0.15
+## Eye glow at 0 HP: near-black, slightly tinted from authored color.
+const EYE_DEAD_RGB_SCALE := Vector3(0.04, 0.06, 0.04)
+const EYE_DEAD_ENERGY_SCALE := 0.28
 
 @export_group("Appearance")
 @export var body_tint: Color = DEFAULT_TINT:
@@ -81,6 +87,10 @@ const RANGE_DISC_HEIGHT := 0.02
 @export var gravity: float = 18.0
 @export var idle_duration_sec: float = 1.2
 @export var patrol_radius: float = 4.0
+## After chase loses all sight/hearing interest for this long → ALERT.
+@export_range(0.5, 30.0, 0.25) var lost_chase_to_alert_sec: float = 4.0
+## How long ALERT lasts with no detection before returning to PATROL.
+@export_range(1.0, 60.0, 0.25) var alert_duration_sec: float = 12.0
 @export var death_linger_sec: float = 30.0
 @export var death_fade_sec: float = 3.0
 ## CLOSE_IN rushes melee. KEEP_AWAY holds at keep_away_range.
@@ -92,6 +102,8 @@ var is_alive: bool = true
 
 var _ai_state: int = MonsterAIScript.State.IDLE
 var _idle_timer: float = 0.0
+var _undetected_sec: float = 0.0
+var _alert_timer: float = 0.0
 var _patrol_goal: Vector3 = Vector3.ZERO
 var _interest: RefCounted = null
 var _knockback_vel: Vector3 = Vector3.ZERO
@@ -172,6 +184,14 @@ func get_combat_abilities() -> Array[Node]:
 	return out
 
 
+func is_ai_chasing() -> bool:
+	return _ai_state == MonsterAIScript.State.CHASE
+
+
+func is_ai_alert() -> bool:
+	return _ai_state == MonsterAIScript.State.ALERT
+
+
 func take_damage(amount: float, from: Node3D = null) -> void:
 	if not is_alive:
 		return
@@ -179,12 +199,16 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	current_health = MonsterAIScript.apply_damage(current_health, amount)
 	if MonsterAIScript.is_dead(current_health):
 		die()
+		return
+	_apply_hurt_knockback()
+	_apply_eye_glow_from_health()
 
 
 func heal(amount: float) -> void:
 	if not is_alive:
 		return
 	current_health = MonsterAIScript.apply_heal(current_health, amount, max_health)
+	_apply_eye_glow_from_health()
 
 
 func die() -> void:
@@ -195,6 +219,8 @@ func die() -> void:
 	current_health = 0.0
 	_ai_state = MonsterAIScript.State.IDLE
 	_interest = null
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
 	_cancel_cast()
 	_kill_owned_summons()
 	_set_chase_eyes_active(false)
@@ -229,13 +255,40 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	velocity += impulse
 
 
+func _apply_hurt_knockback() -> void:
+	## Small hop so hits read even without an HP bar.
+	velocity.y = maxf(velocity.y, HURT_UP_IMPULSE)
+	_knockback_vel.y = maxf(_knockback_vel.y, HURT_UP_IMPULSE * 0.45)
+	_knockback_timer = maxf(_knockback_timer, HURT_KNOCKBACK_TIMER_SEC)
+
+
+func _health_ratio() -> float:
+	if max_health <= 0.001:
+		return 1.0
+	return clampf(current_health / max_health, 0.0, 1.0)
+
+
+func _apply_eye_glow_from_health() -> void:
+	## Full HP = authored glow; near death = darker / dimmer (Wretch green dims hard).
+	var t := 1.0 if Engine.is_editor_hint() else _health_ratio()
+	var dead := Color(
+		eye_glow_color.r * EYE_DEAD_RGB_SCALE.x,
+		eye_glow_color.g * EYE_DEAD_RGB_SCALE.y,
+		eye_glow_color.b * EYE_DEAD_RGB_SCALE.z,
+		1.0
+	)
+	var color := eye_glow_color.lerp(dead, 1.0 - t)
+	var energy := lerpf(EYE_DEAD_ENERGY_SCALE, 1.0, t)
+	_apply_eye_glow_color(color, energy)
+
+
 func _refresh_appearance() -> void:
 	_ensure_mesh_refs()
 	if _body_mesh != null and _head_mesh != null:
 		_character_color = body_tint
 		_apply_character_color(body_tint)
 	_tint_optional_body_parts()
-	_apply_eye_glow_color(eye_glow_color)
+	_apply_eye_glow_from_health()
 
 
 func _tint_optional_body_parts() -> void:
@@ -289,7 +342,7 @@ func _cache_eyes() -> void:
 			_eye_light = child as OmniLight3D
 
 
-func _apply_eye_glow_color(color: Color) -> void:
+func _apply_eye_glow_color(color: Color, energy_scale: float = 1.0) -> void:
 	if _eyes_root == null:
 		_cache_eyes()
 	var mat := StandardMaterial3D.new()
@@ -297,7 +350,7 @@ func _apply_eye_glow_color(color: Color) -> void:
 	mat.albedo_color = color
 	mat.emission_enabled = true
 	mat.emission = color
-	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY
+	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
 	for mesh in _eye_meshes:
 		if mesh == null:
 			continue
@@ -306,7 +359,7 @@ func _apply_eye_glow_color(color: Color) -> void:
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if _eye_light != null:
 		_eye_light.light_color = color
-		_eye_light.light_energy = EYE_LIGHT_ENERGY
+		_eye_light.light_energy = EYE_LIGHT_ENERGY * energy_scale
 		_eye_light.light_cull_mask = WorldVisualLayersScript.SCENE_LIGHT_MASK
 
 
@@ -489,11 +542,8 @@ func _physics_process(delta: float) -> void:
 
 	_interest = _gather_interest()
 	var has_interest := _interest_is_actionable(_interest)
-	var previous: int = _ai_state
 	_ai_state = MonsterAIScript.resolve_state(_ai_state, has_interest)
-	if previous == MonsterAIScript.State.CHASE and _ai_state == MonsterAIScript.State.IDLE:
-		_cancel_cast()
-		_enter_idle()
+	_update_alert_timers(delta, has_interest)
 
 	var chase_target: Node3D = null
 	if _interest != null:
@@ -511,6 +561,8 @@ func _physics_process(delta: float) -> void:
 				_tick_patrol(delta)
 			MonsterAIScript.State.CHASE:
 				_tick_chase(delta)
+			MonsterAIScript.State.ALERT:
+				_tick_alert(delta)
 
 	if lookdev_override:
 		_refresh_lookdev_eyes()
@@ -521,6 +573,27 @@ func _physics_process(delta: float) -> void:
 
 	_apply_knockback_bleed(delta)
 	move_and_slide()
+
+
+func _update_alert_timers(delta: float, has_interest: bool) -> void:
+	## 4s fully undetected after chase → ALERT; 12s more undetected → PATROL.
+	if has_interest:
+		_undetected_sec = 0.0
+		_alert_timer = 0.0
+		return
+	if _ai_state == MonsterAIScript.State.CHASE:
+		_undetected_sec += delta
+		if _undetected_sec >= lost_chase_to_alert_sec:
+			_enter_alert()
+	elif _ai_state == MonsterAIScript.State.ALERT:
+		_alert_timer += delta
+		if _alert_timer >= alert_duration_sec:
+			_undetected_sec = 0.0
+			_alert_timer = 0.0
+			_begin_patrol()
+	else:
+		_undetected_sec = 0.0
+		_alert_timer = 0.0
 
 
 func _interest_is_actionable(interest: RefCounted) -> bool:
@@ -534,6 +607,17 @@ func _interest_is_actionable(interest: RefCounted) -> bool:
 func _enter_idle() -> void:
 	_ai_state = MonsterAIScript.State.IDLE
 	_idle_timer = 0.0
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
+func _enter_alert() -> void:
+	_cancel_cast()
+	_ai_state = MonsterAIScript.State.ALERT
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
 	velocity.x = 0.0
 	velocity.z = 0.0
 
@@ -548,6 +632,8 @@ func _tick_idle(delta: float) -> void:
 
 func _begin_patrol() -> void:
 	_ai_state = MonsterAIScript.State.PATROL
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
 	_patrol_goal = MonsterAIScript.random_patrol_point(
 		global_position,
 		patrol_radius,
@@ -573,10 +659,18 @@ func _tick_patrol(_delta: float) -> void:
 	_face_horizontal(desired)
 
 
+func _tick_alert(_delta: float) -> void:
+	## Vigilant standstill while waiting to re-detect or drop to patrol.
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
 func _tick_chase(_delta: float) -> void:
 	if not _interest_is_actionable(_interest):
+		## Grace window before ALERT: hold position, keep eyes on.
 		_cancel_cast()
-		_enter_idle()
+		velocity.x = 0.0
+		velocity.z = 0.0
 		return
 	var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
 	var target: Node3D = _interest.get("target") as Node3D

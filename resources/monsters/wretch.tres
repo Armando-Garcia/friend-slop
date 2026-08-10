@@ -7,7 +7,7 @@
 script = ExtResource("1")
 id = "wretch"
 display_name = "Wretch"
-description = "A hungry maze-stalker. Chases light and noise."
+description = "A packmaster summoner. Rats explode on player contact while chasing."
 monster_scene = ExtResource("2")
 tint = Color(0.72, 0.28, 0.22, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)

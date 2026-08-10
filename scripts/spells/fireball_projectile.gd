@@ -57,6 +57,8 @@ const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
 
 @export_group("Combat")
 @export_range(0.0, 200.0, 1.0) var hit_damage: float = DEFAULT_HIT_DAMAGE
+## Damage + knockback radius on ground / monster / player impact (not midair timeout).
+@export_range(0.25, 8.0, 0.05) var splash_radius: float = 2.0
 
 @export_group("Editor preview")
 @export var preview_smoke: bool = true:
@@ -632,7 +634,7 @@ func _cast_motion_hit(motion: Vector3) -> bool:
 		return false
 	global_position += motion * safe_fraction
 	if not _probe_players():
-		_finish(_find_ward_hit())
+		_finish(_find_ward_hit(), true)
 	return true
 
 
@@ -672,16 +674,58 @@ func _touch_fake_walls() -> void:
 			node.call("notify_spell_touch", global_position, radius)
 
 
-func _finish(blocked_by: Node = null) -> void:
+func _finish(blocked_by: Node = null, apply_splash: bool = false) -> void:
 	if _finished or not is_inside_tree():
 		return
 	_finished = true
 	_notify_ward_blocked(blocked_by)
 	var world_parent := get_parent()
 	var impact_pos := global_position
+	var ward := _ward_from_node(blocked_by) if blocked_by != null else null
+	if apply_splash and ward == null:
+		_apply_splash_at(impact_pos)
 	_clear_projectile_visuals()
 	FireballExplosionEffectScript.spawn(world_parent, impact_pos)
 	queue_free()
+
+
+func _apply_splash_at(impact_pos: Vector3) -> void:
+	if hit_damage <= 0.0 or splash_radius <= 0.0:
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var radius_sq := splash_radius * splash_radius
+	var seen: Dictionary = {}
+	for group_name in ["monster", "combat_target", "player"]:
+		for node in tree.get_nodes_in_group(group_name):
+			if node == null or not is_instance_valid(node) or node == _caster:
+				continue
+			if seen.has(node):
+				continue
+			if not (node is Node3D):
+				continue
+			var body := node as Node3D
+			if body.global_position.distance_squared_to(impact_pos) > radius_sq:
+				continue
+			seen[node] = true
+			_apply_splash_to_body(body, impact_pos)
+
+
+func _apply_splash_to_body(body: Node3D, impact_pos: Vector3) -> void:
+	var dir := body.global_position - impact_pos
+	if dir.length_squared() < 0.0001:
+		dir = _direction
+	else:
+		dir = dir.normalized()
+	if body.has_method("apply_fireball_knockback"):
+		var apply_local := not _is_multiplayer_match()
+		if body is Node:
+			apply_local = apply_local or (body as Node).is_multiplayer_authority()
+		if apply_local:
+			body.call("apply_fireball_knockback", dir)
+	if body.has_method("take_damage") and hit_damage > 0.0:
+		body.call("take_damage", hit_damage, self)
 
 
 func _find_ward_hit() -> Node:
@@ -741,7 +785,7 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	if body == _caster:
 		return
-	_finish(body)
+	_finish(body, true)
 
 
 func _try_hit_player(body: Node3D) -> bool:
@@ -754,18 +798,8 @@ func _try_hit_player(body: Node3D) -> bool:
 		or body.is_in_group("combat_target")
 	):
 		return false
-	_finish()
-	if body.has_method("apply_fireball_knockback"):
-		## Victim authority applies knockback; MultiplayerSynchronizer replicates motion.
-		## Resolve GameState via the tree — this is an @tool script and cannot name the
-		## autoload directly (editor/headless reloads compile before autoloads exist).
-		var apply_local := not _is_multiplayer_match()
-		if body is Node:
-			apply_local = apply_local or (body as Node).is_multiplayer_authority()
-		if apply_local:
-			body.call("apply_fireball_knockback", _direction)
-	if body.has_method("take_damage") and hit_damage > 0.0:
-		body.call("take_damage", hit_damage, self)
+	## Splash sphere applies damage / knockback (includes this body).
+	_finish(null, true)
 	return true
 
 

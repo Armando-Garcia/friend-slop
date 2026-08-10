@@ -2,8 +2,10 @@
 class_name WretchRitualPose
 extends Node3D
 
-## Chase ritual: straighten the hunched body so forward-facing eyes look skyward.
-## Mouth is an eye-like sphere. Eyes are never tilted on their own.
+## Pack ritual FX: green orb between hands. Alert = outer pulse only.
+## Chase = full body ritual + deep dark-green orb core.
+
+enum RitualPhase { OFF, ALERT, CHASE }
 
 @export var pulse_min_scale: float = 0.55
 @export var pulse_max_scale: float = 1.15
@@ -18,10 +20,14 @@ extends Node3D
 ## Start the beam this far along the face-forward axis from each eye/mouth.
 @export var cone_forward_offset_m: float = 1.0
 @export var glow_color: Color = Color(0.25, 1.0, 0.35, 1.0)
+## Inner core used only in chase to distinguish from alert.
+@export var chase_core_color: Color = Color(0.83, 0.68, 0.22, 1.0)
 
+var _phase: int = RitualPhase.OFF
 var _active: bool = false
 var _blend: float = 0.0
 var _orb: MeshInstance3D = null
+var _orb_core: MeshInstance3D = null
 var _orb_light: OmniLight3D = null
 var _mouth: MeshInstance3D = null
 var _mouth_light: OmniLight3D = null
@@ -45,16 +51,22 @@ var _body_patrol: Transform3D = Transform3D.IDENTITY
 
 func _ready() -> void:
 	_build_if_needed()
-	set_active(false)
+	set_ritual_phase(RitualPhase.OFF)
 	set_process(true)
 
 
 func set_active(active: bool) -> void:
+	## Back-compat for command-pack / lookdev callers.
+	set_ritual_phase(RitualPhase.CHASE if active else RitualPhase.OFF)
+
+
+func set_ritual_phase(phase: int) -> void:
 	_build_if_needed()
-	_active = active
+	_phase = phase
+	_active = phase != RitualPhase.OFF
 	_refresh_ritual_visibility()
-	## Snap off instantly when leaving chase so patrol eyes face forward again.
-	if not active:
+	## Snap off instantly when leaving so patrol eyes face forward again.
+	if not _active:
 		_blend = 0.0
 		_orb_charge_mult = 1.0
 		_orb_charge_target = 1.0
@@ -93,28 +105,36 @@ func is_ritual_active() -> bool:
 	return _active
 
 
+func get_ritual_phase() -> int:
+	return _phase
+
+
 func _refresh_ritual_visibility() -> void:
-	var show_fx := _active
 	var show_orb := _active and not _orb_hidden_for_launch
+	var show_chase_fx := _phase == RitualPhase.CHASE
+	var show_core := show_orb and show_chase_fx
 	if _orb != null:
 		_orb.visible = show_orb
+	if _orb_core != null:
+		_orb_core.visible = show_core
 	if _orb_light != null:
 		_orb_light.visible = show_orb
 	if _mouth != null:
-		_mouth.visible = show_fx
+		_mouth.visible = show_chase_fx
 	if _mouth_light != null:
-		_mouth_light.visible = show_fx
+		_mouth_light.visible = show_chase_fx
 	if _mouth_cone != null:
-		_mouth_cone.visible = show_fx
+		_mouth_cone.visible = show_chase_fx
 	for cone in _eye_cones:
 		if cone != null:
-			cone.visible = show_fx
+			cone.visible = show_chase_fx
 
 
 func _process(delta: float) -> void:
 	_build_if_needed()
 	_place_orb_between_hands()
-	var target := 1.0 if _active else 0.0
+	## Body straighten only in chase; alert keeps the hunched pose with orb only.
+	var target := 1.0 if _phase == RitualPhase.CHASE else 0.0
 	var step := delta / maxf(straighten_sec, 0.05)
 	if _blend < target:
 		_blend = minf(1.0, _blend + step)
@@ -130,6 +150,9 @@ func _process(delta: float) -> void:
 		var scale_v := lerpf(pulse_min_scale, pulse_max_scale, wave) * _orb_charge_mult
 		if _orb != null:
 			_orb.scale = Vector3.ONE * scale_v
+		if _orb_core != null:
+			## Core stays a bit smaller than the outer shell so it reads as a heart.
+			_orb_core.scale = Vector3.ONE * (scale_v * 0.55)
 		if _orb_light != null:
 			_orb_light.light_energy = lerpf(1.6, 3.8, wave) * _orb_charge_mult
 			_orb_light.omni_range = 1.8 * _orb_charge_mult
@@ -165,9 +188,20 @@ func _build_if_needed() -> void:
 	orb_mesh.radius = 0.11
 	orb_mesh.height = 0.22
 	_orb.mesh = orb_mesh
-	_orb.material_override = _make_glow_mat(0.85)
+	_orb.material_override = _make_glow_mat(0.95)
 	_orb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_orb)
+
+	_orb_core = MeshInstance3D.new()
+	_orb_core.name = "PackOrbCore"
+	var core_mesh := SphereMesh.new()
+	core_mesh.radius = 0.11
+	core_mesh.height = 0.22
+	_orb_core.mesh = core_mesh
+	_orb_core.material_override = _make_core_mat()
+	_orb_core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_orb_core.visible = false
+	_orb.add_child(_orb_core)
 
 	_orb_light = OmniLight3D.new()
 	_orb_light.name = "PackOrbLight"
@@ -238,6 +272,20 @@ func _make_glow_mat(alpha: float) -> StandardMaterial3D:
 	mat.emission_enabled = true
 	mat.emission = glow_color
 	mat.emission_energy_multiplier = 4.5
+	return mat
+
+
+func _make_core_mat() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mat.albedo_color = chase_core_color
+	mat.metallic = 0.92
+	mat.roughness = 0.28
+	mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	mat.emission_enabled = true
+	mat.emission = chase_core_color.lightened(0.15)
+	mat.emission_energy_multiplier = 0.55
 	return mat
 
 

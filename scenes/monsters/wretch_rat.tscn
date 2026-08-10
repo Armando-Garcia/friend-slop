@@ -14,7 +14,7 @@ height = 0.28
 
 [node name="WretchRat" instance=ExtResource("1_monster")]
 script = ExtResource("2_rat")
-editor_description = "Wretch rat. 10 HP, 10m sight, green chase eyes, host-leashed."
+editor_description = "Wretch rat. Explodes on player touch while chasing; green charge light under Body."
 body_tint = Color(0.35, 0.55, 0.32, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)
 lookdev_pose = 0
@@ -23,7 +23,7 @@ max_health = 10.0
 move_speed = 4.4
 chase_range = 10.0
 attack_range = 0.85
-touch_damage = 4.0
+touch_damage = 0.0
 chase_style = 0
 leash_radius = 10.0
 leash_enabled = true
@@ -35,6 +35,12 @@ shape = SubResource("CapsuleShape3D_rat")
 [node name="Body" parent="." index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
 mesh = SubResource("SphereMesh_rat")
+
+[node name="ExplodeLight" type="OmniLight3D" parent="Body" index="0"]
+light_color = Color(0.25, 1, 0.35, 1)
+light_energy = 0.0
+omni_range = 0.15
+shadow_enabled = false
 
 [node name="Head" parent="." index="2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, -0.04)

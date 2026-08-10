@@ -8,7 +8,8 @@ extends Monster
 const FORCED_HUNT_SOURCE := &"forced_hunt"
 const FORCED_INVESTIGATE_SOURCE := &"forced_investigate"
 const FORCED_HUNT_URGENCY := 2.0
-const RELAY_SIGHT_URGENCY := 1.65
+## High enough that a rat that sees the player pulls the host into chase.
+const RELAY_SIGHT_URGENCY := 2.25
 ## Prefer the outer band of the leash disk for idle patrol goals.
 const PATROL_EDGE_MIN := 0.72
 const PATROL_EDGE_MAX := 0.96

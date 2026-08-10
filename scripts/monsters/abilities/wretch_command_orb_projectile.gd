@@ -198,4 +198,4 @@ func _apply_hit_effects(hit: Node3D, chase_target: Node3D) -> void:
 		if hit.has_method("apply_fireball_knockback"):
 			hit.call("apply_fireball_knockback", dir * 1.75)
 		if hit.has_method("apply_speed_boost"):
-			hit.call("apply_speed_boost", 1.0, 0.2)
+			hit.call("apply_speed_boost", 2.0, 0.1)

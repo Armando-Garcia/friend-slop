@@ -698,7 +698,7 @@ func apply_ember_halo_hit(hit_dir: Vector3) -> void:
 
 
 func apply_wretch_command_hit(hit_dir: Vector3) -> void:
-	## Strong horizontal knockback + heavy slow (20% speed for 1s).
+	## Light knockback + heavy slow (10% speed for 2s).
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
 	var dir := hit_dir
@@ -711,15 +711,40 @@ func apply_wretch_command_hit(hit_dir: Vector3) -> void:
 		flat = Vector3.FORWARD
 	else:
 		flat = flat.normalized()
-	var impulse := flat * 16.0 + Vector3.UP * 4.5
+	var impulse := flat * 6.0 + Vector3.UP * 1.5
 	_knockback_vel = impulse
-	_knockback_timer = 0.55
+	_knockback_timer = 0.28
 	velocity += impulse
 	if broom_active:
 		var flight := _get_broom_flight()
 		if flight != null and flight.has_method("knock_off"):
 			flight.call("knock_off", flat)
-	apply_speed_boost(1.0, 0.2)
+	apply_speed_boost(2.0, 0.1)
+
+
+func apply_rat_explode_hit(hit_dir: Vector3) -> void:
+	## Rat burst: firm knockback + short heavy slow.
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 14.0 + Vector3.UP * 4.0
+	_knockback_vel = impulse
+	_knockback_timer = 0.5
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(0.75, 0.25)
 
 
 func _get_broom_flight() -> Node:

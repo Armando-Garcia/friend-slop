@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Pure helpers for Monster FSM / targeting / interest preferencing.
 
-enum State { IDLE, PATROL, CHASE }
+enum State { IDLE, PATROL, CHASE, ALERT }
 ## Lookdev pose → eyes. Chase shows eyes; Patrol hides them.
 enum LookdevPose { PATROL, CHASE }
 
@@ -68,19 +68,18 @@ static func prefer_highest_urgency(candidates: Array) -> RefCounted:
 	return best
 
 
-## Chase overrides other states. Leaving chase returns IDLE;
-## IDLE→PATROL is owned by the monster tick.
+## Interest always forces CHASE. Without interest, CHASE/ALERT persist so the
+## monster can time CHASE→ALERT (lost target) and ALERT→PATROL. IDLE→PATROL is
+## owned by the monster idle tick.
 static func resolve_state(current: State, has_chase_target: bool) -> State:
 	if has_chase_target:
 		return State.CHASE
-	if current == State.CHASE:
-		return State.IDLE
 	return current
 
 
-## Eyes are a chase-only tell — hidden in IDLE/PATROL.
+## Eyes stay on while chasing or alert (lost-player vigilance).
 static func chase_eyes_visible(state: State) -> bool:
-	return state == State.CHASE
+	return state == State.CHASE or state == State.ALERT
 
 
 static func lookdev_eyes_visible(pose: LookdevPose) -> bool:

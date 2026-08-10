@@ -62,14 +62,21 @@ func _test_resolve_state() -> int:
 	var idle := MonsterAIScript.State.IDLE
 	var patrol := MonsterAIScript.State.PATROL
 	var chase := MonsterAIScript.State.CHASE
+	var alert := MonsterAIScript.State.ALERT
 	if MonsterAIScript.resolve_state(idle, true) != chase:
 		push_error("Expected chase when a target is present")
 		return 1
 	if MonsterAIScript.resolve_state(patrol, false) != patrol:
 		push_error("Expected patrol to continue without a target")
 		return 1
-	if MonsterAIScript.resolve_state(chase, false) != idle:
-		push_error("Expected chase to drop to idle when target lost")
+	if MonsterAIScript.resolve_state(chase, false) != chase:
+		push_error("Expected chase to persist without a target (grace before alert)")
+		return 1
+	if MonsterAIScript.resolve_state(alert, false) != alert:
+		push_error("Expected alert to persist without a target")
+		return 1
+	if MonsterAIScript.resolve_state(alert, true) != chase:
+		push_error("Expected alert to become chase when a target returns")
 		return 1
 	return 0
 
@@ -83,6 +90,9 @@ func _test_chase_eyes_visible() -> int:
 		return 1
 	if not MonsterAIScript.chase_eyes_visible(MonsterAIScript.State.CHASE):
 		push_error("Expected eyes visible while chasing")
+		return 1
+	if not MonsterAIScript.chase_eyes_visible(MonsterAIScript.State.ALERT):
+		push_error("Expected eyes visible while alert")
 		return 1
 	return 0
 

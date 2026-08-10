@@ -6,13 +6,19 @@ extends Monster
 
 const HEARING_SOURCE := &"hearing"
 const PLAYER_LOCK_SOURCE := &"player_lock"
+const SUMMON_SIGHT_SOURCE := &"summon_sight"
 const PLAYER_LOCK_URGENCY := 2.1
 const COMMAND_ABILITY_ID := "command_pack"
+## Alert hearing extends beyond chase hearing (outer ring only → alert).
+const ALERT_HEAR_RANGE_MULT := 1.33
+const RitualPoseScript := preload("res://scripts/monsters/wretch_ritual_pose.gd")
 
 @export var ambient_summon_cooldown_sec: float = 20.0
-@export var chase_summon_cooldown_sec: float = 8.0
+@export var chase_summon_cooldown_sec: float = 5.33
 ## Keep a spotted player locked long enough to finish Command Pack windup.
 @export_range(1.0, 12.0, 0.25) var player_lock_sec: float = 5.0
+## Base yaw turn rate (rad/s). Hearing turns use half of this.
+@export_range(0.5, 12.0, 0.1) var face_turn_speed_rad: float = 4.0
 
 var _ritual: Node = null
 var _last_rat_command_key: String = ""
@@ -36,10 +42,17 @@ func set_lookdev_pose(pose: MonsterAIScript.LookdevPose, enable_override: bool =
 func _sync_lookdev_ritual() -> void:
 	if _ritual == null:
 		_ritual = get_node_or_null("Ritual")
-	if _ritual == null or not _ritual.has_method("set_active"):
+	if _ritual == null:
 		return
-	var want := lookdev_override and lookdev_pose == MonsterAIScript.LookdevPose.CHASE
-	_ritual.call("set_active", want)
+	if lookdev_override and lookdev_pose == MonsterAIScript.LookdevPose.CHASE:
+		if _ritual.has_method("set_ritual_phase"):
+			_ritual.call("set_ritual_phase", RitualPoseScript.RitualPhase.CHASE)
+		elif _ritual.has_method("set_active"):
+			_ritual.call("set_active", true)
+	elif _ritual.has_method("set_ritual_phase"):
+		_ritual.call("set_ritual_phase", RitualPoseScript.RitualPhase.OFF)
+	elif _ritual.has_method("set_active"):
+		_ritual.call("set_active", false)
 
 
 func is_ai_chasing() -> bool:
@@ -47,6 +60,9 @@ func is_ai_chasing() -> bool:
 
 
 func get_summon_cooldown_sec() -> float:
+	## Alert uses animation-gated casting in SummonRats.begin_cooldown.
+	if is_ai_alert():
+		return 0.0
 	if is_ai_chasing() and _interest_has_player_target(_interest):
 		return chase_summon_cooldown_sec
 	return ambient_summon_cooldown_sec
@@ -91,11 +107,112 @@ func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 	if Engine.is_editor_hint() or not is_alive:
 		return
+	_tick_alert_hearing()
 	_direct_rats_from_interest()
 	_update_ritual_pose()
 
 
+func _prefer_interest(candidates: Array) -> RefCounted:
+	## Rat vision of a player outranks ambient hearing for host chase.
+	var best_summon: RefCounted = null
+	var best_summon_u := 0.0
+	for item in candidates:
+		if item == null:
+			continue
+		if str(item.get("source")) != String(SUMMON_SIGHT_SOURCE):
+			continue
+		if not item.has_method("is_actionable") or not bool(item.call("is_actionable")):
+			continue
+		var urgency := float(item.get("urgency"))
+		if best_summon == null or urgency > best_summon_u:
+			best_summon = item
+			best_summon_u = urgency
+	if best_summon != null:
+		return best_summon
+	return super._prefer_interest(candidates)
+
+
+func _tick_alert_hearing() -> void:
+	## Outer hearing ring (chase hear * 1.33) raises alert without forcing chase.
+	if is_ai_chasing():
+		return
+	if not _has_alert_band_hearing():
+		return
+	if is_ai_alert():
+		## Keep alert fresh while the outer-band noise continues.
+		_alert_timer = 0.0
+	else:
+		_enter_alert()
+
+
+func _chase_hear_range() -> float:
+	var hearing := get_node_or_null("Senses/Hearing")
+	if hearing != null and "hear_range" in hearing:
+		return float(hearing.get("hear_range"))
+	return 10.0
+
+
+func _alert_hear_range() -> float:
+	return _chase_hear_range() * ALERT_HEAR_RANGE_MULT
+
+
+func _has_alert_band_hearing() -> bool:
+	var chase_r := _chase_hear_range()
+	var alert_r := _alert_hear_range()
+	var hearing := get_node_or_null("Senses/Hearing")
+	if hearing != null and bool(hearing.get("has_last_heard")):
+		var heard_pos: Vector3 = hearing.get("last_heard_position") as Vector3
+		if _distance_in_band(heard_pos, chase_r, alert_r):
+			return true
+	var tree := get_tree()
+	if tree == null:
+		return false
+	var hub := tree.root.get_node_or_null("SteamProximityVoiceHub")
+	for node in tree.get_nodes_in_group("player"):
+		if not (node is Node3D):
+			continue
+		var player := node as Node3D
+		if not _player_is_speaking(hub, player):
+			continue
+		if _distance_in_band(player.global_position, chase_r, alert_r):
+			return true
+	return false
+
+
+func _distance_in_band(world_position: Vector3, inner_r: float, outer_r: float) -> bool:
+	var flat := Vector3(
+		world_position.x - global_position.x,
+		0.0,
+		world_position.z - global_position.z
+	)
+	var dist := flat.length()
+	return dist > inner_r and dist <= outer_r
+
+
+func _player_is_speaking(hub: Node, player: Node3D) -> bool:
+	if hub == null or not hub.has_method("is_peer_speaking"):
+		return false
+	var peer_id := 0
+	if player.has_method("get_multiplayer_authority"):
+		peer_id = int(player.get_multiplayer_authority())
+	if peer_id <= 0:
+		return false
+	return bool(hub.call("is_peer_speaking", peer_id))
+
+
 func _pick_ready_ability(target: Node3D) -> Node:
+	## Alert: keep casting Summon Rats until the pack is full (max 3).
+	if is_ai_alert():
+		var host := get_summon_host()
+		if host != null and host.has_method("can_spawn") and bool(host.call("can_spawn")):
+			for ability in get_combat_abilities():
+				if str(ability.get("ability_id")) != "summon_rats":
+					continue
+				if ability.has_method("is_ready_to_cast"):
+					if bool(ability.call("is_ready_to_cast", self, target)):
+						return ability
+				elif bool(ability.call("can_cast")):
+					return ability
 	## Always try Command Pack first when a player is locked / spotted.
 	if target != null and is_instance_valid(target) and target.is_in_group("player"):
 		for ability in get_combat_abilities():
@@ -150,7 +267,7 @@ func _tick_cast_windup(delta: float, target: Node3D) -> void:
 				0.0,
 				aim.z - global_position.z
 			)
-			_face_horizontal(toward)
+			_face_toward_hearing(toward, delta)
 	## Allow Command Pack to finish without a player Node3D (uses pending aim).
 	if (
 		_casting_ability != null
@@ -219,7 +336,7 @@ func _begin_ability_windup(ability: Node) -> void:
 	super._begin_ability_windup(ability)
 
 
-func _tick_chase(_delta: float) -> void:
+func _tick_chase(delta: float) -> void:
 	## Packmaster stands still while directing rats / ritualizing.
 	velocity.x = 0.0
 	velocity.z = 0.0
@@ -233,7 +350,7 @@ func _tick_chase(_delta: float) -> void:
 			)
 			_face_horizontal(toward)
 		return
-	## Hearing-only: face the sound, stay put.
+	## Hearing-only: face the sound slowly, stay put.
 	if _interest != null and _interest.get("has_goal_position"):
 		var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
 		var toward_sound := Vector3(
@@ -241,7 +358,49 @@ func _tick_chase(_delta: float) -> void:
 			0.0,
 			goal.z - global_position.z
 		)
-		_face_horizontal(toward_sound)
+		_face_toward_hearing(toward_sound, delta)
+
+
+func _tick_alert(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	var hear_goal = _hearing_face_goal()
+	if hear_goal is Vector3:
+		var goal: Vector3 = hear_goal as Vector3
+		var toward := Vector3(
+			goal.x - global_position.x,
+			0.0,
+			goal.z - global_position.z
+		)
+		_face_toward_hearing(toward, delta)
+
+
+func _hearing_face_goal():
+	## Prefer live hearing interest, then lingering last-heard point.
+	if (
+		_interest != null
+		and str(_interest.get("source")) == String(HEARING_SOURCE)
+		and bool(_interest.get("has_goal_position"))
+	):
+		return _interest.call("resolved_goal_position", global_position)
+	var hearing := get_node_or_null("Senses/Hearing")
+	if hearing != null and bool(hearing.get("has_last_heard")):
+		return hearing.get("last_heard_position")
+	return null
+
+
+func _face_toward_hearing(desired: Vector3, delta: float) -> void:
+	## Half the normal face turn rate when reacting to sound.
+	_face_horizontal_at_speed(desired, delta, face_turn_speed_rad * 0.5)
+
+
+func _face_horizontal_at_speed(desired: Vector3, delta: float, speed_rad: float) -> void:
+	var flat := Vector3(desired.x, 0.0, desired.z)
+	if flat.length_squared() < 0.0001:
+		return
+	var target_basis := Basis.looking_at(flat.normalized(), Vector3.UP)
+	var target_yaw := target_basis.get_euler().y
+	rotation.y = rotate_toward(rotation.y, target_yaw, maxf(speed_rad, 0.01) * delta)
 
 
 func _direct_rats_from_interest() -> void:
@@ -251,12 +410,25 @@ func _direct_rats_from_interest() -> void:
 
 
 func _update_ritual_pose() -> void:
-	var want := (
-		(is_locked_onto_player() or get_hearing_command_aim() is Vector3)
-		and (is_ai_chasing() or _casting_ability != null)
-	)
-	if _ritual != null and _ritual.has_method("set_active"):
-		_ritual.call("set_active", want)
+	if _ritual == null:
+		_ritual = get_node_or_null("Ritual")
+	if _ritual == null:
+		return
+	var phase: int = RitualPoseScript.RitualPhase.OFF
+	if (
+		_casting_ability != null
+		or (
+			is_ai_chasing()
+			and (is_locked_onto_player() or get_hearing_command_aim() is Vector3)
+		)
+	):
+		phase = RitualPoseScript.RitualPhase.CHASE
+	elif is_ai_alert():
+		phase = RitualPoseScript.RitualPhase.ALERT
+	if _ritual.has_method("set_ritual_phase"):
+		_ritual.call("set_ritual_phase", phase)
+	elif _ritual.has_method("set_active"):
+		_ritual.call("set_active", phase != RitualPoseScript.RitualPhase.OFF)
 
 
 func _refresh_player_lock_from_candidates(candidates: Array) -> void:

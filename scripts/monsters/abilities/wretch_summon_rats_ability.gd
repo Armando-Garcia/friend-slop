@@ -40,6 +40,14 @@ func can_cast() -> bool:
 
 func begin_cooldown() -> void:
 	var monster := _find_monster()
+	## Alert: no long cooldown — only wait out the drop animation before the next cast.
+	if (
+		monster != null
+		and monster.has_method("is_ai_alert")
+		and bool(monster.call("is_ai_alert"))
+	):
+		_cooldown_left = maxf(0.0, drop_duration_sec)
+		return
 	var cd := cooldown_sec
 	if monster != null and monster.has_method("get_summon_cooldown_sec"):
 		cd = float(monster.call("get_summon_cooldown_sec"))
@@ -59,21 +67,36 @@ func _fire_cast(monster: Node3D, _target: Node3D) -> void:
 	var parent := _spawn_parent(monster)
 	if parent == null:
 		return
+	if host.has_method("begin_pending_spawn"):
+		host.call("begin_pending_spawn")
 	var land := _spawn_position(monster)
 	var origin := resolve_cast_origin(monster)
 	var orb = WretchSummonDropOrbScript.spawn(parent, origin, land, drop_duration_sec)
+	var pending_open := true
+	var release_pending := func() -> void:
+		if not pending_open:
+			return
+		pending_open = false
+		if host != null and is_instance_valid(host) and host.has_method("complete_pending_spawn"):
+			host.call("complete_pending_spawn")
 	orb.landed.connect(
 		func(world_pos: Vector3) -> void:
 			_spawn_rat_at(monster, host, parent, world_pos)
+			release_pending.call()
 	)
+	orb.tree_exiting.connect(release_pending)
 
 
 func _spawn_rat_at(monster: Node3D, host: Node, parent: Node, world_pos: Vector3) -> void:
 	if monster == null or not is_instance_valid(monster):
 		return
-	if host == null or not is_instance_valid(host) or not bool(host.call("can_spawn")):
+	if host == null or not is_instance_valid(host):
 		return
 	if parent == null or not is_instance_valid(parent):
+		return
+	var max_n := int(host.get("max_summons")) if "max_summons" in host else 3
+	var count := int(host.call("summon_count")) if host.has_method("summon_count") else 0
+	if count >= max_n:
 		return
 	var rat: Node3D = WretchRatScene.instantiate() as Node3D
 	if rat == null:

@@ -37,7 +37,7 @@ height = 1.15
 
 [node name="Wretch" instance=ExtResource("1_monster")]
 script = ExtResource("2_wretch")
-editor_description = "Packmaster Wretch. Tiny sight, moderate hearing, rat shared vision, ritual chase."
+editor_description = "Packmaster Wretch. Narrow 20m vision cone, moderate hearing, rat shared vision, ritual chase."
 body_tint = Color(0.72, 0.28, 0.22, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)
 lookdev_pose = 0
@@ -51,7 +51,7 @@ chase_style = 1
 keep_away_range = 20.0
 player_lock_sec = 5.0
 ambient_summon_cooldown_sec = 20.0
-chase_summon_cooldown_sec = 8.0
+chase_summon_cooldown_sec = 5.33
 
 [node name="CollisionShape3D" parent="." index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, -0.04)
@@ -103,11 +103,14 @@ cast_shadow = 1
 
 [node name="Sight" type="Node" parent="Senses" index="0"]
 script = ExtResource("6_sight")
-editor_description = "Very poor eyesight."
-sight_range = 2.5
+editor_description = "Blind on patrol/idle; 20m player-wide cone only in alert/chase."
+sight_range = 20.0
 require_line_of_sight = true
 eye_height = 0.95
 sight_urgency = 1.35
+use_vision_cone = true
+cone_width_at_max_range = 0.55
+only_when_alert_or_chase = true
 
 [node name="Hearing" type="Node" parent="Senses" index="1"]
 script = ExtResource("7_hear")
@@ -125,12 +128,13 @@ default_leash_radius = 10.0
 
 [node name="Ritual" type="Node3D" parent="."]
 script = ExtResource("8_ritual")
-editor_description = "Chase ritual: pack orb, sphere mouth, body straightens so face aims skyward."
+editor_description = "Pack ritual: alert = pulsing orb; chase = orb + dark core + skyward pose."
 look_up_pitch_deg = 45.0
 cone_range = 5.0
 cone_angle_deg = 9.0
 cone_forward_offset_m = 1.0
 glow_color = Color(0.25, 1, 0.35, 1)
+chase_core_color = Color(0.83, 0.68, 0.22, 1)
 
 [node name="Abilities" type="Node3D" parent="."]
 editor_description = "Ability 1 RightHand Summon Rats. Ability 2 LeftHand Command Pack."
