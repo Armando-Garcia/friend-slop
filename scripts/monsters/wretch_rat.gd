@@ -1,5 +1,5 @@
 class_name WretchRat
-extends "res://scripts/monsters/summon_monster.gd"
+extends "res://scripts/monsters/summon.gd"
 
 ## Small sphere minion for the Wretch. Sight-only aggro; explodes on player
 ## touch while chasing. Dies with host / fireball.
@@ -14,8 +14,19 @@ const LIGHT_START_RANGE := 0.15
 const LEASH_RADIUS_MULT := 1.4
 const RAT_PATROL_EDGE_MIN := 0.88
 const RAT_PATROL_EDGE_MAX := 0.99
-const RAT_IDLE_DURATION_SEC := 0.35
-const STILL_SPEED_EPS := 0.08
+## Calm patrol: long pauses, slow walks across the leash.
+const RAT_IDLE_DURATION_SEC := 0.7
+const RAT_PATROL_SPEED_MULT := 0.5
+## Host alert: tiny idle pauses so rats keep scurrying toward the sound.
+const AGITATED_IDLE_SEC := 0.08
+const AGITATED_SPEED_MULT := 1.25
+const AGITATED_SOUND_BLEND := 0.72
+const AGITATED_LATERAL_JITTER := 0.4
+## After Command Pack orb lands: arrive, then scout around the site.
+const INVESTIGATE_ARRIVE_DIST := 0.85
+const EXPLORE_RADIUS_MIN := 1.4
+const EXPLORE_RADIUS_MAX := 3.8
+const EXPLORE_ANGLE_STEP := 1.85
 
 @export_range(0.2, 2.0, 0.05) var explode_radius: float = 0.55
 ## Knockback reaches farther than the damage / visual burst radius.
@@ -25,13 +36,17 @@ const STILL_SPEED_EPS := 0.08
 @export var glow_color: Color = Color(0.25, 1.0, 0.35, 1.0)
 @export_range(1.0, 20.0, 0.5) var charge_light_energy: float = 12.0
 @export_range(0.0, 40.0, 0.5) var explode_monster_damage: float = 8.0
-## Explode if horizontal movement stays near zero this long.
-@export_range(0.5, 10.0, 0.1) var still_explode_sec: float = 2.0
 
 var _exploding: bool = false
 var _exploded: bool = false
 var _charge_age: float = 0.0
-var _still_sec: float = 0.0
+var _host_alert: bool = false
+var _alert_sound_goal: Vector3 = Vector3.ZERO
+var _has_alert_sound: bool = false
+var _calm_move_speed: float = 4.4
+var _investigate_center: Vector3 = Vector3.ZERO
+var _exploring_landing: bool = false
+var _explore_angle: float = 0.0
 
 @onready var _explode_light: OmniLight3D = $Body/ExplodeLight
 
@@ -39,11 +54,153 @@ var _still_sec: float = 0.0
 func bind_to_host(p_host: Node, p_leash_radius: float = 10.0) -> void:
 	super.bind_to_host(p_host, p_leash_radius * LEASH_RADIUS_MULT)
 	idle_duration_sec = RAT_IDLE_DURATION_SEC
+	_calm_move_speed = move_speed
+
+
+func sync_from_host_state(state: int) -> void:
+	super.sync_from_host_state(state)
+	_host_alert = state == MonsterAIScript.State.ALERT
+	if _host_alert:
+		_apply_agitation(true)
+		if (
+			_ai_state == MonsterAIScript.State.IDLE
+			or _ai_state == MonsterAIScript.State.ALERT
+		):
+			_begin_patrol()
+		return
+	_apply_agitation(false)
+	clear_host_alert_sound()
+
+
+func begin_recall() -> void:
+	## Drop investigate / alert scramble and run all the way to the Wretch.
+	_exploring_landing = false
+	_host_alert = false
+	_apply_agitation(false)
+	clear_host_alert_sound()
+	super.begin_recall()
+
+
+func _on_recall_finished() -> void:
+	## Spread on the leash edge and resume searching with eyes off.
+	_set_chase_eyes_active(false)
+	_begin_patrol()
+
+
+func set_host_alert_sound(world_position: Vector3) -> void:
+	_alert_sound_goal = world_position
+	_has_alert_sound = true
+	if not _host_alert:
+		return
+	if (
+		_ai_state == MonsterAIScript.State.IDLE
+		or _ai_state == MonsterAIScript.State.ALERT
+	):
+		_begin_patrol()
+
+
+func clear_host_alert_sound() -> void:
+	_has_alert_sound = false
+
+
+func set_forced_investigate(world_position: Vector3, free_leash: bool = true) -> void:
+	set_forced_investigate_explore(world_position, free_leash, _rng.randf() * TAU)
+
+
+func set_forced_investigate_explore(
+	world_position: Vector3, free_leash: bool = true, sector_rad: float = 0.0
+) -> void:
+	super.set_forced_investigate(world_position, free_leash)
+	_investigate_center = world_position
+	_exploring_landing = false
+	_explore_angle = sector_rad
+
+
+func clear_forced_hunt() -> void:
+	super.clear_forced_hunt()
+	_exploring_landing = false
+
+
+func _tick_patrol(_delta: float) -> void:
+	## Calm search is half speed; chase / recall / investigate keep full speed.
+	if not _host_alert:
+		var saved := move_speed
+		move_speed = _calm_move_speed * RAT_PATROL_SPEED_MULT
+		super._tick_patrol(_delta)
+		move_speed = saved
+		return
+	super._tick_patrol(_delta)
+
+
+func _tick_chase(_delta: float) -> void:
+	if aggro_mode == AggroMode.COMMAND_INVESTIGATE:
+		_tick_investigate_explore()
+	super._tick_chase(_delta)
+
+
+func _tick_investigate_explore() -> void:
+	## Run to the orb land point, then keep scouting around it in rotating directions.
+	if not has_forced_hunt_goal and not _exploring_landing:
+		return
+	if not _exploring_landing:
+		var to_land := Vector3(
+			forced_hunt_goal.x - global_position.x,
+			0.0,
+			forced_hunt_goal.z - global_position.z
+		)
+		if to_land.length() > INVESTIGATE_ARRIVE_DIST:
+			return
+		_investigate_center = forced_hunt_goal
+		_exploring_landing = true
+		_pick_explore_waypoint()
+		return
+	var to_waypoint := Vector3(
+		forced_hunt_goal.x - global_position.x,
+		0.0,
+		forced_hunt_goal.z - global_position.z
+	)
+	if to_waypoint.length() <= INVESTIGATE_ARRIVE_DIST:
+		_pick_explore_waypoint()
+
+
+func _pick_explore_waypoint() -> void:
+	## Advance angle so each hop covers a different direction around the land site.
+	_explore_angle += EXPLORE_ANGLE_STEP + _rng.randf_range(-0.45, 0.55)
+	var dist := _rng.randf_range(EXPLORE_RADIUS_MIN, EXPLORE_RADIUS_MAX)
+	forced_hunt_goal = Vector3(
+		_investigate_center.x + cos(_explore_angle) * dist,
+		global_position.y,
+		_investigate_center.z + sin(_explore_angle) * dist
+	)
+	has_forced_hunt_goal = true
+	aggro_mode = AggroMode.COMMAND_INVESTIGATE
+
+
+func _apply_agitation(agitated: bool) -> void:
+	if agitated:
+		idle_duration_sec = AGITATED_IDLE_SEC
+		move_speed = _calm_move_speed * AGITATED_SPEED_MULT
+	else:
+		idle_duration_sec = RAT_IDLE_DURATION_SEC
+		move_speed = _calm_move_speed
 
 
 func _random_leash_edge_point() -> Vector3:
+	if _host_alert and _has_alert_sound:
+		return _agitated_point_toward_sound()
 	var host_pos := _host_position()
-	var angle := _rng.randf() * TAU
+	## Prefer the far side of the ring so each walk crosses more ground.
+	var from_host := Vector3(
+		global_position.x - host_pos.x,
+		0.0,
+		global_position.z - host_pos.z
+	)
+	var angle: float
+	if from_host.length_squared() > 0.05:
+		angle = atan2(from_host.z, from_host.x) + PI
+		angle += _rng.randf_range(-1.0, 1.0)
+	else:
+		angle = _rng.randf() * TAU
 	var dist := leash_radius * _rng.randf_range(RAT_PATROL_EDGE_MIN, RAT_PATROL_EDGE_MAX)
 	return Vector3(
 		host_pos.x + cos(angle) * dist,
@@ -52,9 +209,37 @@ func _random_leash_edge_point() -> Vector3:
 	)
 
 
-func _append_default_interest_candidates(_out: Array) -> void:
-	## Rats use authored Sight sense only (no wide proximity aggro).
-	pass
+func _agitated_point_toward_sound() -> Vector3:
+	## Bias leash-edge scurry toward the host's heard point, with lateral jitter.
+	var host_pos := _host_position()
+	var to_sound := Vector3(
+		_alert_sound_goal.x - host_pos.x,
+		0.0,
+		_alert_sound_goal.z - host_pos.z
+	)
+	var angle := _rng.randf() * TAU
+	var dir := Vector3(cos(angle), 0.0, sin(angle))
+	if to_sound.length_squared() > 0.0001:
+		var toward := to_sound.normalized()
+		var lateral := Vector3(-toward.z, 0.0, toward.x)
+		var side := _rng.randf_range(-AGITATED_LATERAL_JITTER, AGITATED_LATERAL_JITTER)
+		dir = (toward * AGITATED_SOUND_BLEND + lateral * side).normalized()
+	var dist := leash_radius * _rng.randf_range(0.55, RAT_PATROL_EDGE_MAX)
+	return Vector3(
+		host_pos.x + dir.x * dist,
+		global_position.y,
+		host_pos.z + dir.z * dist
+	)
+
+
+func _tick_alert(_delta: float) -> void:
+	## Agitated rats don't freeze — keep scurrying on alert.
+	if _host_alert:
+		if _should_enforce_leash() and _try_pull_to_leash():
+			return
+		_begin_patrol()
+		return
+	super._tick_alert(_delta)
 
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
@@ -73,19 +258,6 @@ func _physics_process(delta: float) -> void:
 		_tick_explode_charge(delta)
 		return
 	super._physics_process(delta)
-	_tick_stillness_fuse(delta)
-
-
-func _tick_stillness_fuse(delta: float) -> void:
-	if _exploding or _exploded or _dying or not is_alive:
-		return
-	var flat_speed := Vector2(velocity.x, velocity.z).length()
-	if flat_speed <= STILL_SPEED_EPS:
-		_still_sec += delta
-		if _still_sec >= still_explode_sec:
-			_begin_explode()
-	else:
-		_still_sec = 0.0
 
 
 func _try_touch_damage(target: Node3D) -> void:
@@ -133,7 +305,6 @@ func _begin_explode() -> void:
 		return
 	_exploding = true
 	_charge_age = 0.0
-	_still_sec = 0.0
 	_cancel_cast()
 	velocity = Vector3.ZERO
 

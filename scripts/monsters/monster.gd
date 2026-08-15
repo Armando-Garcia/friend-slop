@@ -19,6 +19,9 @@ const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.gd")
 const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const MonsterChaseMoveScript := preload("res://scripts/monsters/monster_chase_move.gd")
+const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_combat_spacing.gd")
+const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
 
 const DEFAULT_TINT := Color(0.72, 0.28, 0.22, 1.0)
 const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
@@ -96,6 +99,17 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 ## CLOSE_IN rushes melee. KEEP_AWAY holds at keep_away_range.
 @export var chase_style: ChaseStyle = ChaseStyle.CLOSE_IN
 @export_range(1.0, 40.0, 0.5) var keep_away_range: float = 20.0
+## Yaw turn rate (rad/s). Fast default so retreat/re-face reads as fluid.
+@export_range(1.0, 24.0, 0.1) var face_turn_speed_rad: float = 10.0
+
+@export_group("Chase move")
+@export_range(0.25, 10.0, 0.05) var chase_wait_min_sec: float = 1.0
+@export_range(0.25, 12.0, 0.05) var chase_wait_max_sec: float = 3.0
+@export_range(0.25, 6.0, 0.05) var chase_strafe_min_sec: float = 1.2
+@export_range(0.25, 6.0, 0.05) var chase_strafe_max_sec: float = 2.0
+@export_range(0.25, 8.0, 0.05) var chase_retreat_min_sec: float = 1.2
+@export_range(0.25, 8.0, 0.05) var chase_retreat_max_sec: float = 3.2
+@export_range(0.1, 3.0, 0.05) var chase_optimal_eps: float = 0.55
 
 var current_health: float = 60.0
 var is_alive: bool = true
@@ -121,6 +135,7 @@ var _attack_range_mesh: MeshInstance3D = null
 var _cast_windup_left: float = 0.0
 var _casting_ability: Node = null
 var _cast_prefer_index: int = 0
+var _chase_move: MonsterChaseMove = null
 
 
 func _ready() -> void:
@@ -130,6 +145,8 @@ func _ready() -> void:
 	current_health = max_health
 	is_alive = true
 	_rng.randomize()
+	_chase_move = MonsterChaseMoveScript.new() as MonsterChaseMove
+	_sync_chase_move_config()
 	_senses_root = get_node_or_null("Senses")
 	_cache_eyes()
 	_refresh_appearance()
@@ -143,6 +160,16 @@ func _ready() -> void:
 		return
 	_enter_idle()
 	set_physics_process(true)
+
+
+func _sync_chase_move_config() -> void:
+	if _chase_move == null:
+		return
+	_chase_move.configure(
+		_rng, chase_wait_min_sec, chase_wait_max_sec,
+		chase_strafe_min_sec, chase_strafe_max_sec,
+		chase_retreat_min_sec, chase_retreat_max_sec, chase_optimal_eps
+	)
 
 
 func apply_summon_appearance(tint: Color, p_eye_glow_color: Color = DEFAULT_EYE_GLOW) -> void:
@@ -366,8 +393,7 @@ func _apply_eye_glow_color(color: Color, energy_scale: float = 1.0) -> void:
 func _refresh_lookdev_eyes() -> void:
 	if not lookdev_override and not Engine.is_editor_hint():
 		return
-	var want := MonsterAIScript.lookdev_eyes_visible(lookdev_pose)
-	_set_chase_eyes_active(want)
+	_set_chase_eyes_active(MonsterAIScript.lookdev_eyes_visible(lookdev_pose))
 
 
 func _set_chase_eyes_active(active: bool) -> void:
@@ -379,52 +405,12 @@ func _set_chase_eyes_active(active: bool) -> void:
 
 
 func _refresh_range_gizmos() -> void:
-	if not show_combat_ranges:
-		_free_range_gizmo(_chase_range_mesh)
-		_chase_range_mesh = null
-		_free_range_gizmo(_attack_range_mesh)
-		_attack_range_mesh = null
-		return
-	_chase_range_mesh = _ensure_range_disc(
-		_chase_range_mesh, "ChaseRangeGizmo", chase_range, Color(1.0, 0.35, 0.2, 0.22)
+	var result: Dictionary = MonsterRangeGizmosScript.refresh(
+		self, show_combat_ranges, _chase_range_mesh, _attack_range_mesh,
+		chase_range, attack_range, RANGE_DISC_HEIGHT
 	)
-	_attack_range_mesh = _ensure_range_disc(
-		_attack_range_mesh, "AttackRangeGizmo", attack_range, Color(1.0, 0.85, 0.2, 0.28)
-	)
-
-
-func _ensure_range_disc(
-	existing: MeshInstance3D, node_name: String, radius: float, color: Color
-) -> MeshInstance3D:
-	var mesh_inst := existing
-	if mesh_inst == null or not is_instance_valid(mesh_inst):
-		mesh_inst = MeshInstance3D.new()
-		mesh_inst.name = node_name
-		add_child(mesh_inst)
-		if Engine.is_editor_hint() and get_tree() != null:
-			var edited := get_tree().edited_scene_root
-			if edited != null:
-				mesh_inst.owner = edited
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = maxf(0.05, radius)
-	cyl.bottom_radius = cyl.top_radius
-	cyl.height = RANGE_DISC_HEIGHT
-	cyl.radial_segments = 48
-	mesh_inst.mesh = cyl
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = color
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh_inst.material_override = mat
-	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mesh_inst.position = Vector3(0.0, RANGE_DISC_HEIGHT * 0.5, 0.0)
-	return mesh_inst
-
-
-func _free_range_gizmo(mesh_inst: MeshInstance3D) -> void:
-	if mesh_inst != null and is_instance_valid(mesh_inst):
-		mesh_inst.queue_free()
+	_chase_range_mesh = result.get("chase") as MeshInstance3D
+	_attack_range_mesh = result.get("attack") as MeshInstance3D
 
 
 func _remember_hit_dir(from: Node3D) -> void:
@@ -609,6 +595,7 @@ func _enter_idle() -> void:
 	_idle_timer = 0.0
 	_undetected_sec = 0.0
 	_alert_timer = 0.0
+	_clear_chase_move()
 	velocity.x = 0.0
 	velocity.z = 0.0
 
@@ -618,6 +605,7 @@ func _enter_alert() -> void:
 	_ai_state = MonsterAIScript.State.ALERT
 	_undetected_sec = 0.0
 	_alert_timer = 0.0
+	_clear_chase_move()
 	velocity.x = 0.0
 	velocity.z = 0.0
 
@@ -634,6 +622,7 @@ func _begin_patrol() -> void:
 	_ai_state = MonsterAIScript.State.PATROL
 	_undetected_sec = 0.0
 	_alert_timer = 0.0
+	_clear_chase_move()
 	_patrol_goal = MonsterAIScript.random_patrol_point(
 		global_position,
 		patrol_radius,
@@ -665,16 +654,47 @@ func _tick_alert(_delta: float) -> void:
 	velocity.z = 0.0
 
 
-func _tick_chase(_delta: float) -> void:
+func _tick_chase(delta: float) -> void:
 	if not _interest_is_actionable(_interest):
 		## Grace window before ALERT: hold position, keep eyes on.
 		_cancel_cast()
+		_clear_chase_move()
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
 	var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
 	var target: Node3D = _interest.get("target") as Node3D
 
+	if _try_tick_chase_reposition(delta, target):
+		return
+
+	if _tick_chase_reposition_wait(delta, target):
+		return
+
+	_tick_chase_approach(goal, target)
+
+
+func _tick_chase_reposition_wait(delta: float, target: Node3D) -> bool:
+	## Continuous kite loop while near optimal range. Returns true if handled.
+	if not _uses_continuous_chase_move_timer():
+		return false
+	if target == null or not is_instance_valid(target):
+		return false
+	_ensure_chase_wait_armed()
+	var dist := MonsterAIScript.horizontal_distance(
+		global_position, target.global_position
+	)
+	var optimal := _optimal_combat_range()
+	if dist > optimal + chase_optimal_eps:
+		return false
+	if _tick_chase_wait_and_decide(delta, target, dist, optimal):
+		if _try_tick_chase_reposition(delta, target):
+			return true
+	_hold_chase_while_waiting(target)
+	return true
+
+
+func _tick_chase_approach(goal: Vector3, target: Node3D) -> void:
 	if (
 		chase_style == ChaseStyle.CLOSE_IN
 		and target != null
@@ -703,6 +723,102 @@ func _tick_chase(_delta: float) -> void:
 	_face_horizontal(desired)
 
 
+func _uses_continuous_chase_move_timer() -> bool:
+	## Children (e.g. Wretch) can disable the free 1–3s kite loop.
+	return true
+
+
+func is_chase_retreating() -> bool:
+	return _chase_move != null and _chase_move.is_retreating()
+
+
+func _clear_chase_move() -> void:
+	if _chase_move != null:
+		_chase_move.clear()
+
+
+func _ensure_chase_wait_armed() -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.ensure_wait_armed()
+
+
+func _arm_chase_wait() -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.arm_wait()
+
+
+func _optimal_combat_range() -> float:
+	if chase_style == ChaseStyle.KEEP_AWAY:
+		return keep_away_range
+	if _has_ranged_spacing_abilities():
+		var ability := _preferred_spacing_ability()
+		if ability != null:
+			return MonsterCombatSpacingScript.preferred_cast_ideal(ability)
+	return attack_range
+
+
+func _max_chase_reposition_distance() -> float:
+	return MonsterAIScript.max_aggro_move_distance(chase_range)
+
+
+func _tick_chase_wait_and_decide(
+	delta: float, target: Node3D, dist: float, optimal: float
+) -> bool:
+	_sync_chase_move_config()
+	if _chase_move == null:
+		return false
+	return _chase_move.tick_wait_and_decide(
+		delta, self, target, dist, optimal, _max_chase_reposition_distance()
+	)
+
+
+func start_chase_strafe(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.start_strafe(self, target, side_sign, duration_sec)
+
+
+func start_chase_retreat(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.start_retreat(
+			self, target, side_sign, duration_sec, _max_chase_reposition_distance()
+		)
+
+
+func _try_tick_chase_reposition(delta: float, target: Node3D) -> bool:
+	_sync_chase_move_config()
+	if _chase_move == null:
+		return false
+	return _chase_move.tick_move(
+		delta,
+		self,
+		target,
+		move_speed,
+		attack_range,
+		_max_chase_reposition_distance(),
+		Callable(self, "_face_horizontal"),
+		Callable(self, "_try_touch_damage")
+	)
+
+
+func _hold_chase_while_waiting(target: Node3D) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if target == null or not is_instance_valid(target):
+		return
+	var toward := Vector3(
+		target.global_position.x - global_position.x,
+		0.0,
+		target.global_position.z - global_position.z
+	)
+	_face_horizontal(toward)
+	if toward.length() <= attack_range:
+		_try_touch_damage(target)
+
+
 func _has_ranged_spacing_abilities() -> bool:
 	for ability in get_combat_abilities():
 		if "requires_target" in ability and not bool(ability.get("requires_target")):
@@ -713,40 +829,14 @@ func _has_ranged_spacing_abilities() -> bool:
 
 
 func _move_keep_away(target: Node3D) -> void:
-	var to_target := Vector3(
-		target.global_position.x - global_position.x,
-		0.0,
-		target.global_position.z - global_position.z
+	MonsterCombatSpacingScript.apply_keep_away(
+		self, target, keep_away_range, move_speed, Callable(self, "_face_horizontal")
 	)
-	var dist := to_target.length()
-	var arrive_eps := 0.5
-	_face_horizontal(to_target)
-	if dist < 0.05:
-		velocity.x = 0.0
-		velocity.z = 0.0
-		return
-	var radial := to_target.normalized()
-	if dist < keep_away_range - arrive_eps:
-		var retreat_goal := target.global_position - radial * keep_away_range
-		var desired_away: Vector3 = MonsterAIScript.horizontal_velocity_toward(
-			global_position, retreat_goal, move_speed, velocity.y
-		)
-		velocity.x = desired_away.x
-		velocity.z = desired_away.z
-		return
-	if dist > keep_away_range + arrive_eps:
-		var approach_goal := target.global_position - radial * keep_away_range
-		var desired_in: Vector3 = MonsterAIScript.horizontal_velocity_toward(
-			global_position, approach_goal, move_speed, velocity.y
-		)
-		velocity.x = desired_in.x
-		velocity.z = desired_in.z
-		return
-	velocity.x = 0.0
-	velocity.z = 0.0
 
 
 func _try_start_cast(target: Node3D) -> bool:
+	if is_chase_retreating():
+		return false
 	var ready := _pick_ready_ability(target)
 	if ready == null:
 		return false
@@ -786,14 +876,6 @@ func _first_ranged_castable_ability() -> Node:
 	return null
 
 
-func _first_castable_ability() -> Node:
-	var abilities := get_combat_abilities()
-	for ability in abilities:
-		if bool(ability.call("can_cast")):
-			return ability
-	return null
-
-
 func _preferred_spacing_ability() -> Node:
 	var abilities := get_combat_abilities()
 	for ability in abilities:
@@ -806,48 +888,9 @@ func _preferred_spacing_ability() -> Node:
 
 
 func _move_toward_cast_range(target: Node3D, ability: Node) -> void:
-	var min_r := float(ability.get("min_cast_range")) if "min_cast_range" in ability else 3.0
-	var max_r := float(ability.get("max_cast_range")) if "max_cast_range" in ability else 12.0
-	var ideal := (min_r + max_r) * 0.5
-	if ability.has_method("preferred_cast_range"):
-		ideal = float(ability.call("preferred_cast_range"))
-	var to_target := Vector3(
-		target.global_position.x - global_position.x,
-		0.0,
-		target.global_position.z - global_position.z
+	MonsterCombatSpacingScript.apply_cast_band(
+		self, target, ability, move_speed, Callable(self, "_face_horizontal")
 	)
-	var dist := to_target.length()
-	var arrive_eps := 0.45
-	_face_horizontal(to_target)
-
-	## Too close: back off along the line away from the player.
-	if dist < min_r or dist < ideal - arrive_eps:
-		if dist < 0.05:
-			velocity.x = 0.0
-			velocity.z = 0.0
-			return
-		var radial := to_target.normalized()
-		var retreat_goal := target.global_position - radial * ideal
-		var desired_away: Vector3 = MonsterAIScript.horizontal_velocity_toward(
-			global_position, retreat_goal, move_speed, velocity.y
-		)
-		velocity.x = desired_away.x
-		velocity.z = desired_away.z
-		return
-
-	## Too far: close in toward preferred band (stop short of max).
-	if dist > max_r or dist > ideal + arrive_eps:
-		var radial_in := to_target.normalized()
-		var approach_goal := target.global_position - radial_in * ideal
-		var desired_in: Vector3 = MonsterAIScript.horizontal_velocity_toward(
-			global_position, approach_goal, move_speed, velocity.y
-		)
-		velocity.x = desired_in.x
-		velocity.z = desired_in.z
-		return
-
-	velocity.x = 0.0
-	velocity.z = 0.0
 
 
 func _pick_ready_ability(target: Node3D) -> Node:
@@ -909,6 +952,12 @@ func _tick_cast_windup(delta: float, target: Node3D) -> void:
 		return
 	if ability.has_method("begin_cast"):
 		ability.call("begin_cast", self, target)
+		_on_ability_cast_fired(ability)
+
+
+func _on_ability_cast_fired(_ability: Node) -> void:
+	## Override in children (e.g. Wretch post-Command-Pack retreat).
+	pass
 
 
 func _cancel_cast() -> void:
@@ -920,16 +969,20 @@ func _cancel_cast() -> void:
 
 
 func _try_touch_damage(target: Node3D) -> void:
-	if target == null or not target.has_method("take_damage"):
+	if is_chase_retreating() or target == null or not target.has_method("take_damage"):
 		return
 	target.call("take_damage", touch_damage * get_physics_process_delta_time(), self)
 
 
 func _face_horizontal(desired_vel: Vector3) -> void:
-	var flat := Vector3(desired_vel.x, 0.0, desired_vel.z)
-	if flat.length_squared() < 0.0001:
-		return
-	look_at(global_position + flat.normalized(), Vector3.UP)
+	## Strafe keeps facing the player; retreat/approach turn at face_turn_speed_rad.
+	_face_horizontal_at_speed(
+		desired_vel, get_physics_process_delta_time(), face_turn_speed_rad
+	)
+
+
+func _face_horizontal_at_speed(desired: Vector3, delta: float, speed_rad: float) -> void:
+	rotation.y = MonsterAIScript.rotate_yaw_toward(rotation.y, desired, speed_rad, delta)
 
 
 func _apply_knockback_bleed(delta: float) -> void:

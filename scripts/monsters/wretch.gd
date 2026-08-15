@@ -5,25 +5,24 @@ extends Monster
 ## Pack master: weak eyes, moderate ears, shares rat sight, rituals when a player is known.
 
 const HEARING_SOURCE := &"hearing"
-const PLAYER_LOCK_SOURCE := &"player_lock"
+const LAST_KNOWN_SOURCE := &"last_known"
 const SUMMON_SIGHT_SOURCE := &"summon_sight"
-const PLAYER_LOCK_URGENCY := 2.1
+const SUMMON_HEARING_SOURCE := &"summon_hearing"
+const LAST_KNOWN_URGENCY := 1.55
 const COMMAND_ABILITY_ID := "command_pack"
 ## Alert hearing extends beyond chase hearing (outer ring only → alert).
 const ALERT_HEAR_RANGE_MULT := 1.33
 const RitualPoseScript := preload("res://scripts/monsters/wretch_ritual_pose.gd")
 
 @export var ambient_summon_cooldown_sec: float = 20.0
-@export var chase_summon_cooldown_sec: float = 5.33
-## Keep a spotted player locked long enough to finish Command Pack windup.
-@export_range(1.0, 12.0, 0.25) var player_lock_sec: float = 5.0
-## Base yaw turn rate (rad/s). Hearing turns use half of this.
-@export_range(0.5, 12.0, 0.1) var face_turn_speed_rad: float = 4.0
+@export var chase_summon_cooldown_sec: float = 2.0
 
 var _ritual: Node = null
 var _last_rat_command_key: String = ""
-var _locked_player: Node3D = null
-var _player_lock_left: float = 0.0
+var _last_synced_summon_ai_state: int = -1
+## Snapshot used when the player slips live senses — Command Pack aims here.
+var _last_known_player_pos: Vector3 = Vector3.ZERO
+var _has_last_known_player: bool = false
 
 
 func _ready() -> void:
@@ -69,9 +68,7 @@ func get_summon_cooldown_sec() -> float:
 
 
 func get_locked_player_target() -> Node3D:
-	## Sticky lock preferred; falls back to live interest.
-	if _locked_player != null and is_instance_valid(_locked_player):
-		return _locked_player
+	## Live player interest only (no sticky lock).
 	if not _interest_has_player_target(_interest):
 		return null
 	return _interest.get("target") as Node3D
@@ -92,44 +89,71 @@ func _gather_interest() -> RefCounted:
 	var host := get_summon_host()
 	if host != null and host.has_method("append_relayed_interests"):
 		host.call("append_relayed_interests", candidates)
-	_refresh_player_lock_from_candidates(candidates)
-	if _locked_player != null and is_instance_valid(_locked_player):
-		candidates.append(
-			MonsterInterestScript.from_target(
-				_locked_player, PLAYER_LOCK_URGENCY, PLAYER_LOCK_SOURCE
-			)
+	_update_last_known_from_candidates(candidates)
+	var preferred := _prefer_interest(candidates)
+	if _interest_is_actionable(preferred) and _is_live_detection(preferred):
+		return preferred
+	## Lost live contact while chasing: hold last-known so we can fire Command Pack.
+	if (
+		_ai_state == MonsterAIScript.State.CHASE
+		and _has_last_known_player
+	):
+		return MonsterInterestScript.from_position(
+			_last_known_player_pos, LAST_KNOWN_URGENCY, LAST_KNOWN_SOURCE
 		)
-	return _prefer_interest(candidates)
+	if _interest_is_actionable(preferred):
+		return preferred
+	return preferred
 
 
 func _physics_process(delta: float) -> void:
-	_tick_player_lock(delta)
 	super._physics_process(delta)
 	if Engine.is_editor_hint() or not is_alive:
 		return
 	_tick_alert_hearing()
 	_direct_rats_from_interest()
+	_direct_rats_alert_agitation()
+	_sync_summons_to_ai_state()
 	_update_ritual_pose()
 
 
 func _prefer_interest(candidates: Array) -> RefCounted:
-	## Rat vision of a player outranks ambient hearing for host chase.
-	var best_summon: RefCounted = null
-	var best_summon_u := 0.0
+	## Rat vision > rat hearing > ambient host interests (including host hearing).
+	var best_sight := _best_actionable_source(candidates, SUMMON_SIGHT_SOURCE)
+	if best_sight != null:
+		return best_sight
+	var best_summon_hearing := _best_actionable_source(
+		candidates, SUMMON_HEARING_SOURCE
+	)
+	if best_summon_hearing != null:
+		return best_summon_hearing
+	return super._prefer_interest(candidates)
+
+
+func _best_actionable_source(candidates: Array, source: StringName) -> RefCounted:
+	var best: RefCounted = null
+	var best_u := 0.0
 	for item in candidates:
 		if item == null:
 			continue
-		if str(item.get("source")) != String(SUMMON_SIGHT_SOURCE):
+		if str(item.get("source")) != String(source):
 			continue
 		if not item.has_method("is_actionable") or not bool(item.call("is_actionable")):
 			continue
 		var urgency := float(item.get("urgency"))
-		if best_summon == null or urgency > best_summon_u:
-			best_summon = item
-			best_summon_u = urgency
-	if best_summon != null:
-		return best_summon
-	return super._prefer_interest(candidates)
+		if best == null or urgency > best_u:
+			best = item
+			best_u = urgency
+	return best
+
+
+func _sync_summons_to_ai_state() -> void:
+	if _ai_state == _last_synced_summon_ai_state:
+		return
+	_last_synced_summon_ai_state = _ai_state
+	var host := get_summon_host()
+	if host != null and host.has_method("sync_from_host_state"):
+		host.call("sync_from_host_state", _ai_state)
 
 
 func _tick_alert_hearing() -> void:
@@ -213,16 +237,21 @@ func _pick_ready_ability(target: Node3D) -> Node:
 						return ability
 				elif bool(ability.call("can_cast")):
 					return ability
-	## Always try Command Pack first when a player is locked / spotted.
-	if target != null and is_instance_valid(target) and target.is_in_group("player"):
-		for ability in get_combat_abilities():
-			if str(ability.get("ability_id")) != COMMAND_ABILITY_ID:
-				continue
-			if ability.has_method("is_ready_to_cast"):
-				if bool(ability.call("is_ready_to_cast", self, target)):
-					return ability
-			elif bool(ability.call("can_cast")):
-				return ability
+	## Command Pack is a lost-contact / hearing recovery shot — not while live-locked.
+	if _is_live_player_detection(_interest):
+		return super._pick_ready_ability(target)
+	## Lost contact: aim Command Pack at last known player position.
+	if (
+		is_ai_chasing()
+		and _has_last_known_player
+		and _interest != null
+		and str(_interest.get("source")) == String(LAST_KNOWN_SOURCE)
+	):
+		var lost_cmd := _find_command_ability()
+		if lost_cmd != null and bool(lost_cmd.call("can_cast")):
+			if lost_cmd.has_method("set_pending_aim"):
+				lost_cmd.call("set_pending_aim", _last_known_player_pos)
+			return lost_cmd
 	## Heard outside sight — fire Command Pack at the sound immediately.
 	var hearing_aim = get_hearing_command_aim()
 	if hearing_aim is Vector3:
@@ -238,6 +267,19 @@ func _pick_ready_ability(target: Node3D) -> Node:
 
 
 func _try_start_cast(target: Node3D) -> bool:
+	## Lost-contact Command Pack (no live player Node3D).
+	if (
+		is_ai_chasing()
+		and not _is_live_player_detection(_interest)
+		and _has_last_known_player
+	):
+		var lost_cmd := _find_command_ability()
+		if lost_cmd != null and bool(lost_cmd.call("can_cast")):
+			if lost_cmd.has_method("set_pending_aim"):
+				lost_cmd.call("set_pending_aim", _last_known_player_pos)
+			_begin_ability_windup(lost_cmd)
+			_tick_cast_windup(0.0, null)
+			return true
 	## Hearing casts have no player Node3D — still start Command Pack via pending aim.
 	var hearing_aim = get_hearing_command_aim()
 	if (
@@ -257,11 +299,11 @@ func _try_start_cast(target: Node3D) -> bool:
 
 
 func _tick_cast_windup(delta: float, target: Node3D) -> void:
-	## Face the heard point while winding up a sound-aimed Command Pack.
+	## Face last-known / heard point while winding up a recovery Command Pack.
 	if target == null and _casting_ability != null:
-		var hearing_aim = get_hearing_command_aim()
-		if hearing_aim is Vector3:
-			var aim: Vector3 = hearing_aim as Vector3
+		var aim_point = _command_aim_point()
+		if aim_point is Vector3:
+			var aim: Vector3 = aim_point as Vector3
 			var toward := Vector3(
 				aim.x - global_position.x,
 				0.0,
@@ -284,13 +326,20 @@ func _tick_cast_windup(delta: float, target: Node3D) -> void:
 		_cast_windup_left = 0.0
 		if ability != null and is_instance_valid(ability) and ability.has_method("begin_cast"):
 			ability.call("begin_cast", self, null)
+			_on_ability_cast_fired(ability)
 		return
 	super._tick_cast_windup(delta, target)
 
 
+func _command_aim_point():
+	if _has_last_known_player:
+		return _last_known_player_pos
+	return get_hearing_command_aim()
+
+
 func get_hearing_command_aim():
-	## Sound aim only when not visually locked and the sound is outside sight range.
-	if is_locked_onto_player():
+	## Sound aim only when not live-tracking a player and sound is outside sight.
+	if _is_live_player_detection(_interest):
 		return null
 	if _interest == null:
 		return null
@@ -324,33 +373,34 @@ func _find_command_ability() -> Node:
 	return null
 
 
-func _begin_ability_windup(ability: Node) -> void:
-	## Hold aggro through the full Command Pack ritual windup.
-	if (
-		ability != null
-		and str(ability.get("ability_id")) == COMMAND_ABILITY_ID
-		and _locked_player != null
-		and is_instance_valid(_locked_player)
-	):
-		_player_lock_left = maxf(_player_lock_left, player_lock_sec)
-	super._begin_ability_windup(ability)
-
-
 func _tick_chase(delta: float) -> void:
-	## Packmaster stands still while directing rats / ritualizing.
+	## Packmaster stands still while directing rats / ritualizing, except for
+	## short post-Command-Pack reposition hops from the shared chase move API.
+	if not _interest_is_actionable(_interest):
+		_cancel_cast()
+		_clear_chase_move()
+		velocity.x = 0.0
+		velocity.z = 0.0
+		return
+
+	var target: Node3D = null
+	if _is_live_player_detection(_interest):
+		target = _interest.get("target") as Node3D
+
+	if _try_tick_chase_reposition(delta, target):
+		return
+
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if _interest_has_player_target(_interest):
-		var target: Node3D = _interest.get("target") as Node3D
-		if target != null and is_instance_valid(target):
-			var toward := Vector3(
-				target.global_position.x - global_position.x,
-				0.0,
-				target.global_position.z - global_position.z
-			)
-			_face_horizontal(toward)
+	if target != null and is_instance_valid(target):
+		var toward := Vector3(
+			target.global_position.x - global_position.x,
+			0.0,
+			target.global_position.z - global_position.z
+		)
+		_face_horizontal(toward)
 		return
-	## Hearing-only: face the sound slowly, stay put.
+	## Last-known / hearing: face the memory point slowly, stay put (orb windup).
 	if _interest != null and _interest.get("has_goal_position"):
 		var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
 		var toward_sound := Vector3(
@@ -359,6 +409,29 @@ func _tick_chase(delta: float) -> void:
 			goal.z - global_position.z
 		)
 		_face_toward_hearing(toward_sound, delta)
+
+
+func _uses_continuous_chase_move_timer() -> bool:
+	return false
+
+
+func _on_ability_cast_fired(ability: Node) -> void:
+	if ability == null or not is_instance_valid(ability):
+		return
+	if str(ability.get("ability_id")) != COMMAND_ABILITY_ID:
+		return
+	_reassess_aggro_after_command_pack()
+
+
+func _reassess_aggro_after_command_pack() -> void:
+	## Orb is the lost-contact recovery shot — always drop to alert afterward.
+	_interest = null
+	_clear_chase_move()
+	if _has_last_known_player:
+		var host := get_summon_host()
+		if host != null and host.has_method("sync_alert_sound"):
+			host.call("sync_alert_sound", _last_known_player_pos)
+	_enter_alert()
 
 
 func _tick_alert(delta: float) -> void:
@@ -394,19 +467,59 @@ func _face_toward_hearing(desired: Vector3, delta: float) -> void:
 	_face_horizontal_at_speed(desired, delta, face_turn_speed_rad * 0.5)
 
 
-func _face_horizontal_at_speed(desired: Vector3, delta: float, speed_rad: float) -> void:
-	var flat := Vector3(desired.x, 0.0, desired.z)
-	if flat.length_squared() < 0.0001:
-		return
-	var target_basis := Basis.looking_at(flat.normalized(), Vector3.UP)
-	var target_yaw := target_basis.get_euler().y
-	rotation.y = rotate_toward(rotation.y, target_yaw, maxf(speed_rad, 0.01) * delta)
-
-
 func _direct_rats_from_interest() -> void:
 	## Hearing no longer auto-sends rats — Command Pack orb handles investigate on arrival.
 	if _ai_state != MonsterAIScript.State.CHASE:
 		_last_rat_command_key = ""
+
+
+func _direct_rats_alert_agitation() -> void:
+	## While alert, push the heard point so rats scurry toward it more often.
+	var host := get_summon_host()
+	if host == null:
+		return
+	if not is_ai_alert():
+		if host.has_method("clear_alert_sound"):
+			host.call("clear_alert_sound")
+		return
+	var sound = _resolve_alert_sound_position()
+	if sound is Vector3 and host.has_method("sync_alert_sound"):
+		host.call("sync_alert_sound", sound as Vector3)
+
+
+func _resolve_alert_sound_position():
+	var face = _hearing_face_goal()
+	if face is Vector3:
+		return face
+	var hearing := get_node_or_null("Senses/Hearing")
+	if hearing != null and bool(hearing.get("has_last_heard")):
+		return hearing.get("last_heard_position")
+	if _has_last_known_player:
+		return _last_known_player_pos
+	var alert_r := _alert_hear_range()
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var hub := tree.root.get_node_or_null("SteamProximityVoiceHub")
+	var best: Variant = null
+	var best_dist := INF
+	for node in tree.get_nodes_in_group("player"):
+		if not (node is Node3D):
+			continue
+		var player := node as Node3D
+		if not _player_is_speaking(hub, player):
+			continue
+		var flat := Vector3(
+			player.global_position.x - global_position.x,
+			0.0,
+			player.global_position.z - global_position.z
+		)
+		var dist := flat.length()
+		if dist > alert_r or dist >= best_dist:
+			continue
+		best_dist = dist
+		best = player.global_position
+	return best
 
 
 func _update_ritual_pose() -> void:
@@ -419,7 +532,14 @@ func _update_ritual_pose() -> void:
 		_casting_ability != null
 		or (
 			is_ai_chasing()
-			and (is_locked_onto_player() or get_hearing_command_aim() is Vector3)
+			and (
+				_is_live_player_detection(_interest)
+				or (
+					_interest != null
+					and str(_interest.get("source")) == String(LAST_KNOWN_SOURCE)
+				)
+				or get_hearing_command_aim() is Vector3
+			)
 		)
 	):
 		phase = RitualPoseScript.RitualPhase.CHASE
@@ -431,45 +551,40 @@ func _update_ritual_pose() -> void:
 		_ritual.call("set_active", phase != RitualPoseScript.RitualPhase.OFF)
 
 
-func _refresh_player_lock_from_candidates(candidates: Array) -> void:
+func _update_last_known_from_candidates(candidates: Array) -> void:
 	for item in candidates:
 		if item == null:
 			continue
 		var target: Node3D = item.get("target") as Node3D
-		if target == null or not is_instance_valid(target):
-			continue
-		if not target.is_in_group("player"):
-			continue
-		_locked_player = target
-		_player_lock_left = player_lock_sec
-		return
+		if target != null and is_instance_valid(target) and target.is_in_group("player"):
+			_last_known_player_pos = target.global_position
+			_has_last_known_player = true
+			return
+		## Hearing / investigate positions also refresh last known while chasing.
+		if (
+			is_ai_chasing()
+			and bool(item.get("has_goal_position"))
+			and str(item.get("source")) == String(HEARING_SOURCE)
+		):
+			_last_known_player_pos = item.call(
+				"resolved_goal_position", global_position
+			) as Vector3
+			_has_last_known_player = true
 
 
-func _tick_player_lock(delta: float) -> void:
-	if _locked_player == null:
-		return
-	if not is_instance_valid(_locked_player):
-		_clear_player_lock()
-		return
-	var alive_value = _locked_player.get("is_alive")
-	if alive_value != null and not bool(alive_value):
-		_clear_player_lock()
-		return
-	## Keep lock alive while Command Pack is winding up / in flight setup.
-	if (
-		_casting_ability != null
-		and str(_casting_ability.get("ability_id")) == COMMAND_ABILITY_ID
-	):
-		_player_lock_left = maxf(_player_lock_left, 0.75)
-		return
-	_player_lock_left = maxf(0.0, _player_lock_left - delta)
-	if _player_lock_left <= 0.0:
-		_clear_player_lock()
+func _is_live_detection(interest: RefCounted) -> bool:
+	return _is_live_player_detection(interest)
 
 
-func _clear_player_lock() -> void:
-	_locked_player = null
-	_player_lock_left = 0.0
+func _is_live_player_detection(interest: RefCounted) -> bool:
+	## Own sight or rat sight of a player — not sticky memory / last-known.
+	if not _interest_has_player_target(interest):
+		return false
+	var source := str(interest.get("source"))
+	return (
+		source == "sight"
+		or source == String(SUMMON_SIGHT_SOURCE)
+	)
 
 
 func _interest_has_player_target(interest: RefCounted) -> bool:

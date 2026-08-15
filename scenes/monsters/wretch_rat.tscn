@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3 uid="uid://bwretchrat01"]
 
-[ext_resource type="PackedScene" uid="uid://bmonster001" path="res://scenes/monsters/monster.tscn" id="1_monster"]
+[ext_resource type="PackedScene" path="res://scenes/summons/summon.tscn" id="1_summon"]
 [ext_resource type="Script" path="res://scripts/monsters/wretch_rat.gd" id="2_rat"]
 [ext_resource type="Script" path="res://scripts/monsters/monster_sight_sense.gd" id="3_sight"]
 
@@ -12,19 +12,16 @@ height = 0.24
 radius = 0.12
 height = 0.28
 
-[node name="WretchRat" instance=ExtResource("1_monster")]
+[node name="WretchRat" instance=ExtResource("1_summon")]
 script = ExtResource("2_rat")
 editor_description = "Wretch rat. Explodes on player touch while chasing; green charge light under Body."
 body_tint = Color(0.35, 0.55, 0.32, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)
-lookdev_pose = 0
-show_combat_ranges = false
 max_health = 10.0
 move_speed = 4.4
 chase_range = 10.0
 attack_range = 0.85
 touch_damage = 0.0
-chase_style = 0
 leash_radius = 10.0
 leash_enabled = true
 

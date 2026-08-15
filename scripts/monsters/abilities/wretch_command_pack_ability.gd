@@ -2,7 +2,7 @@
 class_name WretchCommandPackAbility
 extends "res://scripts/monsters/monster_ability.gd"
 
-## Left-hand: ritualize, charge the pack orb 2x, launch at a player or heard point.
+## Left-hand: ritualize, charge the pack orb 2x, linear launch at last-known aim.
 
 const WretchCommandOrbProjectileScript := preload(
 	"res://scripts/monsters/abilities/wretch_command_orb_projectile.gd"

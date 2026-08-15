@@ -49,9 +49,8 @@ attack_range = 1.4
 touch_damage = 8.0
 chase_style = 1
 keep_away_range = 20.0
-player_lock_sec = 5.0
 ambient_summon_cooldown_sec = 20.0
-chase_summon_cooldown_sec = 5.33
+chase_summon_cooldown_sec = 2.0
 
 [node name="CollisionShape3D" parent="." index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.58, -0.04)

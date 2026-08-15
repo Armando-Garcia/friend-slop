@@ -76,17 +76,66 @@ func command_attack(target: Node3D) -> void:
 
 func command_investigate(world_position: Vector3) -> void:
 	_prune()
+	var count := maxi(_summons.size(), 1)
+	var i := 0
 	for summon in _summons:
 		if summon == null or not is_instance_valid(summon):
 			continue
-		if summon.has_method("set_forced_investigate"):
+		## Spread rats into different explore sectors around the land point.
+		var sector := TAU * float(i) / float(count)
+		if summon.has_method("set_forced_investigate_explore"):
+			summon.call("set_forced_investigate_explore", world_position, true, sector)
+		elif summon.has_method("set_forced_investigate"):
 			summon.call("set_forced_investigate", world_position, true)
+		i += 1
+
+
+func command_recall() -> void:
+	## Host calmed — pack runs home, then spreads into leashed search.
+	_prune()
+	for summon in _summons:
+		if summon == null or not is_instance_valid(summon):
+			continue
+		if summon.has_method("begin_recall"):
+			summon.call("begin_recall")
+
+
+func sync_from_host_state(state: int) -> void:
+	## Propagate packmaster AI state so summons can mirror vigilance / recall.
+	_prune()
+	for summon in _summons:
+		if summon == null or not is_instance_valid(summon):
+			continue
+		if summon.has_method("sync_from_host_state"):
+			summon.call("sync_from_host_state", state)
+
+
+func sync_alert_sound(world_position: Vector3) -> void:
+	## Soft sound cue while host is alert — rats scurry toward it (stay leashed).
+	_prune()
+	for summon in _summons:
+		if summon == null or not is_instance_valid(summon):
+			continue
+		if summon.has_method("set_host_alert_sound"):
+			summon.call("set_host_alert_sound", world_position)
+
+
+func clear_alert_sound() -> void:
+	_prune()
+	for summon in _summons:
+		if summon == null or not is_instance_valid(summon):
+			continue
+		if summon.has_method("clear_host_alert_sound"):
+			summon.call("clear_host_alert_sound")
 
 
 func append_relayed_interests(out: Array) -> void:
 	_prune()
 	for summon in _summons:
 		if summon == null or not is_instance_valid(summon):
+			continue
+		if summon.has_method("append_relayed_interests"):
+			summon.call("append_relayed_interests", out)
 			continue
 		if summon.has_method("get_relayed_player_interest"):
 			var interest = summon.call("get_relayed_player_interest")

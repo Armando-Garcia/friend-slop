@@ -112,11 +112,12 @@ func _physics_process(delta: float) -> void:
 
 func _sync_radius_visual() -> void:
 	if _cyl_shape != null:
-		_cyl_shape.radius = _radius
+		_cyl_shape.radius = 0.5
 	if _mesh != null and _mesh.mesh is TorusMesh:
 		var torus := _mesh.mesh as TorusMesh
 		torus.outer_radius = _radius
-		torus.inner_radius = maxf(0.05, _radius * 0.72)
+		torus.inner_radius = maxf(0.05, _radius * 0.85)
+		_mesh.scale.y = 1
 
 
 func _on_body_entered(body: Node3D) -> void:

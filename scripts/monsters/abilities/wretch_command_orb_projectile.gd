@@ -1,6 +1,7 @@
 extends Area3D
 
-## Fast green pack orb. Homing on a player, or flying to a heard world position.
+## Fast green pack orb. Linear shot at a locked aim (player last-known or hear point).
+## Does not home — can miss; arrival without a hit investigates.
 
 signal hit_target(target: Node3D)
 
@@ -11,7 +12,8 @@ const MAX_LIFE_SEC := 3.5
 const ARRIVE_EPS := 0.35
 
 var _caster: Node3D = null
-var _target: Node3D = null
+## Preferred chase target if this orb actually hits a player (not used for aiming).
+var _intended_target: Node3D = null
 var _aim_position: Vector3 = Vector3.ZERO
 var _has_aim_position: bool = false
 var _summon_host: Node = null
@@ -29,11 +31,15 @@ static func spawn(
 	speed: float = DEFAULT_SPEED,
 	scale_mult: float = 2.0
 ) -> Area3D:
+	## Snapshot the target position at fire — no mid-flight tracking.
+	var aim := origin + Vector3.FORWARD
+	if target != null and is_instance_valid(target):
+		aim = target.global_position + Vector3(0.0, 0.5, 0.0)
 	var proj = new()
 	proj.name = "WretchCommandOrb"
 	parent.add_child(proj)
 	proj.global_position = origin
-	proj._setup(target, Vector3.ZERO, false, caster, summon_host, speed, scale_mult)
+	proj._setup(target, aim, true, caster, summon_host, speed, scale_mult)
 	return proj
 
 
@@ -55,7 +61,7 @@ static func spawn_toward_point(
 
 
 func _setup(
-	target: Node3D,
+	intended_target: Node3D,
 	aim_position: Vector3,
 	has_aim: bool,
 	caster: Node3D,
@@ -63,7 +69,7 @@ func _setup(
 	speed: float,
 	scale_mult: float
 ) -> void:
-	_target = target
+	_intended_target = intended_target
 	_aim_position = aim_position
 	_has_aim_position = has_aim
 	_caster = caster
@@ -114,28 +120,21 @@ func _physics_process(delta: float) -> void:
 	if _age >= MAX_LIFE_SEC:
 		_finish_at_aim()
 		return
-	var aim := _resolve_aim()
+	var aim := _locked_aim()
 	var to_aim := aim - global_position
 	if to_aim.length_squared() < 0.0001 or to_aim.length() <= ARRIVE_EPS:
-		if _target != null and is_instance_valid(_target):
-			_finish(_target)
-		else:
-			_finish_at_aim()
+		## Reached the locked aim without a body hit — miss / investigate.
+		_finish_at_aim()
 		return
 	var step := to_aim.normalized() * _speed * delta
 	if step.length() >= to_aim.length():
 		global_position = aim
-		if _target != null and is_instance_valid(_target):
-			_finish(_target)
-		else:
-			_finish_at_aim()
+		_finish_at_aim()
 		return
 	global_position += step
 
 
-func _resolve_aim() -> Vector3:
-	if _target != null and is_instance_valid(_target):
-		return _target.global_position + Vector3(0.0, 0.5, 0.0)
+func _locked_aim() -> Vector3:
 	if _has_aim_position:
 		return _aim_position
 	return global_position + Vector3.FORWARD
@@ -144,7 +143,7 @@ func _resolve_aim() -> Vector3:
 func _on_body_entered(body: Node3D) -> void:
 	if _finished or body == null or body == _caster:
 		return
-	if body.is_in_group("player") or body == _target:
+	if body.is_in_group("player") or body == _intended_target:
 		_finish(body)
 
 
@@ -168,8 +167,8 @@ func _finish(hit: Node3D) -> void:
 	if hit != null and is_instance_valid(hit):
 		hit_target.emit(hit)
 		var chase_target := hit
-		if _target != null and is_instance_valid(_target):
-			chase_target = _target
+		if _intended_target != null and is_instance_valid(_intended_target):
+			chase_target = _intended_target
 		_apply_hit_effects(hit, chase_target)
 		if _summon_host != null and is_instance_valid(_summon_host):
 			if _summon_host.has_method("command_attack"):
