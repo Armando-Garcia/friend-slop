@@ -21,6 +21,8 @@ var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
 var _hotbar_row: HBoxContainer
 var _hotbar_labels: Array[Label] = []
+var _mana_root: Control
+var _mana_fill: ColorRect
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
 var _spellbook_panel: Control
 
@@ -51,6 +53,7 @@ func _ready() -> void:
 	_setup_spellbook_panel()
 	_setup_active_strip()
 	_setup_hotbar()
+	_setup_mana_bar()
 	_update_aim_cursor_visibility()
 
 
@@ -243,6 +246,84 @@ func reveal_cast_spell(spell: Resource, color: Color = Color(1, 1, 1, 1)) -> voi
 func clear_spell_word() -> void:
 	if spell_word_banner != null and spell_word_banner.has_method("clear"):
 		spell_word_banner.call("clear")
+
+
+func show_mana(
+	current: float,
+	maximum: float = 100.0,
+	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+) -> void:
+	if _mana_root == null:
+		return
+	_mana_root.visible = true
+	set_mana(current, maximum, fill_color)
+
+
+func set_mana(
+	current: float,
+	maximum: float = 100.0,
+	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+) -> void:
+	if _mana_fill == null:
+		return
+	_mana_fill.color = fill_color
+	var max_v := maxf(maximum, 0.001)
+	var ratio := clampf(current / max_v, 0.0, 1.0)
+	## Fill stays on the left; empty grows from the right.
+	_mana_fill.anchor_left = 0.0
+	_mana_fill.anchor_right = ratio
+	_mana_fill.offset_left = 0.0
+	_mana_fill.offset_right = 0.0
+
+
+func hide_mana() -> void:
+	if _mana_root != null:
+		_mana_root.visible = false
+
+
+func _setup_mana_bar() -> void:
+	## Between spell-word band and hotbar (hotbar top ≈ -96 from bottom).
+	var anchor := MarginContainer.new()
+	anchor.name = "ManaBarMargin"
+	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	anchor.offset_left = -160.0
+	anchor.offset_top = -128.0
+	anchor.offset_right = 160.0
+	anchor.offset_bottom = -108.0
+	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.visible = false
+	add_child(anchor)
+	_mana_root = anchor
+
+	var track := PanelContainer.new()
+	track.name = "ManaTrack"
+	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var track_style := StyleBoxFlat.new()
+	track_style.bg_color = Color(0.08, 0.06, 0.12, 0.92)
+	track_style.set_border_width_all(1)
+	track_style.border_color = Color(0.18, 0.12, 0.22, 0.9)
+	track_style.set_corner_radius_all(4)
+	track_style.content_margin_left = 2.0
+	track_style.content_margin_top = 2.0
+	track_style.content_margin_right = 2.0
+	track_style.content_margin_bottom = 2.0
+	track.add_theme_stylebox_override("panel", track_style)
+	anchor.add_child(track)
+
+	var fill_host := Control.new()
+	fill_host.name = "ManaFillHost"
+	fill_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill_host.custom_minimum_size = Vector2(0.0, 12.0)
+	track.add_child(fill_host)
+
+	_mana_fill = ColorRect.new()
+	_mana_fill.name = "ManaFill"
+	_mana_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mana_fill.color = Color(0.35, 0.14, 0.32, 1.0)
+	_mana_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fill_host.add_child(_mana_fill)
+	set_mana(100.0, 100.0)
 
 
 func _setup_hotbar() -> void:

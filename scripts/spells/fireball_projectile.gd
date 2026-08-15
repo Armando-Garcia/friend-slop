@@ -215,6 +215,7 @@ var _glow_restart_queued := false
 
 var _direction := Vector3.FORWARD
 var _elapsed := 0.0
+var _speed: float = SPEED
 var _smoke_trail: CPUParticles3D
 var _ember_sparks: CPUParticles3D
 var _hit_shape: SphereShape3D
@@ -235,7 +236,8 @@ static func spawn(
 	origin: Vector3,
 	direction: Vector3,
 	caster: Node3D = null,
-	lookdev_flight: bool = false
+	lookdev_flight: bool = false,
+	charge_factor: float = 1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with fireball.tscn.
 	var packed: PackedScene = load("res://scenes/spells/fireball.tscn") as PackedScene
@@ -244,8 +246,10 @@ static func spawn(
 		projectile.set_meta("lookdev_flight", true)
 		projectile.process_mode = Node.PROCESS_MODE_ALWAYS
 	if projectile is FireballProjectile:
-		(projectile as FireballProjectile)._direction = direction.normalized()
-		(projectile as FireballProjectile)._caster = caster
+		var ball := projectile as FireballProjectile
+		ball._direction = direction.normalized()
+		ball._caster = caster
+		ball.apply_charge_power(charge_factor)
 	if parent != null:
 		parent.add_child(projectile)
 	if projectile is Node3D:
@@ -255,6 +259,17 @@ static func spawn(
 		else:
 			node_3d.position = origin
 	return projectile
+
+
+## charge 0 → base speed / half size; charge 1 → +56.25% speed / full size.
+func apply_charge_power(charge_factor: float) -> void:
+	var t := clampf(charge_factor, 0.0, 1.0)
+	_speed = SPEED * lerpf(1.0, 1.5625, t)
+	var size_scale := lerpf(0.5, 1.0, t)
+	core_radius = core_radius * size_scale
+	hit_radius = hit_radius * size_scale
+	shell_radius = shell_radius * size_scale
+	light_radius = light_radius * size_scale
 
 
 func _is_lookdev_flight() -> bool:
@@ -610,7 +625,7 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 
-	var motion: Vector3 = _direction * SPEED * delta
+	var motion: Vector3 = _direction * _speed * delta
 	if _cast_motion_hit(motion):
 		return
 	global_position += motion

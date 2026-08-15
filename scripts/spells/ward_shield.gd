@@ -2,7 +2,7 @@
 class_name WardShield
 extends Node3D
 
-## Forward-facing spherical-cap blue shield. Blocks one incoming spell, then shatters.
+## Forward-facing spherical-cap blue shield. Blocks 1–2 incoming spells, then shatters.
 ## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
 ## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
 
@@ -44,7 +44,7 @@ var _body: StaticBody3D
 var _mesh_instance: MeshInstance3D
 var _collision_shape: CollisionShape3D
 var _material: StandardMaterial3D
-var _spent := false
+var _hits_remaining := 1
 var _lifetime := 0.0
 var _lifetime_active := false
 ## Instance duration; defaults to DURATION_SEC (player ward). Monster casts may extend.
@@ -58,14 +58,19 @@ var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
 
 
-static func spawn(parent: Node, origin: Vector3, direction: Vector3) -> Node:
+static func spawn(
+	parent: Node,
+	origin: Vector3,
+	direction: Vector3,
+	hit_capacity: int = 1
+) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
 	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
 	var ward: Node = packed.instantiate()
 	if parent != null:
 		parent.add_child(ward)
 	if ward.has_method("setup_cast"):
-		ward.call("setup_cast", origin, direction)
+		ward.call("setup_cast", origin, direction, hit_capacity)
 	return ward
 
 
@@ -109,7 +114,7 @@ func _rebuild_geometry() -> void:
 		)
 
 
-func setup_cast(origin: Vector3, direction: Vector3) -> void:
+func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> void:
 	var dir := direction
 	if dir.length_squared() < 0.0001:
 		dir = Vector3.FORWARD
@@ -123,7 +128,7 @@ func setup_cast(origin: Vector3, direction: Vector3) -> void:
 		up = Vector3.RIGHT
 	global_transform = Transform3D(Basis.looking_at(dir, up), pos)
 	_lifetime = 0.0
-	_spent = false
+	_hits_remaining = maxi(hit_capacity, 1)
 	_lifetime_active = false
 	## Editor look-dev trees are often paused; keep cast FX + lifetime ticking.
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -315,7 +320,7 @@ func _enable_collision() -> void:
 
 
 func _process(delta: float) -> void:
-	if not _lifetime_active or _spent:
+	if not _lifetime_active or _hits_remaining <= 0:
 		return
 	_lifetime += delta
 	var duration := maxf(_duration_sec, 0.05)
@@ -323,20 +328,21 @@ func _process(delta: float) -> void:
 		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
 		_material.albedo_color.a = SHIELD_BLUE.a * fade
 		_material.emission = SHIELD_EDGE * (0.35 + 0.4 * fade)
-	if _lifetime >= duration and not _spent:
+	if _lifetime >= duration and _hits_remaining > 0:
 		_dissolve()
 
 
 func notify_spell_blocked() -> void:
-	## One incoming spell spends the ward.
-	if _spent:
+	## Each blocked spell spends one hit; dissolve when capacity is empty.
+	if _hits_remaining <= 0:
 		return
-	_spent = true
-	_dissolve()
+	_hits_remaining -= 1
+	if _hits_remaining <= 0:
+		_dissolve()
 
 
 func _dissolve() -> void:
-	_spent = true
+	_hits_remaining = 0
 	_lifetime_active = false
 	set_process(false)
 	_kill_cast_tween()

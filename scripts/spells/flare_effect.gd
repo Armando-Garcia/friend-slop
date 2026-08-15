@@ -94,6 +94,13 @@ static func spawn_launched(
 	return flare
 
 
+## charge 0 → dimmer beacon; charge 1 → authored peak energy.
+func apply_charge_power(charge_factor: float) -> void:
+	var t := clampf(charge_factor, 0.0, 1.0)
+	light_peak_energy = light_peak_energy * lerpf(0.55, 1.0, t)
+	_refresh_visual_state()
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	collision_layer = 0

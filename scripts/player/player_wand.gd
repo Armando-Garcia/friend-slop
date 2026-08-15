@@ -1,9 +1,12 @@
+@tool
 class_name PlayerWand
 extends Node3D
 
 ## Slim hand-held wand with tip glow for casting and optional flashlight beam.
+## @tool so spell_cast_workshop (and other studios) can drive pose/FX in the editor.
 
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const WandListeningFxScript := preload("res://scripts/player/wand_listening_fx.gd")
 
 const WORLD_LIGHT_CULL_MASK := WorldVisualLayersScript.WORLD_LIGHT_MASK
 
@@ -27,6 +30,31 @@ const FLASHLIGHT_COLOR := Color(1.0, 0.86, 0.56)
 const FLASHLIGHT_TIP_EMISSION := 1.0
 const FLAME_GLOW_COLOR := Color(0.72, 0.08, 0.04)
 const FLAME_GLOW_EMISSION := 3.2
+const CAST_MIN_HOLD_SEC := 0.2
+
+## Tip raised and nudged toward screen center relative to idle held pose.
+@export var raised_position_offset: Vector3 = Vector3(-0.04, 0.10, -0.02)
+@export var raised_basis_euler_deg: Vector3 = Vector3(28.0, -8.0, -4.0)
+@export_range(0.05, 1.0, 0.01) var raise_tween_sec: float = 0.25
+
+## Tip lift while holding LMB; spell fires on release as the wand returns forward.
+## Pitch sign matches E-raise (+X): tip is on local −Z, so +pitch lifts the lit end.
+@export_range(0.05, 0.8, 0.01) var cast_charge_sec: float = 0.14
+## Flipped-P release: large tip arc left/up, brief pause, then fast drop. Fire awaits all.
+@export_range(0.08, 0.8, 0.01) var cast_release_arc_sec: float = 0.28
+@export_range(0.0, 0.25, 0.01) var cast_release_pause_sec: float = 0.05
+@export_range(0.04, 0.4, 0.01) var cast_release_drop_sec: float = 0.16
+## Max apex offset (full charge). Scaled down when released earlier.
+@export var cast_release_apex_position_offset: Vector3 = Vector3(-0.09, 0.15, 0.0)
+## Max tip up (+X) / left (+Y) at full charge.
+@export var cast_release_apex_basis_euler_deg: Vector3 = Vector3(52.0, 48.0, 8.0)
+@export var cast_charge_position_offset: Vector3 = Vector3.ZERO
+@export var cast_charge_basis_euler_deg: Vector3 = Vector3(21.0, 0.0, 0.0)
+## Defensive lift: tip up and slightly toward screen-right while charging.
+@export var defensive_lift_position_offset: Vector3 = Vector3(0.045, 0.09, 0.0)
+@export var defensive_lift_basis_euler_deg: Vector3 = Vector3(22.0, -14.0, 4.0)
+@export_range(0.05, 0.4, 0.01) var shake_wand_fx_sec: float = 0.14
+@export_range(0.05, 0.5, 0.01) var defensive_return_sec: float = 0.18
 
 var _shaft_mesh: MeshInstance3D
 var _tip_mesh: MeshInstance3D
@@ -34,6 +62,7 @@ var _flashlight_light: SpotLight3D
 var _cast_origin: Marker3D
 var _fizzle_particles: CPUParticles3D
 var _success_particles: CPUParticles3D
+var _listen_fx: WandListeningFxScript
 var _armed := false
 var _flashlight_active := false
 var _flame_glow_active := false
@@ -41,9 +70,32 @@ var _listen_level: float = 0.0
 var _listen_peak: float = 0.0
 ## Scene Tip scale from player_wand.tscn — runtime pulse must not replace it with Vector3.ONE.
 var _tip_base_scale := Vector3.ONE
+var _idle_transform: Transform3D = Transform3D.IDENTITY
+## Exact pose at LMB press — release always restores this, not a stale idle cache.
+var _cast_pre_click_transform: Transform3D = Transform3D.IDENTITY
+## Stable tip offset in wand space (authored child chain); not from live to_local.
+var _tip_rest_local: Vector3 = Vector3(0.0, 0.0, -0.28)
+var _raised := false
+var _pose_tween: Tween
+var _cast_charging := false
+var _cast_charge_spell: SpellDefinition
+var _cast_charge_duration: float = 0.0
+var _cast_charge_elapsed: float = 0.0
+var _cast_charge_ready := false
+var _cast_fx_started := false
+## Snapshotted on release so build_params still sees power after charge ends.
+var _cast_power_factor: float = 1.0
+var _cast_fx_kind: int = 0
 
 
 func _ready() -> void:
+	ensure_preview_ready()
+
+
+## Bind meshes/particles; safe to call from editor workshops (@tool).
+func ensure_preview_ready() -> void:
+	if _cast_origin != null and _success_particles != null:
+		return
 	if (
 		has_node("Model/Shaft")
 		or (has_node("Shaft") and has_node("Tip") and has_node("CastOrigin"))
@@ -51,12 +103,65 @@ func _ready() -> void:
 		_bind_existing_meshes()
 	else:
 		_build_wand_meshes()
-	_build_particles()
-	set_armed(false)
-	set_process(false)
+	if _success_particles == null:
+		_build_particles()
+	_tip_rest_local = _resolve_tip_rest_local()
+	if not _raised and not _cast_charging:
+		_idle_transform = transform
+		_cast_pre_click_transform = transform
+	set_armed(_armed)
+	_refresh_process_enabled()
 
 
-func _process(_delta: float) -> void:
+func is_raised() -> bool:
+	return _raised
+
+
+func set_raised(raised: bool, instant: bool = false) -> void:
+	if raised == _raised and not instant:
+		return
+	if _cast_charging:
+		_end_cast_charge_fx()
+	_cast_charging = false
+	_cast_charge_ready = false
+	_cast_fx_started = false
+	_raised = raised
+	var target := _raised_transform() if raised else _idle_transform
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+	if instant or raise_tween_sec <= 0.001:
+		transform = target
+		return
+	_pose_tween = create_tween()
+	_pose_tween.set_trans(Tween.TRANS_QUAD)
+	_pose_tween.set_ease(Tween.EASE_OUT)
+	_pose_tween.tween_property(self, "transform", target, raise_tween_sec)
+
+
+func cache_idle_transform() -> void:
+	## Call after scene pose is final (before any raise).
+	if not _raised:
+		_idle_transform = transform
+		_cast_pre_click_transform = transform
+	_tip_rest_local = _resolve_tip_rest_local()
+
+
+func _raised_transform() -> Transform3D:
+	## Compose on idle so raise always lifts/tips relative to the authored held pose.
+	var raise_basis := Basis.from_euler(Vector3(
+		deg_to_rad(raised_basis_euler_deg.x),
+		deg_to_rad(raised_basis_euler_deg.y),
+		deg_to_rad(raised_basis_euler_deg.z)
+	))
+	return Transform3D(
+		_idle_transform.basis * raise_basis,
+		_idle_transform.origin + raised_position_offset
+	)
+
+
+func _process(delta: float) -> void:
+	if _cast_charging:
+		_tick_cast_charge(delta)
 	if _flashlight_active:
 		_aim_flashlight_to_crosshair()
 
@@ -80,7 +185,28 @@ func _bind_existing_meshes() -> void:
 	_tip_mesh.layers = WorldVisualLayersScript.PLAYER_SELF
 	_shaft_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_tip_base_scale = _tip_mesh.scale
+	_configure_grip_visual_layers(model)
+	_bind_listen_fx(model)
 
+
+func _configure_grip_visual_layers(model: Node) -> void:
+	## Hand / sleeve are authored under Model in player_wand.tscn.
+	var hand_path := "Model/Hand" if model != null else "Hand"
+	var sleeve_path := "Model/Sleeve" if model != null else "Sleeve"
+	for path in [hand_path, sleeve_path]:
+		var mesh := get_node_or_null(path) as MeshInstance3D
+		if mesh == null:
+			continue
+		mesh.layers = WorldVisualLayersScript.PLAYER_SELF
+		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+
+func _bind_listen_fx(model: Node) -> void:
+	var fx_path := "Model/WandListeningFx" if model != null else "WandListeningFx"
+	_listen_fx = get_node_or_null(fx_path) as WandListeningFxScript
+	## Runtime starts hidden; editor preview is owned by WandListeningFx.preview_in_editor.
+	if _listen_fx != null and not Engine.is_editor_hint():
+		_listen_fx.set_active(false)
 
 
 func set_armed(active: bool) -> void:
@@ -88,7 +214,23 @@ func set_armed(active: bool) -> void:
 	if not active:
 		_listen_level = 0.0
 		_listen_peak = 0.0
+	if _listen_fx != null:
+		## Keep recognition morph alive after session goes idle.
+		if active or not bool(_listen_fx.call("is_recognizing")):
+			_listen_fx.set_active(active)
+	_refresh_process_enabled()
 	_refresh_tip_light()
+
+
+## Shrink listen orbs then play the spell tip recognition FX (before wand lowers).
+func play_spell_recognition(spell: SpellDefinition) -> void:
+	if _listen_fx != null and _listen_fx.has_method("play_recognition"):
+		await _listen_fx.play_recognition(spell)
+
+
+func _refresh_process_enabled() -> void:
+	## Listen FX processes itself; wand process for flashlight aim + cast charge.
+	set_process(_flashlight_active or _cast_charging)
 
 
 func set_listen_level(level: float) -> void:
@@ -116,6 +258,364 @@ func play_cast_success(spell: SpellDefinition = null, keep_armed: bool = false) 
 	_pulse_tip(_success_pulse_color_for_spell(spell), 0.35)
 
 
+## LMB press: start silent hold; tip FX begins only after CAST_MIN_HOLD_SEC.
+func begin_cast_charge(spell: SpellDefinition = null) -> void:
+	if _raised:
+		return
+	## Lock the exact pre-click pose so release can restore it precisely.
+	_cast_pre_click_transform = transform
+	_idle_transform = transform
+	_tip_rest_local = _resolve_tip_rest_local()
+	_cast_charging = true
+	_cast_fx_started = false
+	_cast_charge_spell = spell
+	_cast_fx_kind = (
+		spell.get_wand_fx_kind() if spell != null else SpellDefinition.WandFxKind.P_SHAPED
+	)
+	_cast_charge_duration = spell.get_charge_time_sec() if spell != null else 1.0
+	_cast_charge_elapsed = 0.0
+	_cast_power_factor = 1.0 if _cast_charge_duration <= 0.001 else 0.0
+	## Channels / zero charge: ready + visuals immediately.
+	if _cast_charge_duration <= 0.001:
+		_cast_charge_ready = true
+		_cast_power_factor = 1.0
+		_start_cast_charge_visuals()
+	else:
+		_cast_charge_ready = false
+	_refresh_process_enabled()
+
+
+func _start_cast_charge_visuals() -> void:
+	if _cast_fx_started or not _cast_charging:
+		return
+	_cast_fx_started = true
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+		_pose_tween = null
+	match _cast_fx_kind:
+		SpellDefinition.WandFxKind.SHAKE:
+			_play_shake_wand_fx(false)
+		SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+			_apply_lift_defensive_progress(get_cast_power_factor())
+		_:
+			_start_p_shaped_charge_lift()
+	if _listen_fx != null and _listen_fx.has_method("begin_cast_charge_fx"):
+		_listen_fx.begin_cast_charge_fx(_cast_charge_spell)
+		_listen_fx.set_cast_charge_progress(get_cast_power_factor())
+
+
+func _start_p_shaped_charge_lift() -> void:
+	var apex := _cast_charge_transform(_cast_pre_click_transform)
+	if cast_charge_sec <= 0.001:
+		transform = apex
+		return
+	_pose_tween = create_tween()
+	_pose_tween.set_trans(Tween.TRANS_QUAD)
+	_pose_tween.set_ease(Tween.EASE_OUT)
+	_pose_tween.tween_property(self, "transform", apex, cast_charge_sec)
+
+
+func _tick_cast_charge(delta: float) -> void:
+	if not _cast_charging:
+		return
+	_cast_charge_elapsed += delta
+	if not _cast_fx_started and _cast_charge_elapsed > CAST_MIN_HOLD_SEC:
+		_start_cast_charge_visuals()
+	if not _cast_charge_ready and (
+		_cast_charge_duration <= 0.001 or _cast_charge_elapsed > CAST_MIN_HOLD_SEC
+	):
+		_cast_charge_ready = true
+	var power := get_cast_power_factor()
+	if _cast_fx_started and _listen_fx != null and _listen_fx.has_method("set_cast_charge_progress"):
+		_listen_fx.set_cast_charge_progress(power)
+	if _cast_fx_started and _cast_fx_kind == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+		_apply_lift_defensive_progress(power)
+
+
+func is_cast_charge_ready() -> bool:
+	return _cast_charging and _cast_charge_ready
+
+
+## 0..1 power from hold time past min gate up to spell charge_time (capped).
+func get_cast_power_factor() -> float:
+	if _cast_charging:
+		return _compute_cast_power_factor()
+	return _cast_power_factor
+
+
+func _compute_cast_power_factor() -> float:
+	if _cast_charge_duration <= 0.001:
+		return 1.0
+	if _cast_charge_elapsed <= CAST_MIN_HOLD_SEC:
+		return 0.0
+	var span := _cast_charge_duration - CAST_MIN_HOLD_SEC
+	if span <= 0.001:
+		return 1.0
+	return clampf((_cast_charge_elapsed - CAST_MIN_HOLD_SEC) / span, 0.0, 1.0)
+
+
+func _end_cast_charge_fx() -> void:
+	if _listen_fx != null and _listen_fx.has_method("end_cast_charge_fx"):
+		_listen_fx.end_cast_charge_fx()
+
+
+## End charge and play release FX (p_shaped / shake await; lift_defensive is fire-and-forget).
+func return_from_cast_charge() -> void:
+	_cast_power_factor = _compute_cast_power_factor()
+	var height_t := _cast_power_factor
+	var kind := _cast_fx_kind
+	var had_fx := _cast_fx_started
+	_cast_charging = false
+	_cast_charge_ready = false
+	_cast_fx_started = false
+	_end_cast_charge_fx()
+	_refresh_process_enabled()
+	if not had_fx:
+		_snap_to_pre_click_pose()
+		return
+	match kind:
+		SpellDefinition.WandFxKind.SHAKE:
+			await _play_shake_wand_fx(true)
+			_snap_to_pre_click_pose()
+		SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+			_start_defensive_return_to_idle()
+		_:
+			_start_p_shaped_wand_fx(height_t)
+			if _pose_tween != null and is_instance_valid(_pose_tween):
+				await _pose_tween.finished
+			_pose_tween = null
+			_snap_to_pre_click_pose()
+
+
+## Workshop: return tip, then tip FX when idle again.
+func release_cast(spell: SpellDefinition = null, keep_armed: bool = true) -> void:
+	await return_from_cast_charge()
+	if not is_instance_valid(self):
+		return
+	play_cast_success(spell, keep_armed)
+
+
+func cancel_cast_charge(instant: bool = false) -> void:
+	_cast_power_factor = _compute_cast_power_factor() if _cast_charging else _cast_power_factor
+	var height_t := _cast_power_factor
+	var kind := _cast_fx_kind
+	var had_fx := _cast_fx_started
+	_cast_charging = false
+	_cast_charge_ready = false
+	_cast_fx_started = false
+	_end_cast_charge_fx()
+	_refresh_process_enabled()
+	if not had_fx:
+		_snap_to_pre_click_pose()
+		return
+	if instant:
+		_snap_to_pre_click_pose()
+		return
+	match kind:
+		SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+			_start_defensive_return_to_idle()
+		SpellDefinition.WandFxKind.SHAKE:
+			_snap_to_pre_click_pose()
+		_:
+			_start_p_shaped_wand_fx(height_t)
+
+
+## Early release after tip FX began: sparks. Below min hold: use cancel_cast_charge (silent).
+func fizzle_cast_charge(instant: bool = false) -> void:
+	var had_fx := _cast_fx_started
+	cancel_cast_charge(instant)
+	if had_fx:
+		play_fizzle(true)
+
+
+func _cast_release_duration() -> float:
+	return (
+		maxf(cast_release_arc_sec, 0.0)
+		+ maxf(cast_release_pause_sec, 0.0)
+		+ maxf(cast_release_drop_sec, 0.0)
+	)
+
+
+## p_shaped_wand_fx — flipped-P tip path back to the pre-click pose.
+func _start_p_shaped_wand_fx(height_t: float = 1.0) -> void:
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+		_pose_tween = null
+	var idle_xf := _cast_pre_click_transform
+	if _cast_release_duration() <= 0.001:
+		_snap_to_pre_click_pose()
+		return
+	var from_xf := transform
+	var apex_xf := _cast_release_apex_transform(height_t)
+	var arc_sec := maxf(cast_release_arc_sec, 0.01)
+	var pause_sec := maxf(cast_release_pause_sec, 0.0)
+	var drop_sec := maxf(cast_release_drop_sec, 0.01)
+	_pose_tween = create_tween()
+	_pose_tween.tween_method(
+		_sample_cast_release_arc.bind(from_xf, apex_xf),
+		0.0,
+		1.0,
+		arc_sec
+	).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_pose_tween.tween_callback(func() -> void:
+		if is_instance_valid(self):
+			transform = _tip_matched_transform(apex_xf.basis, apex_xf * _tip_rest_local)
+	)
+	if pause_sec > 0.001:
+		_pose_tween.tween_interval(pause_sec)
+	_pose_tween.tween_method(
+		_sample_cast_release_drop.bind(apex_xf, idle_xf),
+		0.0,
+		1.0,
+		drop_sec
+	).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_pose_tween.tween_callback(_snap_to_pre_click_pose)
+
+
+## shake_wand_fx — brief tip jitter (channel / drain spells).
+func _play_shake_wand_fx(awaitable: bool = false) -> void:
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+		_pose_tween = null
+	var base := transform
+	var total := maxf(shake_wand_fx_sec, 0.06)
+	var step := total / 5.0
+	_pose_tween = create_tween()
+	for _i in 4:
+		var jitter := Vector3(
+			randf_range(-0.01, 0.01),
+			randf_range(-0.008, 0.008),
+			randf_range(-0.004, 0.004)
+		)
+		var xf := Transform3D(base.basis, base.origin + base.basis * jitter)
+		_pose_tween.tween_property(self, "transform", xf, step)
+	_pose_tween.tween_property(self, "transform", base, step)
+	if awaitable and _pose_tween != null:
+		await _pose_tween.finished
+		_pose_tween = null
+
+
+## lift_defensive_wand_fx — tip rises up/right with charge progress.
+func _apply_lift_defensive_progress(t: float) -> void:
+	var u := clampf(t, 0.0, 1.0)
+	var base := _cast_pre_click_transform
+	var euler := Vector3.ZERO.lerp(defensive_lift_basis_euler_deg, u)
+	var pos := Vector3.ZERO.lerp(defensive_lift_position_offset, u)
+	var lift_basis := Basis.from_euler(Vector3(
+		deg_to_rad(euler.x),
+		deg_to_rad(euler.y),
+		deg_to_rad(euler.z)
+	))
+	transform = Transform3D(
+		base.basis * lift_basis,
+		base.origin + base.basis * pos
+	)
+
+
+func _start_defensive_return_to_idle() -> void:
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+		_pose_tween = null
+	var idle_xf := _cast_pre_click_transform
+	if defensive_return_sec <= 0.001:
+		_snap_to_pre_click_pose()
+		return
+	_pose_tween = create_tween()
+	_pose_tween.set_trans(Tween.TRANS_QUAD)
+	_pose_tween.set_ease(Tween.EASE_IN)
+	_pose_tween.tween_property(self, "transform", idle_xf, defensive_return_sec)
+	_pose_tween.tween_callback(_snap_to_pre_click_pose)
+
+
+func _snap_to_pre_click_pose() -> void:
+	if not is_instance_valid(self):
+		return
+	transform = _cast_pre_click_transform
+	_idle_transform = _cast_pre_click_transform
+
+
+## Apex of the flipped-P bowl; height_t scales size up to the full-charge maximum.
+func _cast_release_apex_transform(height_t: float) -> Transform3D:
+	## Partial charge → smaller P; full charge → max authored apex.
+	var h := lerpf(0.4, 1.0, clampf(height_t, 0.0, 1.0))
+	var euler := cast_charge_basis_euler_deg.lerp(cast_release_apex_basis_euler_deg, h)
+	var pos := cast_charge_position_offset.lerp(cast_release_apex_position_offset, h)
+	var apex_basis := Basis.from_euler(Vector3(
+		deg_to_rad(euler.x),
+		deg_to_rad(euler.y),
+		deg_to_rad(euler.z)
+	))
+	var base := _cast_pre_click_transform
+	return Transform3D(
+		base.basis * apex_basis,
+		base.origin + base.basis * pos
+	)
+
+
+## Tip draws a semicircle from charge → apex (left/up bulge).
+func _sample_cast_release_arc(t: float, from_xf: Transform3D, apex_xf: Transform3D) -> void:
+	var tip_local := _tip_rest_local
+	var p0 := from_xf * tip_local
+	var p1 := apex_xf * tip_local
+	var mid := (p0 + p1) * 0.5
+	var radius_vec := p0 - mid
+	var chord := p1 - p0
+	var left_up := (_cast_pre_click_transform.basis * Vector3(-1.0, 1.0, 0.0)).normalized()
+	var perp := chord.cross(left_up)
+	if perp.length_squared() < 0.0000001:
+		perp = chord.cross(_cast_pre_click_transform.basis.y)
+	perp = perp.cross(chord)
+	## Slightly fatter than a flat semicircle so the bowl reads larger.
+	var bulge := radius_vec.length() * 1.35
+	if perp.length_squared() < 0.0000001:
+		perp = left_up * bulge
+	else:
+		perp = perp.normalized() * bulge
+	if perp.dot(left_up) < 0.0:
+		perp = -perp
+	var tip := mid + radius_vec * cos(PI * t) + perp * sin(PI * t)
+	var basis := from_xf.basis.slerp(apex_xf.basis, clampf(t, 0.0, 1.0)).orthonormalized()
+	transform = _tip_matched_transform(basis, tip)
+
+
+## Straight tip drop from apex to the exact pre-click tip / pose.
+func _sample_cast_release_drop(t: float, apex_xf: Transform3D, idle_xf: Transform3D) -> void:
+	var tip_local := _tip_rest_local
+	var p0 := apex_xf * tip_local
+	var p1 := idle_xf * tip_local
+	var u := clampf(t, 0.0, 1.0)
+	var tip := p0.lerp(p1, u)
+	var basis := apex_xf.basis.slerp(idle_xf.basis, u).orthonormalized()
+	transform = _tip_matched_transform(basis, tip)
+
+
+func _tip_matched_transform(basis: Basis, tip_parent: Vector3) -> Transform3D:
+	return Transform3D(basis, tip_parent - basis * _tip_rest_local)
+
+
+func play_cast_animation(spell: SpellDefinition, keep_armed: bool = true) -> void:
+	begin_cast_charge(spell)
+	var wait := 0.35
+	if spell != null:
+		wait = maxf(spell.get_charge_time_sec(), 0.35)
+	await get_tree().create_timer(wait, true, true).timeout
+	if not is_instance_valid(self):
+		return
+	await release_cast(spell, keep_armed)
+
+
+func _cast_charge_transform(base: Transform3D) -> Transform3D:
+	var flourish_basis := Basis.from_euler(Vector3(
+		deg_to_rad(cast_charge_basis_euler_deg.x),
+		deg_to_rad(cast_charge_basis_euler_deg.y),
+		deg_to_rad(cast_charge_basis_euler_deg.z)
+	))
+	return Transform3D(
+		base.basis * flourish_basis,
+		base.origin + base.basis * cast_charge_position_offset
+	)
+
+
 func play_fizzle(keep_armed: bool = false) -> void:
 	if not keep_armed:
 		set_armed(false)
@@ -125,7 +625,7 @@ func play_fizzle(keep_armed: bool = false) -> void:
 
 func set_flashlight_enabled(active: bool) -> void:
 	_flashlight_active = active
-	set_process(active)
+	_refresh_process_enabled()
 	if _flashlight_light == null:
 		return
 	_flashlight_light.visible = active
@@ -409,38 +909,32 @@ func _set_tip_emission(color: Color, energy: float) -> void:
 
 
 func _tip_local_position() -> Vector3:
-	if _cast_origin != null and is_instance_valid(_cast_origin):
-		return to_local(_cast_origin.global_position)
-	var model := get_node_or_null("Model") as Node3D
-	if model != null:
-		return model.transform * Vector3(0.0, 0.0, -SHAFT_LENGTH)
-	return Vector3(0.0, 0.0, -SHAFT_LENGTH)
+	return _tip_rest_local
+
+
+## Authored tip offset in wand space via child transforms (stable during pose tweens).
+func _resolve_tip_rest_local() -> Vector3:
+	if _cast_origin == null or not is_instance_valid(_cast_origin):
+		var model := get_node_or_null("Model") as Node3D
+		if model != null:
+			return model.transform * Vector3(0.0, 0.0, -SHAFT_LENGTH)
+		return Vector3(0.0, 0.0, -SHAFT_LENGTH)
+	var xf := Transform3D.IDENTITY
+	var node: Node = _cast_origin
+	while node != null and node != self:
+		if node is Node3D:
+			xf = (node as Node3D).transform * xf
+		node = node.get_parent()
+	return xf.origin
 
 
 func _success_color_for_spell(spell: SpellDefinition) -> Color:
-	var fallback := Color(1.0, 0.95, 0.85)
 	if spell == null:
-		return fallback
-	var color := fallback
-	match spell.effect_id:
-		"fireball":
-			color = Color(1.0, 0.55, 0.15)
-		"flare":
-			color = Color(1.0, 0.75, 0.25)
-		"ward":
-			color = Color(0.45, 0.75, 1.0)
-		"light":
-			color = Color(1.0, 0.92, 0.55)
-		"haste":
-			color = Color(0.55, 0.82, 1.0)
-		"flashlight_toggle", "light_ball", "target", "pull", "follow", "stop", "dispell", "clone":
-			color = FLASHLIGHT_COLOR
-	return color
+		return Color(1.0, 0.95, 0.85)
+	return spell.get_display_color()
 
 
 func _success_pulse_color_for_spell(spell: SpellDefinition) -> Color:
-	if spell != null and spell.effect_id == "light_ball":
-		return FLASHLIGHT_COLOR.lightened(0.25)
-	if spell != null and spell.effect_id == "ward":
-		return Color(0.55, 0.85, 1.0)
-	return Color(1.0, 0.98, 0.92)
+	if spell == null:
+		return Color(1.0, 0.98, 0.92)
+	return spell.get_display_color().lightened(0.2)
