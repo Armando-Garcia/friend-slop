@@ -14,6 +14,7 @@
 [ext_resource type="Script" uid="uid://bfnrfxnwjg02y" path="res://scripts/ui/aim_cursor.gd" id="9_aim"]
 [ext_resource type="Script" uid="uid://crdov1cq8kly5" path="res://scripts/ui/game_hud.gd" id="9_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_menu.tscn" id="9_player_menu"]
+[ext_resource type="Script" path="res://scripts/ui/spell_word_banner.gd" id="9_spell_word"]
 [ext_resource type="Script" uid="uid://dnyy0kwsw60ow" path="res://scripts/objectives/delivery_objective.gd" id="10_objective"]
 [ext_resource type="Script" uid="uid://yf2yi73fbs6o" path="res://scripts/spells/voice_spell_validator.gd" id="10_validator"]
 [ext_resource type="Script" uid="uid://cgo2lkhlxtcky" path="res://scripts/spells/spell_validation_runner.gd" id="11_runner"]
@@ -154,6 +155,38 @@ theme_override_constants/margin_top = 12
 layout_mode = 2
 theme_override_colors/font_color = Color(0.92, 0.88, 1, 1)
 theme_override_font_sizes/font_size = 18
+
+[node name="SpellWordBanner" type="Control" parent="GameHUD"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -420.0
+offset_top = 136.0
+offset_right = 420.0
+offset_bottom = 224.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+z_index = 64
+script = ExtResource("9_spell_word")
+
+[node name="SpellWordLabel" type="Label" parent="GameHUD/SpellWordBanner"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 68
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
 
 [node name="CastingPanel" type="PanelContainer" parent="GameHUD" unique_id=1360674168]
 anchors_preset = 7

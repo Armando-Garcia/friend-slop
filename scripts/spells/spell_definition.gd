@@ -14,6 +14,11 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var effect_id: String = ""
 
 
+func get_word_display_color() -> Color:
+	## Spell-word HUD ink. Category colors can be wired later; white for now.
+	return Color(1.0, 1.0, 1.0, 1.0)
+
+
 func get_incantation_text() -> String:
 	return " ".join(incantation_words)
 

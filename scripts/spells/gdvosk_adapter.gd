@@ -121,6 +121,9 @@ static func extract_words_and_starts(result: Dictionary) -> Dictionary:
 	if words.is_empty() and result.has("text"):
 		_append_text_tokens(words, str(result["text"]))
 
+	if words.is_empty() and result.has("partial"):
+		_append_text_tokens(words, str(result["partial"]))
+
 	return {"words": words, "starts": starts}
 
 

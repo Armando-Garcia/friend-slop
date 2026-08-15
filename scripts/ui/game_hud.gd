@@ -36,6 +36,7 @@ var _spellbook_panel: Control
 @onready var mic_level_bar: ProgressBar = $CastingPanel/MarginContainer/VBox/MicLevelBar
 @onready var casting_feedback: Label = $CastingPanel/MarginContainer/VBox/FeedbackLabel
 @onready var casting_detail: Label = $CastingPanel/MarginContainer/VBox/DetailLabel
+@onready var spell_word_banner: Control = $SpellWordBanner
 
 
 func _ready() -> void:
@@ -220,6 +221,28 @@ func _on_spellbook_closed() -> void:
 
 func get_selected_spell_id() -> String:
 	return _selected_spell_id
+
+
+func reveal_cast_spell(spell: Resource, color: Color = Color(1, 1, 1, 1)) -> void:
+	## Typewriter the spell display name above the hotbar (box invisible; glyphs only).
+	if spell_word_banner == null or not spell_word_banner.has_method("reveal"):
+		return
+	var def := spell as SpellDefinitionScript
+	if def == null:
+		return
+	var word := def.display_name.strip_edges()
+	if word.is_empty():
+		word = def.id.capitalize()
+	## Category color from the spell; optional override when caller passes non-white.
+	var ink := def.get_word_display_color()
+	if not color.is_equal_approx(Color(1, 1, 1, 1)):
+		ink = color
+	spell_word_banner.call("reveal", word, ink)
+
+
+func clear_spell_word() -> void:
+	if spell_word_banner != null and spell_word_banner.has_method("clear"):
+		spell_word_banner.call("clear")
 
 
 func _setup_hotbar() -> void:
