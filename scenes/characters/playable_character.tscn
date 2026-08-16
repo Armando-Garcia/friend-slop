@@ -47,7 +47,7 @@ unique_name_in_owner = true
 
 [node name="Wand" parent="Head/CameraPivot" index="1" unique_id=109575587 instance=ExtResource("6_wand")]
 editor_description = "Instance of player_wand.tscn. Override only this node's transform for held pose — tip/shaft mesh must stay in player_wand.tscn."
-transform = Transform3D(1, 0, 0, 0, 0.9715491, -0.23683815, 0, 0.23683815, 0.9715491, 0.15, -0.2, -0.16)
+transform = Transform3D(1, 0, 0, 0, 0.9715491, -0.23683815, 0, 0.23683815, 0.9715491, 0.15, -0.22, -0.24)
 
 [node name="CharacterSpellLoadout" type="Node" parent="." index="3" unique_id=20200838]
 unique_name_in_owner = true

@@ -7,12 +7,18 @@ extends Area3D
 
 const SPEED := 16.0
 const DEFAULT_HIT_DAMAGE := 20.0
+## Min charge combat values; max uses authored hit_damage / splash / radii.
+const CHARGE_DAMAGE_MIN := 5.0
+const CHARGE_AOE_MIN_RADIUS := 0.037
+const CHARGE_SPEED_MIN_MULT := 0.75
+const CHARGE_SPEED_MAX_MULT := 1.5625
 
 const FireballExplosionEffectScript := preload("res://scripts/spells/fireball_explosion_effect.gd")
 const FireballSmokeTrailScript := preload("res://scripts/spells/fireball_smoke_trail.gd")
 const FireballParticlesScript := preload("res://scripts/spells/fireball_particles.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 @export_group("Radii")
 @export_range(0.05, 1.5, 0.01, "or_greater") var core_radius: float = 0.22:
@@ -229,6 +235,8 @@ var _glow_tween: Tween
 var _caster: Node3D
 var _finished := false
 var _preview_material_ready := false
+## 0..1 visual scale driven by charge (trails + impact FX).
+var _charge_fx_scale := 1.0
 
 
 static func spawn(
@@ -250,26 +258,46 @@ static func spawn(
 		ball._direction = direction.normalized()
 		ball._caster = caster
 		ball.apply_charge_power(charge_factor)
-	if parent != null:
+	## Place before add_child so `_ready` light/particles are not at Match origin.
+	if parent != null and projectile is Node3D:
+		SpellEphemeralFxScript.add_child_at(parent, projectile as Node3D, origin)
+	elif parent != null:
 		parent.add_child(projectile)
-	if projectile is Node3D:
-		var node_3d := projectile as Node3D
-		if node_3d.is_inside_tree():
-			node_3d.global_position = origin
-		else:
-			node_3d.position = origin
 	return projectile
 
 
-## charge 0 → base speed / half size; charge 1 → +56.25% speed / full size.
+## charge 0 → min damage / baseball AoE / base speed; charge 1 → authored max + speed boost.
 func apply_charge_power(charge_factor: float) -> void:
 	var t := clampf(charge_factor, 0.0, 1.0)
-	_speed = SPEED * lerpf(1.0, 1.5625, t)
-	var size_scale := lerpf(0.5, 1.0, t)
-	core_radius = core_radius * size_scale
-	hit_radius = hit_radius * size_scale
-	shell_radius = shell_radius * size_scale
-	light_radius = light_radius * size_scale
+	_speed = SPEED * lerpf(CHARGE_SPEED_MIN_MULT, CHARGE_SPEED_MAX_MULT, t)
+	var dmg_max := hit_damage
+	var splash_max := splash_radius
+	var core_max := core_radius
+	var hit_max := hit_radius
+	var shell_max := shell_radius
+	var light_max := light_radius
+	var smoke_emit_max := smoke_emission_radius
+	var smoke_puff_max := smoke_puff_radius
+	var smoke_amt_max := smoke_amount
+	var ember_emit_max := ember_emission_radius
+	var ember_puff_max := ember_puff_radius
+	var ember_amt_max := ember_amount
+	hit_damage = lerpf(CHARGE_DAMAGE_MIN, dmg_max, t)
+	splash_radius = lerpf(CHARGE_AOE_MIN_RADIUS, splash_max, t)
+	core_radius = lerpf(CHARGE_AOE_MIN_RADIUS, core_max, t)
+	hit_radius = lerpf(CHARGE_AOE_MIN_RADIUS, hit_max, t)
+	shell_radius = lerpf(CHARGE_AOE_MIN_RADIUS * 1.15, shell_max, t)
+	light_radius = lerpf(CHARGE_AOE_MIN_RADIUS * 2.0, light_max, t)
+	## Trail + impact FX track projectile scale (baseball → full).
+	_charge_fx_scale = lerpf(CHARGE_AOE_MIN_RADIUS / maxf(core_max, 0.01), 1.0, t)
+	smoke_emission_radius = smoke_emit_max * _charge_fx_scale
+	smoke_puff_radius = smoke_puff_max * _charge_fx_scale
+	smoke_amount = maxi(2, int(round(float(smoke_amt_max) * _charge_fx_scale)))
+	ember_emission_radius = ember_emit_max * _charge_fx_scale
+	ember_puff_radius = ember_puff_max * _charge_fx_scale
+	ember_amount = maxi(1, int(round(float(ember_amt_max) * _charge_fx_scale)))
+	if is_inside_tree():
+		_sync_orb_shape()
 
 
 func _is_lookdev_flight() -> bool:
@@ -700,7 +728,7 @@ func _finish(blocked_by: Node = null, apply_splash: bool = false) -> void:
 	if apply_splash and ward == null:
 		_apply_splash_at(impact_pos)
 	_clear_projectile_visuals()
-	FireballExplosionEffectScript.spawn(world_parent, impact_pos)
+	FireballExplosionEffectScript.spawn(world_parent, impact_pos, _charge_fx_scale)
 	queue_free()
 
 

@@ -8,6 +8,7 @@ extends Node3D
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 const GROUP := "spell_ward"
 const DURATION_SEC := 1.0
@@ -67,7 +68,9 @@ static func spawn(
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
 	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
 	var ward: Node = packed.instantiate()
-	if parent != null:
+	if parent != null and ward is Node3D:
+		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)
+	elif parent != null:
 		parent.add_child(ward)
 	if ward.has_method("setup_cast"):
 		ward.call("setup_cast", origin, direction, hit_capacity)

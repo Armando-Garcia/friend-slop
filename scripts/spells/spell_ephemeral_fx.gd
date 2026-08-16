@@ -68,6 +68,19 @@ static func unpack_ray(wire: Dictionary) -> Dictionary:
 	}
 
 
+## Parent then place so `_ready` never runs at the bucket/Match origin.
+static func add_child_at(parent: Node, node: Node3D, origin: Vector3) -> void:
+	if parent == null or node == null:
+		return
+	if parent is Node3D and (parent as Node3D).is_inside_tree():
+		node.position = (parent as Node3D).to_local(origin)
+	else:
+		node.position = origin
+	parent.add_child(node)
+	if node.is_inside_tree():
+		node.global_position = origin
+
+
 static func is_ray_wire(params: Dictionary) -> bool:
 	return params.has("origin_x") and params.has("dir_x") and not params.has(KEY_ORIGIN)
 

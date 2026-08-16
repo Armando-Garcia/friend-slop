@@ -6,6 +6,7 @@ extends Node3D
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const HoveringOrbMotionScript := preload("res://scripts/spells/hovering_orb_motion.gd")
 const SpellWorldSyncScript := preload("res://scripts/spells/spell_world_sync.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 const DEFAULT_DURATION_SEC := 30.0
 const ORB_RADIUS := 0.16
@@ -66,7 +67,8 @@ static func spawn_cast(
 	orb._wand_origin = wand_origin
 	orb._target = target_position
 	orb.spawn_id = orb_spawn_id
-	parent.add_child(orb)
+	## Place before add_child so `_ready` light is not at Match origin.
+	SpellEphemeralFxScript.add_child_at(parent, orb, target_position)
 	var snapped_pos := snap_to_ground(orb.get_world_3d(), target_position)
 	orb._target = snapped_pos
 	orb.global_position = snapped_pos

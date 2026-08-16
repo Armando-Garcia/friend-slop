@@ -30,7 +30,6 @@ const FLASHLIGHT_COLOR := Color(1.0, 0.86, 0.56)
 const FLASHLIGHT_TIP_EMISSION := 1.0
 const FLAME_GLOW_COLOR := Color(0.72, 0.08, 0.04)
 const FLAME_GLOW_EMISSION := 3.2
-const CAST_MIN_HOLD_SEC := 0.2
 
 ## Tip raised and nudged toward screen center relative to idle held pose.
 @export var raised_position_offset: Vector3 = Vector3(-0.04, 0.10, -0.02)
@@ -70,8 +69,11 @@ var _listen_level: float = 0.0
 var _listen_peak: float = 0.0
 ## Scene Tip scale from player_wand.tscn — runtime pulse must not replace it with Vector3.ONE.
 var _tip_base_scale := Vector3.ONE
+## Authored held pose from the scene — never overwritten by cast flourishes.
+var _default_held_transform: Transform3D = Transform3D.IDENTITY
+var _has_default_held := false
 var _idle_transform: Transform3D = Transform3D.IDENTITY
-## Exact pose at LMB press — release always restores this, not a stale idle cache.
+## Exact pose at LMB press — release always restores the default held pose.
 var _cast_pre_click_transform: Transform3D = Transform3D.IDENTITY
 ## Stable tip offset in wand space (authored child chain); not from live to_local.
 var _tip_rest_local: Vector3 = Vector3(0.0, 0.0, -0.28)
@@ -106,9 +108,8 @@ func ensure_preview_ready() -> void:
 	if _success_particles == null:
 		_build_particles()
 	_tip_rest_local = _resolve_tip_rest_local()
-	if not _raised and not _cast_charging:
-		_idle_transform = transform
-		_cast_pre_click_transform = transform
+	if not _raised and not _cast_charging and not _has_default_held:
+		_capture_default_held_transform()
 	set_armed(_armed)
 	_refresh_process_enabled()
 
@@ -126,7 +127,10 @@ func set_raised(raised: bool, instant: bool = false) -> void:
 	_cast_charge_ready = false
 	_cast_fx_started = false
 	_raised = raised
-	var target := _raised_transform() if raised else _idle_transform
+	var target := _raised_transform() if raised else _default_held_transform
+	if not raised:
+		_idle_transform = _default_held_transform
+		_cast_pre_click_transform = _default_held_transform
 	if _pose_tween != null and is_instance_valid(_pose_tween):
 		_pose_tween.kill()
 	if instant or raise_tween_sec <= 0.001:
@@ -136,26 +140,45 @@ func set_raised(raised: bool, instant: bool = false) -> void:
 	_pose_tween.set_trans(Tween.TRANS_QUAD)
 	_pose_tween.set_ease(Tween.EASE_OUT)
 	_pose_tween.tween_property(self, "transform", target, raise_tween_sec)
+	if not raised:
+		_pose_tween.tween_callback(_restore_default_held_pose)
 
 
 func cache_idle_transform() -> void:
-	## Call after scene pose is final (before any raise).
+	## Call after scene pose is final (before any raise). Locks the default hold.
 	if not _raised:
-		_idle_transform = transform
-		_cast_pre_click_transform = transform
+		_capture_default_held_transform()
 	_tip_rest_local = _resolve_tip_rest_local()
 
 
+func _capture_default_held_transform() -> void:
+	_default_held_transform = transform
+	_idle_transform = _default_held_transform
+	_cast_pre_click_transform = _default_held_transform
+	_has_default_held = true
+
+
+func _restore_default_held_pose() -> void:
+	if not _has_default_held:
+		_capture_default_held_transform()
+	if _pose_tween != null and is_instance_valid(_pose_tween):
+		_pose_tween.kill()
+		_pose_tween = null
+	transform = _default_held_transform
+	_idle_transform = _default_held_transform
+	_cast_pre_click_transform = _default_held_transform
+
+
 func _raised_transform() -> Transform3D:
-	## Compose on idle so raise always lifts/tips relative to the authored held pose.
+	## Compose on the authored default so raise never stacks on a drifted pose.
 	var raise_basis := Basis.from_euler(Vector3(
 		deg_to_rad(raised_basis_euler_deg.x),
 		deg_to_rad(raised_basis_euler_deg.y),
 		deg_to_rad(raised_basis_euler_deg.z)
 	))
 	return Transform3D(
-		_idle_transform.basis * raise_basis,
-		_idle_transform.origin + raised_position_offset
+		_default_held_transform.basis * raise_basis,
+		_default_held_transform.origin + raised_position_offset
 	)
 
 
@@ -258,13 +281,12 @@ func play_cast_success(spell: SpellDefinition = null, keep_armed: bool = false) 
 	_pulse_tip(_success_pulse_color_for_spell(spell), 0.35)
 
 
-## LMB press: start silent hold; tip FX begins only after CAST_MIN_HOLD_SEC.
+## LMB press: ready immediately; hold builds charge power up to spell charge_time.
 func begin_cast_charge(spell: SpellDefinition = null) -> void:
 	if _raised:
 		return
-	## Lock the exact pre-click pose so release can restore it precisely.
-	_cast_pre_click_transform = transform
-	_idle_transform = transform
+	## Always start from the authored hold — never snapshot a mid-flourish pose.
+	_restore_default_held_pose()
 	_tip_rest_local = _resolve_tip_rest_local()
 	_cast_charging = true
 	_cast_fx_started = false
@@ -274,14 +296,9 @@ func begin_cast_charge(spell: SpellDefinition = null) -> void:
 	)
 	_cast_charge_duration = spell.get_charge_time_sec() if spell != null else 1.0
 	_cast_charge_elapsed = 0.0
+	_cast_charge_ready = true
 	_cast_power_factor = 1.0 if _cast_charge_duration <= 0.001 else 0.0
-	## Channels / zero charge: ready + visuals immediately.
-	if _cast_charge_duration <= 0.001:
-		_cast_charge_ready = true
-		_cast_power_factor = 1.0
-		_start_cast_charge_visuals()
-	else:
-		_cast_charge_ready = false
+	_start_cast_charge_visuals()
 	_refresh_process_enabled()
 
 
@@ -319,12 +336,7 @@ func _tick_cast_charge(delta: float) -> void:
 	if not _cast_charging:
 		return
 	_cast_charge_elapsed += delta
-	if not _cast_fx_started and _cast_charge_elapsed > CAST_MIN_HOLD_SEC:
-		_start_cast_charge_visuals()
-	if not _cast_charge_ready and (
-		_cast_charge_duration <= 0.001 or _cast_charge_elapsed > CAST_MIN_HOLD_SEC
-	):
-		_cast_charge_ready = true
+	_cast_charge_ready = true
 	var power := get_cast_power_factor()
 	if _cast_fx_started and _listen_fx != null and _listen_fx.has_method("set_cast_charge_progress"):
 		_listen_fx.set_cast_charge_progress(power)
@@ -336,7 +348,7 @@ func is_cast_charge_ready() -> bool:
 	return _cast_charging and _cast_charge_ready
 
 
-## 0..1 power from hold time past min gate up to spell charge_time (capped).
+## 0..1 power from hold time up to spell charge_time (capped). Instant release = 0.
 func get_cast_power_factor() -> float:
 	if _cast_charging:
 		return _compute_cast_power_factor()
@@ -346,12 +358,7 @@ func get_cast_power_factor() -> float:
 func _compute_cast_power_factor() -> float:
 	if _cast_charge_duration <= 0.001:
 		return 1.0
-	if _cast_charge_elapsed <= CAST_MIN_HOLD_SEC:
-		return 0.0
-	var span := _cast_charge_duration - CAST_MIN_HOLD_SEC
-	if span <= 0.001:
-		return 1.0
-	return clampf((_cast_charge_elapsed - CAST_MIN_HOLD_SEC) / span, 0.0, 1.0)
+	return clampf(_cast_charge_elapsed / _cast_charge_duration, 0.0, 1.0)
 
 
 func _end_cast_charge_fx() -> void:
@@ -420,7 +427,7 @@ func cancel_cast_charge(instant: bool = false) -> void:
 			_start_p_shaped_wand_fx(height_t)
 
 
-## Early release after tip FX began: sparks. Below min hold: use cancel_cast_charge (silent).
+## Cancel after tip FX began: sparks. Instant cancel snaps with no flourish.
 func fizzle_cast_charge(instant: bool = false) -> void:
 	var had_fx := _cast_fx_started
 	cancel_cast_charge(instant)
@@ -477,7 +484,7 @@ func _play_shake_wand_fx(awaitable: bool = false) -> void:
 	if _pose_tween != null and is_instance_valid(_pose_tween):
 		_pose_tween.kill()
 		_pose_tween = null
-	var base := transform
+	var base := _default_held_transform if _has_default_held else transform
 	var total := maxf(shake_wand_fx_sec, 0.06)
 	var step := total / 5.0
 	_pose_tween = create_tween()
@@ -493,6 +500,7 @@ func _play_shake_wand_fx(awaitable: bool = false) -> void:
 	if awaitable and _pose_tween != null:
 		await _pose_tween.finished
 		_pose_tween = null
+		_restore_default_held_pose()
 
 
 ## lift_defensive_wand_fx — tip rises up/right with charge progress.
@@ -530,8 +538,7 @@ func _start_defensive_return_to_idle() -> void:
 func _snap_to_pre_click_pose() -> void:
 	if not is_instance_valid(self):
 		return
-	transform = _cast_pre_click_transform
-	_idle_transform = _cast_pre_click_transform
+	_restore_default_held_pose()
 
 
 ## Apex of the flipped-P bowl; height_t scales size up to the full-charge maximum.

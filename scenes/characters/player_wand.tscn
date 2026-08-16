@@ -40,7 +40,7 @@ roughness = 0.85
 [sub_resource type="CylinderMesh" id="CylinderMesh_sleeve"]
 top_radius = 0.03
 bottom_radius = 0.034
-height = 0.07
+height = 0.13
 
 [node name="Wand" type="Node3D" unique_id=463812716]
 editor_description = "Canonical wand mesh for every playable. Edit Tip/Shaft here. Held pose lives on playable_character.tscn → Head/CameraPivot/Wand transform (instance root only — never Make Editable)."
@@ -67,7 +67,7 @@ mesh = SubResource("SphereMesh_hand")
 
 [node name="Sleeve" type="MeshInstance3D" parent="Model" unique_id=2100000002]
 editor_description = "Placeholder sleeve behind the hand, away from the tip."
-transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0.055)
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0.085)
 material_override = SubResource("StandardMaterial3D_sleeve")
 mesh = SubResource("CylinderMesh_sleeve")
 
