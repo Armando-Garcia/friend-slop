@@ -1,8 +1,6 @@
 class_name PlayableCharacter
 extends Character
 
-## Playable character: movement, camera, shared wand, spells, and optional trail in derived scenes.
-
 const WALK_SPEED := 3.0
 const SPRINT_SPEED := 5.0
 const JUMP_VELOCITY := 2.5
@@ -27,7 +25,6 @@ const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
-## Replicated so remotes show/hide the mounted broom mesh.
 var broom_active := false:
 	set(value):
 		broom_active = value
@@ -96,9 +93,6 @@ func _is_under_spawn_slot() -> bool:
 
 
 func _enter_editor_preview_mode() -> void:
-	## Spawn-slot or gallery preview: never act as a live player.
-	## Visible in the editor only — hide (and free) at runtime so placeholders
-	## do not show up as extra characters or initialize mic/voice systems.
 	process_mode = Node.PROCESS_MODE_DISABLED
 	collision_layer = 0
 	collision_mask = 0
@@ -233,7 +227,6 @@ func _is_monster_book_busy() -> bool:
 
 
 func _is_spellbook_open() -> bool:
-	## The spellbook is browse-only: wand raise must not steal book page-next.
 	return (
 		_game_hud != null
 		and _game_hud.has_method("is_spellbook_open")
@@ -385,8 +378,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		## Yaw on Head (look L/R); Body mirrors yaw so broom/torso turn as one.
-		## Pitch stays on CameraPivot only — never tips the body or broom.
 		head.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
 		camera_pivot.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
 		camera_pivot.rotation.x = clampf(
@@ -457,7 +448,6 @@ func _on_wand_cast_succeeded(
 	mode: String,
 	_validation: CastValidationResult
 ) -> void:
-	## Tome learn still uses cast_succeeded; voice select uses spell_selected.
 	if _wand == null or mode != "cast":
 		return
 	_wand.play_cast_success(spell)
@@ -472,7 +462,6 @@ func _on_wand_cast_failed(
 		return
 	if _casting_session.is_tome_teaching():
 		return
-	## Keep tip armed while wand-select retries after a miss.
 	if _casting_session.is_wand_voice_select() and _wand_raised:
 		return
 	_wand.play_fizzle()
@@ -630,7 +619,6 @@ func _fire_armed_spell() -> void:
 	var cost := SpellManaScript.cast_cost(_armed_spell)
 	var spell := _armed_spell
 	if _wand != null:
-		## Defensive lift: fire now; P-shape / shake await flourish.
 		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
 			_wand.return_from_cast_charge()
 		else:
@@ -856,7 +844,6 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 
 
 func apply_ember_halo_hit(hit_dir: Vector3) -> void:
-	## Jump launch + light horizontal knockback + slow (60% speed for 0.5s).
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
 	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
@@ -875,7 +862,6 @@ func apply_ember_halo_hit(hit_dir: Vector3) -> void:
 
 
 func apply_wretch_command_hit(hit_dir: Vector3) -> void:
-	## Light knockback + heavy slow (10% speed for 2s).
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
 	var dir := hit_dir
@@ -900,7 +886,6 @@ func apply_wretch_command_hit(hit_dir: Vector3) -> void:
 
 
 func apply_rat_explode_hit(hit_dir: Vector3) -> void:
-	## Rat burst: firm knockback + short heavy slow.
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
 	var dir := hit_dir
@@ -940,7 +925,6 @@ func _refresh_broom_visual() -> void:
 
 
 func _sync_body_yaw_to_head() -> void:
-	## Body (and BroomMount under it) yaw with look; pitch never touches them.
 	var body := get_node_or_null("Body") as Node3D
 	if body == null or head == null:
 		return
