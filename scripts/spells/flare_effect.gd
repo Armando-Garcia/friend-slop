@@ -9,6 +9,7 @@ const SCENE_PATH := "res://scenes/spells/flare.tscn"
 
 const FlareFlightScript := preload("res://scripts/spells/flare_flight.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 @export_group("Beacon")
 @export_range(2.0, 80.0, 0.5) var light_peak_energy: float = 36.0
@@ -85,13 +86,22 @@ static func spawn_launched(
 	else:
 		flare._velocity = Vector3.ZERO
 		flare._direction = Vector3.ZERO
-	parent.add_child(flare)
-	if flare.is_inside_tree():
-		flare.global_position = origin
-	else:
-		flare.position = origin
+	## Place before add_child so `_ready` beacon is not at Match origin.
+	SpellEphemeralFxScript.add_child_at(parent, flare, origin)
 	flare.play_launch()
 	return flare
+
+
+## charge 0 → base launch speed / dimmer beacon; charge 1 → +56.25% speed / full light.
+func apply_charge_power(charge_factor: float) -> void:
+	var t := clampf(charge_factor, 0.0, 1.0)
+	light_peak_energy = light_peak_energy * lerpf(0.55, 1.0, t)
+	var speed_max := launch_speed
+	launch_speed = speed_max * lerpf(1.0, 1.5625, t)
+	if _flying:
+		var aim := _direction if _direction.length_squared() > 0.0001 else Vector3.FORWARD
+		_velocity = FlareFlightScript.initial_velocity(aim, launch_speed)
+	_refresh_visual_state()
 
 
 func _ready() -> void:

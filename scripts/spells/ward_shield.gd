@@ -2,12 +2,13 @@
 class_name WardShield
 extends Node3D
 
-## Forward-facing spherical-cap blue shield. Blocks one fireball, then shatters.
+## Forward-facing spherical-cap blue shield. Blocks 1–2 incoming spells, then shatters.
 ## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
 ## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 const GROUP := "spell_ward"
 const DURATION_SEC := 1.0
@@ -44,9 +45,11 @@ var _body: StaticBody3D
 var _mesh_instance: MeshInstance3D
 var _collision_shape: CollisionShape3D
 var _material: StandardMaterial3D
-var _spent := false
+var _hits_remaining := 1
 var _lifetime := 0.0
 var _lifetime_active := false
+## Instance duration; defaults to DURATION_SEC (player ward). Monster casts may extend.
+var _duration_sec: float = DURATION_SEC
 var _wand_origin := Vector3.ZERO
 var _body_collision_layer := 1
 var _beam: MeshInstance3D
@@ -56,16 +59,26 @@ var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
 
 
-static func spawn(parent: Node, origin: Vector3, direction: Vector3) -> Node:
+static func spawn(
+	parent: Node,
+	origin: Vector3,
+	direction: Vector3,
+	hit_capacity: int = 1
+) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
 	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
 	var ward: Node = packed.instantiate()
-	if parent != null:
+	if parent != null and ward is Node3D:
+		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)
+	elif parent != null:
 		parent.add_child(ward)
 	if ward.has_method("setup_cast"):
-		ward.call("setup_cast", origin, direction)
+		ward.call("setup_cast", origin, direction, hit_capacity)
 	return ward
 
+
+func set_duration_sec(seconds: float) -> void:
+	_duration_sec = maxf(seconds, 0.05)
 
 func _ready() -> void:
 	_cache_nodes()
@@ -104,7 +117,7 @@ func _rebuild_geometry() -> void:
 		)
 
 
-func setup_cast(origin: Vector3, direction: Vector3) -> void:
+func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> void:
 	var dir := direction
 	if dir.length_squared() < 0.0001:
 		dir = Vector3.FORWARD
@@ -118,7 +131,7 @@ func setup_cast(origin: Vector3, direction: Vector3) -> void:
 		up = Vector3.RIGHT
 	global_transform = Transform3D(Basis.looking_at(dir, up), pos)
 	_lifetime = 0.0
-	_spent = false
+	_hits_remaining = maxi(hit_capacity, 1)
 	_lifetime_active = false
 	## Editor look-dev trees are often paused; keep cast FX + lifetime ticking.
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -310,27 +323,29 @@ func _enable_collision() -> void:
 
 
 func _process(delta: float) -> void:
-	if not _lifetime_active or _spent:
+	if not _lifetime_active or _hits_remaining <= 0:
 		return
 	_lifetime += delta
+	var duration := maxf(_duration_sec, 0.05)
 	if _material != null:
-		var fade := clampf(1.0 - (_lifetime / DURATION_SEC), 0.0, 1.0)
+		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
 		_material.albedo_color.a = SHIELD_BLUE.a * fade
 		_material.emission = SHIELD_EDGE * (0.35 + 0.4 * fade)
-	if _lifetime >= DURATION_SEC and not _spent:
+	if _lifetime >= duration and _hits_remaining > 0:
 		_dissolve()
 
 
 func notify_spell_blocked() -> void:
-	## One fireball (or similar) spends the ward.
-	if _spent:
+	## Each blocked spell spends one hit; dissolve when capacity is empty.
+	if _hits_remaining <= 0:
 		return
-	_spent = true
-	_dissolve()
+	_hits_remaining -= 1
+	if _hits_remaining <= 0:
+		_dissolve()
 
 
 func _dissolve() -> void:
-	_spent = true
+	_hits_remaining = 0
 	_lifetime_active = false
 	set_process(false)
 	_kill_cast_tween()

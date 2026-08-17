@@ -249,6 +249,7 @@ func _wire_spell_system(player: CharacterBody3D) -> void:
 	casting_session.state_changed.connect(_on_cast_state_changed)
 	casting_session.cast_succeeded.connect(_on_cast_succeeded)
 	casting_session.cast_failed.connect(_on_cast_failed)
+	casting_session.spell_selected.connect(_on_spell_selected)
 	casting_session.tome_teaching_changed.connect(_on_tome_teaching_changed)
 	player.configure_interaction(loadout, casting_session, game_hud, effect_applier)
 
@@ -547,19 +548,31 @@ func _on_cast_state_changed(state: String, spell: SpellDefinition) -> void:
 			return
 		game_hud.hide_casting()
 		return
-	if casting_session.is_free_cast() and not casting_session.is_tome_teaching():
+	if (
+		(
+			casting_session.is_free_cast()
+			or casting_session.is_wand_voice_select()
+		)
+		and not casting_session.is_tome_teaching()
+	):
 		return
 	game_hud.show_casting_state(
 		state,
 		spell,
 		casting_session.is_tome_teaching(),
-		casting_session.is_free_cast()
+		casting_session.is_free_cast() or casting_session.is_wand_voice_select()
 	)
 
 
 func _on_tome_teaching_changed(active: bool, _spell: SpellDefinition) -> void:
 	if not active and not _learn_confirm_pending:
 		game_hud.hide_casting()
+
+
+func _on_spell_selected(spell: SpellDefinition) -> void:
+	## Voice select arms LMB cast; player also reveals — ensure HUD once.
+	if spell != null and game_hud != null and game_hud.has_method("reveal_cast_spell"):
+		game_hud.reveal_cast_spell(spell)
 
 
 func _on_cast_succeeded(
@@ -586,11 +599,14 @@ func _on_cast_succeeded(
 		_learn_confirm_pending = true
 		loadout.learn_spell(spell.id, "tome")
 		_consume_tome_for_spell(spell.id)
+		game_hud.reveal_cast_spell(spell)
 		game_hud.show_spell_learned(spell, validation)
 		await get_tree().create_timer(3.5).timeout
 		_learn_confirm_pending = false
 		game_hud.hide_casting()
+		game_hud.clear_spell_word()
 	else:
+		game_hud.reveal_cast_spell(spell)
 		var params := SpellEffectSyncScript.build_params(spell, _local_player)
 		var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
 		if spell.effect_id == "fake_wall":
@@ -636,16 +652,19 @@ func _on_cast_failed(
 		not partial.heard_text.is_empty() or not partial.incantation_text.is_empty()
 	):
 		TomeDebug.log("Match", partial.get_speech_match_line())
+	game_hud.clear_spell_word()
 	var from_tome: bool = casting_session.is_tome_teaching()
-	var free_cast: bool = casting_session.is_free_cast()
-	if not free_cast:
+	var open_mic: bool = (
+		casting_session.is_free_cast() or casting_session.is_wand_voice_select()
+	)
+	if not open_mic:
 		if partial != null:
 			game_hud.show_cast_feedback(partial, from_tome)
 		else:
 			game_hud.show_cast_feedback(CastValidationResult.fail(reason), from_tome)
 	if from_tome:
 		return
-	if free_cast:
+	if open_mic:
 		return
 	await get_tree().create_timer(3.0).timeout
 	game_hud.hide_casting()

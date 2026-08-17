@@ -1,45 +1,123 @@
+@tool
 class_name Monster
 extends Character
 
 ## Combat-ready AI character. Extends Character (not PlayableCharacter):
 ## no camera, wand, "player" group, or multiplayer authority.
 ##
-## AI: senses append interest candidates → _prefer_interest → IDLE/PATROL/CHASE.
+## AI: senses append interest candidates → _prefer_interest → IDLE/PATROL/CHASE/ALERT.
 ## Override _prefer_interest / _append_default_interest_candidates on children;
 ## add MonsterSense nodes under Senses to customize perception without forking the FSM.
-## Eyes (Head/Eyes) glow only while chasing — color from summon entry.
+## Eyes (Head/Eyes) glow while chasing or alert — color from body_tint / eye_glow exports.
+## Glow darkens and dims with missing health so hits read without an HP bar.
+## Lookdev: set lookdev_override + lookdev_pose to preview chase/patrol in the editor.
+
+enum ChaseStyle { CLOSE_IN, KEEP_AWAY }
 
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.gd")
 const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const MonsterChaseMoveScript := preload("res://scripts/monsters/monster_chase_move.gd")
+const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_combat_spacing.gd")
+const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
 
 const DEFAULT_TINT := Color(0.72, 0.28, 0.22, 1.0)
 const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
-const IDLE_DURATION_SEC := 1.2
-const PATROL_RADIUS := 4.0
 const PATROL_ARRIVE_DIST := 0.45
 const KNOCKBACK_TIMER_SEC := 0.35
 const DEFAULT_PLAYER_SOURCE := &"player"
 const DEATH_IMPULSE_SCALE := 1.35
 const EYE_EMISSION_ENERGY := 5.5
 const EYE_LIGHT_ENERGY := 2.6
+const RANGE_DISC_HEIGHT := 0.02
+const HURT_UP_IMPULSE := 5.0
+const HURT_KNOCKBACK_TIMER_SEC := 0.15
+## Eye glow at 0 HP: near-black, slightly tinted from authored color.
+const EYE_DEAD_RGB_SCALE := Vector3(0.04, 0.06, 0.04)
+const EYE_DEAD_ENERGY_SCALE := 0.28
 
+@export_group("Appearance")
+@export var body_tint: Color = DEFAULT_TINT:
+	set(value):
+		body_tint = value
+		if is_inside_tree():
+			_refresh_appearance()
+
+@export var eye_glow_color: Color = DEFAULT_EYE_GLOW:
+	set(value):
+		eye_glow_color = value
+		if is_inside_tree():
+			_refresh_appearance()
+
+@export_group("Lookdev")
+## When true, lookdev_pose drives eyes instead of live AI (workspace / editor preview).
+@export var lookdev_override: bool = false:
+	set(value):
+		lookdev_override = value
+		if is_inside_tree():
+			_refresh_lookdev_eyes()
+
+@export var lookdev_pose: MonsterAIScript.LookdevPose = MonsterAIScript.LookdevPose.PATROL:
+	set(value):
+		lookdev_pose = value
+		if is_inside_tree():
+			_refresh_lookdev_eyes()
+
+@export var show_combat_ranges: bool = false:
+	set(value):
+		show_combat_ranges = value
+		if is_inside_tree():
+			_refresh_range_gizmos()
+
+@export_group("Combat")
 @export var max_health: float = 60.0
 @export var move_speed: float = 3.2
-@export var chase_range: float = 12.0
-@export var attack_range: float = 1.4
+@export var chase_range: float = 12.0:
+	set(value):
+		chase_range = value
+		if is_inside_tree() and show_combat_ranges:
+			_refresh_range_gizmos()
+
+@export var attack_range: float = 1.4:
+	set(value):
+		attack_range = value
+		if is_inside_tree() and show_combat_ranges:
+			_refresh_range_gizmos()
+
 @export var touch_damage: float = 8.0
 @export var gravity: float = 18.0
+@export var idle_duration_sec: float = 1.2
+@export var patrol_radius: float = 4.0
+## After chase loses all sight/hearing interest for this long → ALERT.
+@export_range(0.5, 30.0, 0.25) var lost_chase_to_alert_sec: float = 4.0
+## How long ALERT lasts with no detection before returning to PATROL.
+@export_range(1.0, 60.0, 0.25) var alert_duration_sec: float = 12.0
 @export var death_linger_sec: float = 30.0
 @export var death_fade_sec: float = 3.0
+## CLOSE_IN rushes melee. KEEP_AWAY holds at keep_away_range.
+@export var chase_style: ChaseStyle = ChaseStyle.CLOSE_IN
+@export_range(1.0, 40.0, 0.5) var keep_away_range: float = 20.0
+## Yaw turn rate (rad/s). Fast default so retreat/re-face reads as fluid.
+@export_range(1.0, 24.0, 0.1) var face_turn_speed_rad: float = 10.0
+
+@export_group("Chase move")
+@export_range(0.25, 10.0, 0.05) var chase_wait_min_sec: float = 1.0
+@export_range(0.25, 12.0, 0.05) var chase_wait_max_sec: float = 3.0
+@export_range(0.25, 6.0, 0.05) var chase_strafe_min_sec: float = 1.2
+@export_range(0.25, 6.0, 0.05) var chase_strafe_max_sec: float = 2.0
+@export_range(0.25, 8.0, 0.05) var chase_retreat_min_sec: float = 1.2
+@export_range(0.25, 8.0, 0.05) var chase_retreat_max_sec: float = 3.2
+@export_range(0.1, 3.0, 0.05) var chase_optimal_eps: float = 0.55
 
 var current_health: float = 60.0
 var is_alive: bool = true
 
 var _ai_state: int = MonsterAIScript.State.IDLE
 var _idle_timer: float = 0.0
+var _undetected_sec: float = 0.0
+var _alert_timer: float = 0.0
 var _patrol_goal: Vector3 = Vector3.ZERO
 var _interest: RefCounted = null
 var _knockback_vel: Vector3 = Vector3.ZERO
@@ -48,32 +126,97 @@ var _rng := RandomNumberGenerator.new()
 var _senses_root: Node = null
 var _last_hit_dir: Vector3 = Vector3.FORWARD
 var _dying: bool = false
-var _eye_glow_color: Color = DEFAULT_EYE_GLOW
 var _eyes_root: Node3D = null
 var _eye_meshes: Array[MeshInstance3D] = []
 var _eye_light: OmniLight3D = null
 var _eyes_chasing: bool = false
+var _chase_range_mesh: MeshInstance3D = null
+var _attack_range_mesh: MeshInstance3D = null
+var _cast_windup_left: float = 0.0
+var _casting_ability: Node = null
+var _cast_prefer_index: int = 0
+var _chase_move: MonsterChaseMove = null
 
 
 func _ready() -> void:
-	add_to_group("monster")
-	add_to_group("combat_target")
+	if not Engine.is_editor_hint():
+		add_to_group("monster")
+		add_to_group("combat_target")
 	current_health = max_health
 	is_alive = true
 	_rng.randomize()
+	_chase_move = MonsterChaseMoveScript.new() as MonsterChaseMove
+	_sync_chase_move_config()
 	_senses_root = get_node_or_null("Senses")
 	_cache_eyes()
-	_apply_character_color(DEFAULT_TINT)
-	_apply_eye_glow_color(_eye_glow_color)
-	_set_chase_eyes_active(false)
+	_refresh_appearance()
+	if lookdev_override or Engine.is_editor_hint():
+		_refresh_lookdev_eyes()
+	else:
+		_set_chase_eyes_active(false)
+	_refresh_range_gizmos()
+	if Engine.is_editor_hint():
+		set_physics_process(false)
+		return
 	_enter_idle()
 	set_physics_process(true)
 
 
-func apply_summon_appearance(tint: Color, eye_glow_color: Color = DEFAULT_EYE_GLOW) -> void:
+func _sync_chase_move_config() -> void:
+	if _chase_move == null:
+		return
+	_chase_move.configure(
+		_rng, chase_wait_min_sec, chase_wait_max_sec,
+		chase_strafe_min_sec, chase_strafe_max_sec,
+		chase_retreat_min_sec, chase_retreat_max_sec, chase_optimal_eps
+	)
+
+
+func apply_summon_appearance(tint: Color, p_eye_glow_color: Color = DEFAULT_EYE_GLOW) -> void:
 	## Used by the headmaster summon book after instantiate.
-	_apply_character_color(tint)
-	_apply_eye_glow_color(eye_glow_color)
+	body_tint = tint
+	eye_glow_color = p_eye_glow_color
+	_refresh_appearance()
+
+
+func set_lookdev_pose(pose: MonsterAIScript.LookdevPose, enable_override: bool = true) -> void:
+	lookdev_override = enable_override
+	lookdev_pose = pose
+
+
+func get_ability_placeholders() -> Array[Node]:
+	var out: Array[Node] = []
+	var root := get_node_or_null("Abilities")
+	if root == null:
+		return out
+	for child in root.get_children():
+		if child.has_method("preview_cast"):
+			out.append(child)
+	return out
+
+
+func get_combat_abilities() -> Array[Node]:
+	## Abilities that support chase casting (can_cast / begin_cast / range check).
+	var out: Array[Node] = []
+	var root := get_node_or_null("Abilities")
+	if root == null:
+		return out
+	for child in root.get_children():
+		if (
+			child.has_method("can_cast")
+			and child.has_method("begin_cast")
+			and child.has_method("is_target_in_range")
+		):
+			out.append(child)
+	return out
+
+
+func is_ai_chasing() -> bool:
+	return _ai_state == MonsterAIScript.State.CHASE
+
+
+func is_ai_alert() -> bool:
+	return _ai_state == MonsterAIScript.State.ALERT
 
 
 func take_damage(amount: float, from: Node3D = null) -> void:
@@ -83,12 +226,16 @@ func take_damage(amount: float, from: Node3D = null) -> void:
 	current_health = MonsterAIScript.apply_damage(current_health, amount)
 	if MonsterAIScript.is_dead(current_health):
 		die()
+		return
+	_apply_hurt_knockback()
+	_apply_eye_glow_from_health()
 
 
 func heal(amount: float) -> void:
 	if not is_alive:
 		return
 	current_health = MonsterAIScript.apply_heal(current_health, amount, max_health)
+	_apply_eye_glow_from_health()
 
 
 func die() -> void:
@@ -99,6 +246,10 @@ func die() -> void:
 	current_health = 0.0
 	_ai_state = MonsterAIScript.State.IDLE
 	_interest = null
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
+	_cancel_cast()
+	_kill_owned_summons()
 	_set_chase_eyes_active(false)
 	velocity = Vector3.ZERO
 	set_physics_process(false)
@@ -110,6 +261,16 @@ func die() -> void:
 	queue_free()
 
 
+func get_summon_host() -> Node:
+	return get_node_or_null("SummonHost")
+
+
+func _kill_owned_summons() -> void:
+	var host := get_summon_host()
+	if host != null and host.has_method("kill_all"):
+		host.call("kill_all")
+
+
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	if not is_alive:
 		return
@@ -119,6 +280,78 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	_knockback_vel = impulse
 	_knockback_timer = KNOCKBACK_TIMER_SEC
 	velocity += impulse
+
+
+func _apply_hurt_knockback() -> void:
+	## Small hop so hits read even without an HP bar.
+	velocity.y = maxf(velocity.y, HURT_UP_IMPULSE)
+	_knockback_vel.y = maxf(_knockback_vel.y, HURT_UP_IMPULSE * 0.45)
+	_knockback_timer = maxf(_knockback_timer, HURT_KNOCKBACK_TIMER_SEC)
+
+
+func _health_ratio() -> float:
+	if max_health <= 0.001:
+		return 1.0
+	return clampf(current_health / max_health, 0.0, 1.0)
+
+
+func _apply_eye_glow_from_health() -> void:
+	## Full HP = authored glow; near death = darker / dimmer (Wretch green dims hard).
+	var t := 1.0 if Engine.is_editor_hint() else _health_ratio()
+	var dead := Color(
+		eye_glow_color.r * EYE_DEAD_RGB_SCALE.x,
+		eye_glow_color.g * EYE_DEAD_RGB_SCALE.y,
+		eye_glow_color.b * EYE_DEAD_RGB_SCALE.z,
+		1.0
+	)
+	var color := eye_glow_color.lerp(dead, 1.0 - t)
+	var energy := lerpf(EYE_DEAD_ENERGY_SCALE, 1.0, t)
+	_apply_eye_glow_color(color, energy)
+
+
+func _refresh_appearance() -> void:
+	_ensure_mesh_refs()
+	if _body_mesh != null and _head_mesh != null:
+		_character_color = body_tint
+		_apply_character_color(body_tint)
+	_tint_optional_body_parts()
+	_apply_eye_glow_from_health()
+
+
+func _tint_optional_body_parts() -> void:
+	## Type scenes may author MidBody / hand spheres that should match body_tint.
+	_tint_mesh_instance(get_node_or_null("%MidBody") as MeshInstance3D, body_tint)
+	_tint_optional_hands()
+
+
+func _tint_optional_hands() -> void:
+	for path in ["%RightHand", "%LeftHand"]:
+		_tint_mesh_instance(get_node_or_null(path) as MeshInstance3D, body_tint)
+
+
+func _tint_mesh_instance(mesh_inst: MeshInstance3D, color: Color) -> void:
+	if mesh_inst == null:
+		return
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.albedo_color = color
+	mat.roughness = 0.62
+	mat.metallic = 0.05
+	mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	mesh_inst.material_override = mat
+	mesh_inst.layers = WorldVisualLayersScript.PLAYER_SELF
+	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+
+func _ensure_mesh_refs() -> void:
+	if head == null:
+		head = get_node_or_null("%Head") as Node3D
+	if _body_mesh == null:
+		_body_mesh = get_node_or_null("%Body") as MeshInstance3D
+	if _head_mesh == null:
+		_head_mesh = get_node_or_null("%HeadMesh") as MeshInstance3D
+	if _body_collision == null:
+		_body_collision = get_node_or_null("%CollisionShape3D") as CollisionShape3D
 
 
 func _cache_eyes() -> void:
@@ -136,8 +369,7 @@ func _cache_eyes() -> void:
 			_eye_light = child as OmniLight3D
 
 
-func _apply_eye_glow_color(color: Color) -> void:
-	_eye_glow_color = color
+func _apply_eye_glow_color(color: Color, energy_scale: float = 1.0) -> void:
 	if _eyes_root == null:
 		_cache_eyes()
 	var mat := StandardMaterial3D.new()
@@ -145,7 +377,7 @@ func _apply_eye_glow_color(color: Color) -> void:
 	mat.albedo_color = color
 	mat.emission_enabled = true
 	mat.emission = color
-	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY
+	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
 	for mesh in _eye_meshes:
 		if mesh == null:
 			continue
@@ -154,8 +386,14 @@ func _apply_eye_glow_color(color: Color) -> void:
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if _eye_light != null:
 		_eye_light.light_color = color
-		_eye_light.light_energy = EYE_LIGHT_ENERGY
+		_eye_light.light_energy = EYE_LIGHT_ENERGY * energy_scale
 		_eye_light.light_cull_mask = WorldVisualLayersScript.SCENE_LIGHT_MASK
+
+
+func _refresh_lookdev_eyes() -> void:
+	if not lookdev_override and not Engine.is_editor_hint():
+		return
+	_set_chase_eyes_active(MonsterAIScript.lookdev_eyes_visible(lookdev_pose))
 
 
 func _set_chase_eyes_active(active: bool) -> void:
@@ -164,6 +402,15 @@ func _set_chase_eyes_active(active: bool) -> void:
 		_cache_eyes()
 	if _eyes_root != null:
 		_eyes_root.visible = active
+
+
+func _refresh_range_gizmos() -> void:
+	var result: Dictionary = MonsterRangeGizmosScript.refresh(
+		self, show_combat_ranges, _chase_range_mesh, _attack_range_mesh,
+		chase_range, attack_range, RANGE_DISC_HEIGHT
+	)
+	_chase_range_mesh = result.get("chase") as MeshInstance3D
+	_attack_range_mesh = result.get("attack") as MeshInstance3D
 
 
 func _remember_hit_dir(from: Node3D) -> void:
@@ -188,6 +435,7 @@ func _spawn_ragdoll_corpse() -> void:
 
 	_reparent_to_corpse(_body_collision, corpse)
 	_reparent_to_corpse(_body_mesh, corpse)
+	_reparent_to_corpse(get_node_or_null("%MidBody"), corpse)
 	_reparent_to_corpse(head, corpse)
 
 	var impulse: Vector3 = BroomLocomotionScript.knockback_impulse(_last_hit_dir)
@@ -271,7 +519,7 @@ func _prefer_interest(candidates: Array) -> RefCounted:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_alive:
+	if Engine.is_editor_hint() or not is_alive:
 		return
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -280,25 +528,58 @@ func _physics_process(delta: float) -> void:
 
 	_interest = _gather_interest()
 	var has_interest := _interest_is_actionable(_interest)
-	var previous: int = _ai_state
 	_ai_state = MonsterAIScript.resolve_state(_ai_state, has_interest)
-	if previous == MonsterAIScript.State.CHASE and _ai_state == MonsterAIScript.State.IDLE:
-		_enter_idle()
+	_update_alert_timers(delta, has_interest)
 
-	match _ai_state:
-		MonsterAIScript.State.IDLE:
-			_tick_idle(delta)
-		MonsterAIScript.State.PATROL:
-			_tick_patrol(delta)
-		MonsterAIScript.State.CHASE:
-			_tick_chase(delta)
+	var chase_target: Node3D = null
+	if _interest != null:
+		chase_target = _interest.get("target") as Node3D
 
-	var want_eyes := MonsterAIScript.chase_eyes_visible(_ai_state)
-	if want_eyes != _eyes_chasing:
-		_set_chase_eyes_active(want_eyes)
+	if _casting_ability != null:
+		_tick_cast_windup(delta, chase_target)
+	elif _try_start_cast(chase_target):
+		pass
+	else:
+		match _ai_state:
+			MonsterAIScript.State.IDLE:
+				_tick_idle(delta)
+			MonsterAIScript.State.PATROL:
+				_tick_patrol(delta)
+			MonsterAIScript.State.CHASE:
+				_tick_chase(delta)
+			MonsterAIScript.State.ALERT:
+				_tick_alert(delta)
+
+	if lookdev_override:
+		_refresh_lookdev_eyes()
+	else:
+		var want_eyes := MonsterAIScript.chase_eyes_visible(_ai_state)
+		if want_eyes != _eyes_chasing:
+			_set_chase_eyes_active(want_eyes)
 
 	_apply_knockback_bleed(delta)
 	move_and_slide()
+
+
+func _update_alert_timers(delta: float, has_interest: bool) -> void:
+	## 4s fully undetected after chase → ALERT; 12s more undetected → PATROL.
+	if has_interest:
+		_undetected_sec = 0.0
+		_alert_timer = 0.0
+		return
+	if _ai_state == MonsterAIScript.State.CHASE:
+		_undetected_sec += delta
+		if _undetected_sec >= lost_chase_to_alert_sec:
+			_enter_alert()
+	elif _ai_state == MonsterAIScript.State.ALERT:
+		_alert_timer += delta
+		if _alert_timer >= alert_duration_sec:
+			_undetected_sec = 0.0
+			_alert_timer = 0.0
+			_begin_patrol()
+	else:
+		_undetected_sec = 0.0
+		_alert_timer = 0.0
 
 
 func _interest_is_actionable(interest: RefCounted) -> bool:
@@ -312,6 +593,19 @@ func _interest_is_actionable(interest: RefCounted) -> bool:
 func _enter_idle() -> void:
 	_ai_state = MonsterAIScript.State.IDLE
 	_idle_timer = 0.0
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
+	_clear_chase_move()
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
+func _enter_alert() -> void:
+	_cancel_cast()
+	_ai_state = MonsterAIScript.State.ALERT
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
+	_clear_chase_move()
 	velocity.x = 0.0
 	velocity.z = 0.0
 
@@ -320,15 +614,18 @@ func _tick_idle(delta: float) -> void:
 	_idle_timer += delta
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if _idle_timer >= IDLE_DURATION_SEC:
+	if _idle_timer >= idle_duration_sec:
 		_begin_patrol()
 
 
 func _begin_patrol() -> void:
 	_ai_state = MonsterAIScript.State.PATROL
+	_undetected_sec = 0.0
+	_alert_timer = 0.0
+	_clear_chase_move()
 	_patrol_goal = MonsterAIScript.random_patrol_point(
 		global_position,
-		PATROL_RADIUS,
+		patrol_radius,
 		_rng.randf() * TAU,
 		_rng.randf_range(0.35, 1.0)
 	)
@@ -351,12 +648,66 @@ func _tick_patrol(_delta: float) -> void:
 	_face_horizontal(desired)
 
 
-func _tick_chase(_delta: float) -> void:
+func _tick_alert(_delta: float) -> void:
+	## Vigilant standstill while waiting to re-detect or drop to patrol.
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+
+func _tick_chase(delta: float) -> void:
 	if not _interest_is_actionable(_interest):
-		_enter_idle()
+		## Grace window before ALERT: hold position, keep eyes on.
+		_cancel_cast()
+		_clear_chase_move()
+		velocity.x = 0.0
+		velocity.z = 0.0
 		return
 	var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
 	var target: Node3D = _interest.get("target") as Node3D
+
+	if _try_tick_chase_reposition(delta, target):
+		return
+
+	if _tick_chase_reposition_wait(delta, target):
+		return
+
+	_tick_chase_approach(goal, target)
+
+
+func _tick_chase_reposition_wait(delta: float, target: Node3D) -> bool:
+	## Continuous kite loop while near optimal range. Returns true if handled.
+	if not _uses_continuous_chase_move_timer():
+		return false
+	if target == null or not is_instance_valid(target):
+		return false
+	_ensure_chase_wait_armed()
+	var dist := MonsterAIScript.horizontal_distance(
+		global_position, target.global_position
+	)
+	var optimal := _optimal_combat_range()
+	if dist > optimal + chase_optimal_eps:
+		return false
+	if _tick_chase_wait_and_decide(delta, target, dist, optimal):
+		if _try_tick_chase_reposition(delta, target):
+			return true
+	_hold_chase_while_waiting(target)
+	return true
+
+
+func _tick_chase_approach(goal: Vector3, target: Node3D) -> void:
+	if (
+		chase_style == ChaseStyle.CLOSE_IN
+		and target != null
+		and is_instance_valid(target)
+		and _has_ranged_spacing_abilities()
+	):
+		if _tick_ranged_cast_chase(target):
+			return
+
+	if chase_style == ChaseStyle.KEEP_AWAY and target != null and is_instance_valid(target):
+		_move_keep_away(target)
+		return
+
 	var to_goal := Vector3(goal.x - global_position.x, 0.0, goal.z - global_position.z)
 	if to_goal.length() <= attack_range:
 		velocity.x = 0.0
@@ -372,17 +723,266 @@ func _tick_chase(_delta: float) -> void:
 	_face_horizontal(desired)
 
 
+func _uses_continuous_chase_move_timer() -> bool:
+	## Children (e.g. Wretch) can disable the free 1–3s kite loop.
+	return true
+
+
+func is_chase_retreating() -> bool:
+	return _chase_move != null and _chase_move.is_retreating()
+
+
+func _clear_chase_move() -> void:
+	if _chase_move != null:
+		_chase_move.clear()
+
+
+func _ensure_chase_wait_armed() -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.ensure_wait_armed()
+
+
+func _arm_chase_wait() -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.arm_wait()
+
+
+func _optimal_combat_range() -> float:
+	if chase_style == ChaseStyle.KEEP_AWAY:
+		return keep_away_range
+	if _has_ranged_spacing_abilities():
+		var ability := _preferred_spacing_ability()
+		if ability != null:
+			return MonsterCombatSpacingScript.preferred_cast_ideal(ability)
+	return attack_range
+
+
+func _max_chase_reposition_distance() -> float:
+	return MonsterAIScript.max_aggro_move_distance(chase_range)
+
+
+func _tick_chase_wait_and_decide(
+	delta: float, target: Node3D, dist: float, optimal: float
+) -> bool:
+	_sync_chase_move_config()
+	if _chase_move == null:
+		return false
+	return _chase_move.tick_wait_and_decide(
+		delta, self, target, dist, optimal, _max_chase_reposition_distance()
+	)
+
+
+func start_chase_strafe(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.start_strafe(self, target, side_sign, duration_sec)
+
+
+func start_chase_retreat(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	_sync_chase_move_config()
+	if _chase_move != null:
+		_chase_move.start_retreat(
+			self, target, side_sign, duration_sec, _max_chase_reposition_distance()
+		)
+
+
+func _try_tick_chase_reposition(delta: float, target: Node3D) -> bool:
+	_sync_chase_move_config()
+	if _chase_move == null:
+		return false
+	return _chase_move.tick_move(
+		delta,
+		self,
+		target,
+		move_speed,
+		attack_range,
+		_max_chase_reposition_distance(),
+		Callable(self, "_face_horizontal"),
+		Callable(self, "_try_touch_damage")
+	)
+
+
+func _hold_chase_while_waiting(target: Node3D) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if target == null or not is_instance_valid(target):
+		return
+	var toward := Vector3(
+		target.global_position.x - global_position.x,
+		0.0,
+		target.global_position.z - global_position.z
+	)
+	_face_horizontal(toward)
+	if toward.length() <= attack_range:
+		_try_touch_damage(target)
+
+
+func _has_ranged_spacing_abilities() -> bool:
+	for ability in get_combat_abilities():
+		if "requires_target" in ability and not bool(ability.get("requires_target")):
+			continue
+		if "min_cast_range" in ability and float(ability.get("min_cast_range")) > 0.5:
+			return true
+	return false
+
+
+func _move_keep_away(target: Node3D) -> void:
+	MonsterCombatSpacingScript.apply_keep_away(
+		self, target, keep_away_range, move_speed, Callable(self, "_face_horizontal")
+	)
+
+
+func _try_start_cast(target: Node3D) -> bool:
+	if is_chase_retreating():
+		return false
+	var ready := _pick_ready_ability(target)
+	if ready == null:
+		return false
+	_begin_ability_windup(ready)
+	_tick_cast_windup(0.0, target)
+	return true
+
+
+## Keep cast spacing and fire when in band. Returns true when chase is handled.
+func _tick_ranged_cast_chase(target: Node3D) -> bool:
+	var ready := _pick_ready_ability(target)
+	if ready != null:
+		_begin_ability_windup(ready)
+		_tick_cast_windup(0.0, target)
+		return true
+
+	var awaiting := _first_ranged_castable_ability()
+	if awaiting != null:
+		_move_toward_cast_range(target, awaiting)
+		return true
+
+	var spacer := _preferred_spacing_ability()
+	if spacer != null:
+		_move_toward_cast_range(target, spacer)
+		return true
+	return false
+
+
+func _first_ranged_castable_ability() -> Node:
+	var abilities := get_combat_abilities()
+	for ability in abilities:
+		if "requires_target" in ability and not bool(ability.get("requires_target")):
+			continue
+		if not bool(ability.call("can_cast")):
+			continue
+		return ability
+	return null
+
+
+func _preferred_spacing_ability() -> Node:
+	var abilities := get_combat_abilities()
+	for ability in abilities:
+		if "requires_target" in ability and not bool(ability.get("requires_target")):
+			continue
+		return ability
+	if abilities.is_empty():
+		return null
+	return abilities[0]
+
+
+func _move_toward_cast_range(target: Node3D, ability: Node) -> void:
+	MonsterCombatSpacingScript.apply_cast_band(
+		self, target, ability, move_speed, Callable(self, "_face_horizontal")
+	)
+
+
+func _pick_ready_ability(target: Node3D) -> Node:
+	var abilities := get_combat_abilities()
+	if abilities.is_empty():
+		return null
+	var count := abilities.size()
+	for i in count:
+		var idx := (_cast_prefer_index + i) % count
+		var ability: Node = abilities[idx]
+		if ability.has_method("is_ready_to_cast"):
+			if not bool(ability.call("is_ready_to_cast", self, target)):
+				continue
+		else:
+			if not bool(ability.call("can_cast")):
+				continue
+			if not bool(ability.call("is_target_in_range", self, target)):
+				continue
+		_cast_prefer_index = (idx + 1) % count
+		return ability
+	return null
+
+
+func _begin_ability_windup(ability: Node) -> void:
+	_casting_ability = ability
+	_cast_windup_left = 0.55
+	if "windup_sec" in ability:
+		_cast_windup_left = float(ability.get("windup_sec"))
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if ability.has_method("start_windup_fx"):
+		ability.call("start_windup_fx", self)
+
+
+func _tick_cast_windup(delta: float, target: Node3D) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if target != null and is_instance_valid(target):
+		var toward := Vector3(
+			target.global_position.x - global_position.x,
+			0.0,
+			target.global_position.z - global_position.z
+		)
+		_face_horizontal(toward)
+	_cast_windup_left -= delta
+	if _cast_windup_left > 0.0:
+		return
+	var ability := _casting_ability
+	_casting_ability = null
+	_cast_windup_left = 0.0
+	if ability == null or not is_instance_valid(ability):
+		return
+	var needs_target := true
+	if "requires_target" in ability:
+		needs_target = bool(ability.get("requires_target"))
+	if needs_target and (target == null or not is_instance_valid(target)):
+		if ability.has_method("stop_windup_fx"):
+			ability.call("stop_windup_fx")
+		return
+	if ability.has_method("begin_cast"):
+		ability.call("begin_cast", self, target)
+		_on_ability_cast_fired(ability)
+
+
+func _on_ability_cast_fired(_ability: Node) -> void:
+	## Override in children (e.g. Wretch post-Command-Pack retreat).
+	pass
+
+
+func _cancel_cast() -> void:
+	if _casting_ability != null and is_instance_valid(_casting_ability):
+		if _casting_ability.has_method("stop_windup_fx"):
+			_casting_ability.call("stop_windup_fx")
+	_casting_ability = null
+	_cast_windup_left = 0.0
+
+
 func _try_touch_damage(target: Node3D) -> void:
-	if target == null or not target.has_method("take_damage"):
+	if is_chase_retreating() or target == null or not target.has_method("take_damage"):
 		return
 	target.call("take_damage", touch_damage * get_physics_process_delta_time(), self)
 
 
 func _face_horizontal(desired_vel: Vector3) -> void:
-	var flat := Vector3(desired_vel.x, 0.0, desired_vel.z)
-	if flat.length_squared() < 0.0001:
-		return
-	look_at(global_position + flat.normalized(), Vector3.UP)
+	## Strafe keeps facing the player; retreat/approach turn at face_turn_speed_rad.
+	_face_horizontal_at_speed(
+		desired_vel, get_physics_process_delta_time(), face_turn_speed_rad
+	)
+
+
+func _face_horizontal_at_speed(desired: Vector3, delta: float, speed_rad: float) -> void:
+	rotation.y = MonsterAIScript.rotate_yaw_toward(rotation.y, desired, speed_rad, delta)
 
 
 func _apply_knockback_bleed(delta: float) -> void:

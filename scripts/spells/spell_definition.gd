@@ -1,6 +1,13 @@
 class_name SpellDefinition
 extends Resource
 
+## Drives LMB cast wand flourish (offensive jab, defensive guard, etc.).
+enum Category { OFFENSIVE, DEFENSIVE, UTILITY, BUFF }
+## CAST charges while LMB held; CHANNEL is instantly ready (mana drain while armed).
+enum CastMode { CAST, CHANNEL }
+## Wand flourish used while charging / releasing an armed spell.
+enum WandFxKind { P_SHAPED, SHAKE, LIFT_DEFENSIVE }
+
 const DEFAULT_ONE_WORD_DURATION_MS := 700
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 
@@ -12,6 +19,38 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var require_rhythm: bool = false
 @export var cooldown_sec: float = 8.0
 @export var effect_id: String = ""
+## Shared hue for mana bar, spell-word HUD, and cast / recognition FX.
+@export var color: Color = Color(0.55, 0.28, 0.72, 1.0)
+@export var category: Category = Category.UTILITY
+@export var cast_mode: CastMode = CastMode.CAST
+## LMB hold time before CAST spells are ready (CHANNEL uses 0).
+@export_range(0.0, 10.0, 0.05) var charge_time_sec: float = 1.0
+
+
+func get_display_color() -> Color:
+	return color
+
+
+func get_word_display_color() -> Color:
+	return color
+
+
+func is_channelled() -> bool:
+	return cast_mode == CastMode.CHANNEL
+
+
+func get_wand_fx_kind() -> WandFxKind:
+	if is_channelled():
+		return WandFxKind.SHAKE
+	if category == Category.DEFENSIVE:
+		return WandFxKind.LIFT_DEFENSIVE
+	return WandFxKind.P_SHAPED
+
+
+func get_charge_time_sec() -> float:
+	if is_channelled():
+		return 0.0
+	return maxf(charge_time_sec, 0.0)
 
 
 func get_incantation_text() -> String:

@@ -11,3 +11,4 @@ syllable_cadence_ms = PackedInt32Array(0)
 pitch_targets_hz = null
 cooldown_sec = 1.0
 effect_id = "stop"
+color = Color(0.75, 0.45, 0.95, 1)

@@ -6,6 +6,7 @@ extends Node3D
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const HoveringOrbMotionScript := preload("res://scripts/spells/hovering_orb_motion.gd")
 const SpellWorldSyncScript := preload("res://scripts/spells/spell_world_sync.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 const DEFAULT_DURATION_SEC := 30.0
 const ORB_RADIUS := 0.16
@@ -13,7 +14,9 @@ const OUTLINE_RADIUS := 0.2
 const CLEAR_MARGIN := 0.08
 const LIGHT_RANGE := 12.0
 const LIGHT_ENERGY := 3.0
-const PLACE_FORWARD := 2.2
+const PLACE_FORWARD := 12.0
+## Min aim distance at zero charge; full charge uses PLACE_FORWARD.
+const PLACE_FORWARD_MIN := 1.0
 ## Fixed hover height above the ground under the orb.
 const PLACE_HEIGHT := HoveringOrbMotionScript.HEIGHT_LIGHT_BALL
 const CAST_TRAVEL_SEC := 0.28
@@ -64,7 +67,8 @@ static func spawn_cast(
 	orb._wand_origin = wand_origin
 	orb._target = target_position
 	orb.spawn_id = orb_spawn_id
-	parent.add_child(orb)
+	## Place before add_child so `_ready` light is not at Match origin.
+	SpellEphemeralFxScript.add_child_at(parent, orb, target_position)
 	var snapped_pos := snap_to_ground(orb.get_world_3d(), target_position)
 	orb._target = snapped_pos
 	orb.global_position = snapped_pos
@@ -72,8 +76,9 @@ static func spawn_cast(
 	return orb
 
 
-static func resolve_placement(player: CharacterBody3D) -> Vector3:
+static func resolve_placement(player: CharacterBody3D, charge_factor: float = 1.0) -> Vector3:
 	## Place along wand → crosshair aim (not body-forward), then clear + ground-snap.
+	## Longer LMB hold pushes the orb farther along that aim.
 	if player == null or not player.is_inside_tree():
 		return Vector3.ZERO
 	var wand_origin := player.global_position + Vector3(0.0, PLACE_HEIGHT, 0.0)
@@ -85,12 +90,13 @@ static func resolve_placement(player: CharacterBody3D) -> Vector3:
 	if forward.length_squared() < 0.0001:
 		forward = -player.global_transform.basis.z
 	forward = forward.normalized()
-	var desired := wand_origin + forward * PLACE_FORWARD
+	var place_forward := lerpf(PLACE_FORWARD_MIN, PLACE_FORWARD, clampf(charge_factor, 0.0, 1.0))
+	var desired := wand_origin + forward * place_forward
 	## Prefer the first surface under the crosshair within place range.
 	var world_3d := player.get_world_3d()
 	if world_3d != null and world_3d.direct_space_state != null:
 		var ray := PhysicsRayQueryParameters3D.create(
-			wand_origin, wand_origin + forward * PLACE_FORWARD
+			wand_origin, wand_origin + forward * place_forward
 		)
 		ray.collision_mask = WORLD_COLLISION_MASK
 		ray.hit_from_inside = true

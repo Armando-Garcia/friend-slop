@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="SpellDefinition" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="SpellDefinition" format=3 uid="uid://djvkxthosghuf"]
 
-[ext_resource type="Script" path="res://scripts/spells/spell_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://dwdwxw8dalcmm" path="res://scripts/spells/spell_definition.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
@@ -8,5 +8,7 @@ id = "fake_wall"
 display_name = "Fake Wall"
 incantation_words = PackedStringArray("fake", "wall")
 syllable_cadence_ms = PackedInt32Array(0, 280)
+pitch_targets_hz = null
 cooldown_sec = 50.0
 effect_id = "fake_wall"
+color = Color(0.55, 0.5, 0.45, 1)

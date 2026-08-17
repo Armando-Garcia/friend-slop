@@ -10,8 +10,10 @@ func run() -> int:
 	failures += _test_pick_nearest_target()
 	failures += _test_resolve_state()
 	failures += _test_chase_eyes_visible()
+	failures += _test_lookdev_eyes_visible()
 	failures += _test_patrol_and_velocity_helpers()
 	failures += _test_proximity_and_prefer_interest()
+	failures += _test_chase_move_helpers()
 	return failures
 
 
@@ -61,14 +63,21 @@ func _test_resolve_state() -> int:
 	var idle := MonsterAIScript.State.IDLE
 	var patrol := MonsterAIScript.State.PATROL
 	var chase := MonsterAIScript.State.CHASE
+	var alert := MonsterAIScript.State.ALERT
 	if MonsterAIScript.resolve_state(idle, true) != chase:
 		push_error("Expected chase when a target is present")
 		return 1
 	if MonsterAIScript.resolve_state(patrol, false) != patrol:
 		push_error("Expected patrol to continue without a target")
 		return 1
-	if MonsterAIScript.resolve_state(chase, false) != idle:
-		push_error("Expected chase to drop to idle when target lost")
+	if MonsterAIScript.resolve_state(chase, false) != chase:
+		push_error("Expected chase to persist without a target (grace before alert)")
+		return 1
+	if MonsterAIScript.resolve_state(alert, false) != alert:
+		push_error("Expected alert to persist without a target")
+		return 1
+	if MonsterAIScript.resolve_state(alert, true) != chase:
+		push_error("Expected alert to become chase when a target returns")
 		return 1
 	return 0
 
@@ -82,6 +91,19 @@ func _test_chase_eyes_visible() -> int:
 		return 1
 	if not MonsterAIScript.chase_eyes_visible(MonsterAIScript.State.CHASE):
 		push_error("Expected eyes visible while chasing")
+		return 1
+	if not MonsterAIScript.chase_eyes_visible(MonsterAIScript.State.ALERT):
+		push_error("Expected eyes visible while alert")
+		return 1
+	return 0
+
+
+func _test_lookdev_eyes_visible() -> int:
+	if MonsterAIScript.lookdev_eyes_visible(MonsterAIScript.LookdevPose.PATROL):
+		push_error("Expected lookdev patrol to hide eyes")
+		return 1
+	if not MonsterAIScript.lookdev_eyes_visible(MonsterAIScript.LookdevPose.CHASE):
+		push_error("Expected lookdev chase to show eyes")
 		return 1
 	return 0
 
@@ -134,5 +156,86 @@ func _test_proximity_and_prefer_interest() -> int:
 		return 1
 	if MonsterAIScript.prefer_highest_urgency([none]) != null:
 		push_error("Expected no actionable interest when all urgencies are zero")
+		return 1
+	return 0
+
+
+func _test_chase_move_helpers() -> int:
+	var failures := 0
+	failures += _assert_chase_move_durations()
+	failures += _assert_chase_move_directions()
+	failures += _assert_chase_move_aggro_clamp()
+	return 1 if failures > 0 else 0
+
+
+func _assert_chase_move_durations() -> int:
+	if not is_equal_approx(MonsterAIScript.max_aggro_move_distance(10.0), 8.0):
+		push_error("Expected max aggro move distance to be 80% of chase_range")
+		return 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 42
+	var wait_sec: float = MonsterAIScript.pick_chase_wait_sec(rng, 1.0, 3.0)
+	if wait_sec < 1.0 or wait_sec > 3.0:
+		push_error("Expected chase wait duration within 1–3s")
+		return 1
+	var strafe_sec: float = MonsterAIScript.pick_chase_strafe_sec(rng, 1.2, 2.0)
+	if strafe_sec < 1.2 or strafe_sec > 2.0:
+		push_error("Expected strafe duration within 1.2–2.0s")
+		return 1
+	var retreat_sec: float = MonsterAIScript.pick_chase_retreat_sec(rng, 1.2, 3.2)
+	if retreat_sec < 1.2 or retreat_sec > 3.2:
+		push_error("Expected retreat duration within 1.2–3.2s")
+		return 1
+	var wretch_sec: float = MonsterAIScript.pick_wretch_post_cast_move_sec(rng, 0.5, 1.5)
+	if wretch_sec < 0.5 or wretch_sec > 1.5:
+		push_error("Expected wretch post-cast move within 0.5–1.5s")
+		return 1
+	return 0
+
+
+func _assert_chase_move_directions() -> int:
+	var from := Vector3(0.0, 0.0, 0.0)
+	var player := Vector3(0.0, 0.0, -10.0)
+	var strafe: Vector3 = MonsterAIScript.angled_strafe_dir(from, player, 1.0, 0.28)
+	if strafe.length_squared() < 0.5:
+		push_error("Expected non-zero angled strafe direction")
+		return 1
+	if strafe.x <= 0.0:
+		push_error("Expected right strafe to push +X when facing -Z")
+		return 1
+	var retreat: Vector3 = MonsterAIScript.angled_retreat_dir(from, player, -1.0, 0.38)
+	if retreat.z <= 0.0:
+		push_error("Expected retreat to move away (+Z) from player on -Z")
+		return 1
+	return 0
+
+
+func _assert_chase_move_aggro_clamp() -> int:
+	## Cap is absolute distance from the player (e.g. 0.8 * chase_range).
+	var player := Vector3(0.0, 0.0, 0.0)
+	var inside := Vector3(0.0, 0.0, -5.0)
+	if not MonsterAIScript.can_retreat_farther(inside, player, 8.0):
+		push_error("Expected retreat allowed inside max aggro distance")
+		return 1
+	var at_cap := Vector3(0.0, 0.0, -8.0)
+	if MonsterAIScript.can_retreat_farther(at_cap, player, 8.0):
+		push_error("Expected retreat blocked at max aggro distance")
+		return 1
+	var clamped: Vector3 = MonsterAIScript.retreat_velocity_clamped(
+		at_cap, player, Vector3(0.0, 0.0, -1.0), 4.0, -1.0, 8.0
+	)
+	if not is_equal_approx(clamped.x, 0.0) or not is_equal_approx(clamped.z, 0.0):
+		push_error("Expected clamped retreat velocity to zero at aggro cap")
+		return 1
+	if not is_equal_approx(clamped.y, -1.0):
+		push_error("Expected clamped retreat to preserve Y velocity")
+		return 1
+	## Start facing +X; target facing -Z so yaw must change.
+	var yaw0 := PI * 0.5
+	var yaw1: float = MonsterAIScript.rotate_yaw_toward(
+		yaw0, Vector3(0.0, 0.0, -1.0), 10.0, 0.05
+	)
+	if is_equal_approx(yaw1, yaw0):
+		push_error("Expected rotate_yaw_toward to change yaw toward -Z")
 		return 1
 	return 0

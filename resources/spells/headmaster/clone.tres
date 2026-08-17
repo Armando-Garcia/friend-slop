@@ -11,3 +11,4 @@ syllable_cadence_ms = PackedInt32Array(0)
 pitch_targets_hz = null
 cooldown_sec = 12.0
 effect_id = "clone"
+color = Color(0.65, 0.75, 0.95, 1)

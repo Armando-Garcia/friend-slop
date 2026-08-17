@@ -7,12 +7,18 @@ extends Area3D
 
 const SPEED := 16.0
 const DEFAULT_HIT_DAMAGE := 20.0
+## Min charge combat values; max uses authored hit_damage / splash / radii.
+const CHARGE_DAMAGE_MIN := 5.0
+const CHARGE_AOE_MIN_RADIUS := 0.037
+const CHARGE_SPEED_MIN_MULT := 0.75
+const CHARGE_SPEED_MAX_MULT := 1.5625
 
 const FireballExplosionEffectScript := preload("res://scripts/spells/fireball_explosion_effect.gd")
 const FireballSmokeTrailScript := preload("res://scripts/spells/fireball_smoke_trail.gd")
 const FireballParticlesScript := preload("res://scripts/spells/fireball_particles.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
+const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 
 @export_group("Radii")
 @export_range(0.05, 1.5, 0.01, "or_greater") var core_radius: float = 0.22:
@@ -57,6 +63,8 @@ const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
 
 @export_group("Combat")
 @export_range(0.0, 200.0, 1.0) var hit_damage: float = DEFAULT_HIT_DAMAGE
+## Damage + knockback radius on ground / monster / player impact (not midair timeout).
+@export_range(0.25, 8.0, 0.05) var splash_radius: float = 2.0
 
 @export_group("Editor preview")
 @export var preview_smoke: bool = true:
@@ -213,6 +221,7 @@ var _glow_restart_queued := false
 
 var _direction := Vector3.FORWARD
 var _elapsed := 0.0
+var _speed: float = SPEED
 var _smoke_trail: CPUParticles3D
 var _ember_sparks: CPUParticles3D
 var _hit_shape: SphereShape3D
@@ -226,6 +235,8 @@ var _glow_tween: Tween
 var _caster: Node3D
 var _finished := false
 var _preview_material_ready := false
+## 0..1 visual scale driven by charge (trails + impact FX).
+var _charge_fx_scale := 1.0
 
 
 static func spawn(
@@ -233,7 +244,8 @@ static func spawn(
 	origin: Vector3,
 	direction: Vector3,
 	caster: Node3D = null,
-	lookdev_flight: bool = false
+	lookdev_flight: bool = false,
+	charge_factor: float = 1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with fireball.tscn.
 	var packed: PackedScene = load("res://scenes/spells/fireball.tscn") as PackedScene
@@ -242,17 +254,50 @@ static func spawn(
 		projectile.set_meta("lookdev_flight", true)
 		projectile.process_mode = Node.PROCESS_MODE_ALWAYS
 	if projectile is FireballProjectile:
-		(projectile as FireballProjectile)._direction = direction.normalized()
-		(projectile as FireballProjectile)._caster = caster
-	if parent != null:
+		var ball := projectile as FireballProjectile
+		ball._direction = direction.normalized()
+		ball._caster = caster
+		ball.apply_charge_power(charge_factor)
+	## Place before add_child so `_ready` light/particles are not at Match origin.
+	if parent != null and projectile is Node3D:
+		SpellEphemeralFxScript.add_child_at(parent, projectile as Node3D, origin)
+	elif parent != null:
 		parent.add_child(projectile)
-	if projectile is Node3D:
-		var node_3d := projectile as Node3D
-		if node_3d.is_inside_tree():
-			node_3d.global_position = origin
-		else:
-			node_3d.position = origin
 	return projectile
+
+
+## charge 0 → min damage / baseball AoE / base speed; charge 1 → authored max + speed boost.
+func apply_charge_power(charge_factor: float) -> void:
+	var t := clampf(charge_factor, 0.0, 1.0)
+	_speed = SPEED * lerpf(CHARGE_SPEED_MIN_MULT, CHARGE_SPEED_MAX_MULT, t)
+	var dmg_max := hit_damage
+	var splash_max := splash_radius
+	var core_max := core_radius
+	var hit_max := hit_radius
+	var shell_max := shell_radius
+	var light_max := light_radius
+	var smoke_emit_max := smoke_emission_radius
+	var smoke_puff_max := smoke_puff_radius
+	var smoke_amt_max := smoke_amount
+	var ember_emit_max := ember_emission_radius
+	var ember_puff_max := ember_puff_radius
+	var ember_amt_max := ember_amount
+	hit_damage = lerpf(CHARGE_DAMAGE_MIN, dmg_max, t)
+	splash_radius = lerpf(CHARGE_AOE_MIN_RADIUS, splash_max, t)
+	core_radius = lerpf(CHARGE_AOE_MIN_RADIUS, core_max, t)
+	hit_radius = lerpf(CHARGE_AOE_MIN_RADIUS, hit_max, t)
+	shell_radius = lerpf(CHARGE_AOE_MIN_RADIUS * 1.15, shell_max, t)
+	light_radius = lerpf(CHARGE_AOE_MIN_RADIUS * 2.0, light_max, t)
+	## Trail + impact FX track projectile scale (baseball → full).
+	_charge_fx_scale = lerpf(CHARGE_AOE_MIN_RADIUS / maxf(core_max, 0.01), 1.0, t)
+	smoke_emission_radius = smoke_emit_max * _charge_fx_scale
+	smoke_puff_radius = smoke_puff_max * _charge_fx_scale
+	smoke_amount = maxi(2, int(round(float(smoke_amt_max) * _charge_fx_scale)))
+	ember_emission_radius = ember_emit_max * _charge_fx_scale
+	ember_puff_radius = ember_puff_max * _charge_fx_scale
+	ember_amount = maxi(1, int(round(float(ember_amt_max) * _charge_fx_scale)))
+	if is_inside_tree():
+		_sync_orb_shape()
 
 
 func _is_lookdev_flight() -> bool:
@@ -608,7 +653,7 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 
-	var motion: Vector3 = _direction * SPEED * delta
+	var motion: Vector3 = _direction * _speed * delta
 	if _cast_motion_hit(motion):
 		return
 	global_position += motion
@@ -632,7 +677,7 @@ func _cast_motion_hit(motion: Vector3) -> bool:
 		return false
 	global_position += motion * safe_fraction
 	if not _probe_players():
-		_finish(_find_ward_hit())
+		_finish(_find_ward_hit(), true)
 	return true
 
 
@@ -672,16 +717,58 @@ func _touch_fake_walls() -> void:
 			node.call("notify_spell_touch", global_position, radius)
 
 
-func _finish(blocked_by: Node = null) -> void:
+func _finish(blocked_by: Node = null, apply_splash: bool = false) -> void:
 	if _finished or not is_inside_tree():
 		return
 	_finished = true
 	_notify_ward_blocked(blocked_by)
 	var world_parent := get_parent()
 	var impact_pos := global_position
+	var ward := _ward_from_node(blocked_by) if blocked_by != null else null
+	if apply_splash and ward == null:
+		_apply_splash_at(impact_pos)
 	_clear_projectile_visuals()
-	FireballExplosionEffectScript.spawn(world_parent, impact_pos)
+	FireballExplosionEffectScript.spawn(world_parent, impact_pos, _charge_fx_scale)
 	queue_free()
+
+
+func _apply_splash_at(impact_pos: Vector3) -> void:
+	if hit_damage <= 0.0 or splash_radius <= 0.0:
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var radius_sq := splash_radius * splash_radius
+	var seen: Dictionary = {}
+	for group_name in ["monster", "combat_target", "player"]:
+		for node in tree.get_nodes_in_group(group_name):
+			if node == null or not is_instance_valid(node) or node == _caster:
+				continue
+			if seen.has(node):
+				continue
+			if not (node is Node3D):
+				continue
+			var body := node as Node3D
+			if body.global_position.distance_squared_to(impact_pos) > radius_sq:
+				continue
+			seen[node] = true
+			_apply_splash_to_body(body, impact_pos)
+
+
+func _apply_splash_to_body(body: Node3D, impact_pos: Vector3) -> void:
+	var dir := body.global_position - impact_pos
+	if dir.length_squared() < 0.0001:
+		dir = _direction
+	else:
+		dir = dir.normalized()
+	if body.has_method("apply_fireball_knockback"):
+		var apply_local := not _is_multiplayer_match()
+		if body is Node:
+			apply_local = apply_local or (body as Node).is_multiplayer_authority()
+		if apply_local:
+			body.call("apply_fireball_knockback", dir)
+	if body.has_method("take_damage") and hit_damage > 0.0:
+		body.call("take_damage", hit_damage, self)
 
 
 func _find_ward_hit() -> Node:
@@ -741,7 +828,7 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	if body == _caster:
 		return
-	_finish(body)
+	_finish(body, true)
 
 
 func _try_hit_player(body: Node3D) -> bool:
@@ -754,18 +841,8 @@ func _try_hit_player(body: Node3D) -> bool:
 		or body.is_in_group("combat_target")
 	):
 		return false
-	_finish()
-	if body.has_method("apply_fireball_knockback"):
-		## Victim authority applies knockback; MultiplayerSynchronizer replicates motion.
-		## Resolve GameState via the tree — this is an @tool script and cannot name the
-		## autoload directly (editor/headless reloads compile before autoloads exist).
-		var apply_local := not _is_multiplayer_match()
-		if body is Node:
-			apply_local = apply_local or (body as Node).is_multiplayer_authority()
-		if apply_local:
-			body.call("apply_fireball_knockback", _direction)
-	if body.has_method("take_damage") and hit_damage > 0.0:
-		body.call("take_damage", hit_damage, self)
+	## Splash sphere applies damage / knockback (includes this body).
+	_finish(null, true)
 	return true
 
 

@@ -25,6 +25,7 @@ const KEY_DIRECTION := "direction"
 const KEY_DURATION := "duration"
 const KEY_MULTIPLIER := "multiplier"
 const KEY_TARGET_KIND := "target_kind"
+const KEY_CHARGE_FACTOR := "charge_factor"
 
 const EFFECT_HASTE := "haste"
 const EFFECT_LIGHT := "light"
@@ -96,7 +97,10 @@ static func get_effect_duration_sec(spell: SpellDefinition, params: Dictionary =
 static func build_params(spell: SpellDefinition, player: CharacterBody3D) -> Dictionary:
 	if spell == null or player == null:
 		return {}
-	var params := {KEY_EFFECT_ID: spell.effect_id}
+	var params := {
+		KEY_EFFECT_ID: spell.effect_id,
+		KEY_CHARGE_FACTOR: _player_charge_factor(player),
+	}
 	match spell.effect_id:
 		EFFECT_FIREBALL, EFFECT_FLARE, EFFECT_WARD:
 			params[KEY_ORIGIN] = _fireball_origin(player)
@@ -143,6 +147,17 @@ static func build_params(spell: SpellDefinition, player: CharacterBody3D) -> Dic
 		_:
 			return {}
 	return params
+
+
+static func _player_charge_factor(player: CharacterBody3D) -> float:
+	if player == null:
+		return 1.0
+	var wand: Node = player.get_node_or_null("Head/CameraPivot/Wand")
+	if wand == null:
+		wand = player.get_node_or_null("Head/CameraPivot/FirstPersonCamera/Wand")
+	if wand != null and wand.has_method("get_cast_power_factor"):
+		return clampf(float(wand.call("get_cast_power_factor")), 0.0, 1.0)
+	return 1.0
 
 
 static func _append_targetable(params: Dictionary, player: CharacterBody3D) -> void:
@@ -323,6 +338,7 @@ static func pack_for_network(params: Dictionary) -> Dictionary:
 			var origin := coerce_vector3(local.get(KEY_ORIGIN, Vector3.ZERO))
 			var direction := coerce_vector3(local.get(KEY_DIRECTION, Vector3.FORWARD))
 			SpellEphemeralFxScript.pack_ray(wire, origin, direction)
+			wire[KEY_CHARGE_FACTOR] = float(local.get(KEY_CHARGE_FACTOR, 1.0))
 			if str(wire[KEY_EFFECT_ID]) == EFFECT_WARD:
 				wire[KEY_DURATION] = float(local.get(KEY_DURATION, DEFAULT_WARD_DURATION))
 			elif str(wire[KEY_EFFECT_ID]) == EFFECT_FLARE:
@@ -407,6 +423,7 @@ static func unpack_from_network(wire: Dictionary) -> Dictionary:
 			var ray := SpellEphemeralFxScript.unpack_ray(wire)
 			params[KEY_ORIGIN] = ray[SpellEphemeralFxScript.KEY_ORIGIN]
 			params[KEY_DIRECTION] = ray[SpellEphemeralFxScript.KEY_DIRECTION]
+			params[KEY_CHARGE_FACTOR] = float(wire.get(KEY_CHARGE_FACTOR, 1.0))
 			if effect_id == EFFECT_WARD:
 				params[KEY_DURATION] = float(wire.get(KEY_DURATION, DEFAULT_WARD_DURATION))
 			elif effect_id == EFFECT_FLARE:
@@ -785,12 +802,15 @@ static func _fireball_origin(player: CharacterBody3D) -> Vector3:
 static func _apply_fireball(player: CharacterBody3D, params: Dictionary) -> void:
 	var origin := coerce_vector3(params.get(KEY_ORIGIN, Vector3.ZERO))
 	var direction := coerce_vector3(params.get(KEY_DIRECTION, Vector3.FORWARD))
+	var charge := clampf(float(params.get(KEY_CHARGE_FACTOR, 1.0)), 0.0, 1.0)
 	SpellEphemeralFxScript.spawn_at(
 		player,
 		origin,
 		direction,
 		func(parent: Node, spawn_origin: Vector3, spawn_dir: Vector3) -> Node:
-			return FireballProjectileScript.spawn(parent, spawn_origin, spawn_dir, player)
+			return FireballProjectileScript.spawn(
+				parent, spawn_origin, spawn_dir, player, false, charge
+			)
 	)
 
 
@@ -800,6 +820,7 @@ static func _apply_flare(player: CharacterBody3D, params: Dictionary) -> void:
 	var duration := float(
 		params.get(KEY_DURATION, FlareEffectScript.DEFAULT_DURATION_SEC)
 	)
+	var charge := clampf(float(params.get(KEY_CHARGE_FACTOR, 1.0)), 0.0, 1.0)
 	## Same ephemeral cast wire as fireball — every peer spawns + simulates locally.
 	SpellEphemeralFxScript.spawn_at(
 		player,
@@ -808,21 +829,38 @@ static func _apply_flare(player: CharacterBody3D, params: Dictionary) -> void:
 		func(parent: Node, spawn_origin: Vector3, spawn_dir: Vector3) -> Node:
 			var fly := true
 			var caster: Node3D = player
-			return FlareEffectScript.spawn_launched(
+			var flare: Node = FlareEffectScript.spawn_launched(
 				parent, spawn_origin, spawn_dir, duration, fly, caster
 			)
+			if flare != null and flare.has_method("apply_charge_power"):
+				flare.call("apply_charge_power", charge)
+			return flare
 	)
 
 
 static func _apply_ward(player: CharacterBody3D, params: Dictionary) -> void:
 	var origin := coerce_vector3(params.get(KEY_ORIGIN, Vector3.ZERO))
 	var direction := coerce_vector3(params.get(KEY_DIRECTION, Vector3.FORWARD))
-	SpellEphemeralFxScript.spawn_at(
-		player,
-		origin,
-		direction,
-		Callable(WardShieldScript, "spawn")
-	)
+	var charge := clampf(float(params.get(KEY_CHARGE_FACTOR, 1.0)), 0.0, 1.0)
+	var forward := direction
+	if forward.length_squared() < 0.0001:
+		forward = Vector3.FORWARD
+	else:
+		forward = forward.normalized()
+	## Nudge every ward slightly ahead of the cast point.
+	var base_origin := origin + forward * 0.4
+	## Full charge: two single-hit wards stacked along aim (near then far).
+	var ward_count := 2 if charge >= 0.999 else 1
+	const WARD_STACK_SPACING := 0.22
+	for i in ward_count:
+		var spawn_origin := base_origin + forward * (WARD_STACK_SPACING * float(i))
+		SpellEphemeralFxScript.spawn_at(
+			player,
+			spawn_origin,
+			forward,
+			func(parent: Node, placed_origin: Vector3, spawn_dir: Vector3) -> Node:
+				return WardShieldScript.spawn(parent, placed_origin, spawn_dir, 1)
+		)
 
 
 static func _apply_fake_wall(player: CharacterBody3D, params: Dictionary) -> void:
@@ -911,7 +949,7 @@ static func _toggle_flashlight(player: CharacterBody3D) -> void:
 
 
 static func _light_ball_origin(player: CharacterBody3D) -> Vector3:
-	return LightBallOrbScript.resolve_placement(player)
+	return LightBallOrbScript.resolve_placement(player, _player_charge_factor(player))
 
 
 static func _apply_light_ball(player: CharacterBody3D, params: Dictionary) -> void:

@@ -3,6 +3,7 @@ extends Node
 
 signal cast_succeeded(spell: SpellDefinition, mode: String, validation: CastValidationResult)
 signal cast_failed(spell: SpellDefinition, reason: String, partial: CastValidationResult)
+signal spell_selected(spell: SpellDefinition)
 signal state_changed(state: String, spell: SpellDefinition)
 signal listen_level_changed(level: float)
 signal listen_coaching_changed(message: String)
@@ -21,6 +22,8 @@ const STATE_COACHING := "coaching"
 
 const ARMING_SEC := 0.1
 const MAX_LISTEN_SEC := 5.0
+## Open-ended while wand is raised; silence still commits a recognition pass.
+const WAND_SELECT_MAX_LISTEN_SEC := 120.0
 const TRAILING_SILENCE_SEC := 0.15
 const MIN_LISTEN_BEFORE_END_SEC := 0.25
 const TOME_RETRY_SEC := 2.0
@@ -44,6 +47,7 @@ var _sample_rate: int = 44100
 var _transcript_words: PackedStringArray = PackedStringArray()
 var _word_starts_sec: PackedFloat32Array = PackedFloat32Array()
 var _free_cast := false
+var _wand_voice_select := false
 var _free_cast_candidates: Array[SpellDefinition] = []
 var _free_cast_debug_lines: PackedStringArray = PackedStringArray()
 var _capture_worker: VoiceCaptureWorker
@@ -100,6 +104,10 @@ func is_free_cast() -> bool:
 	return _free_cast
 
 
+func is_wand_voice_select() -> bool:
+	return _wand_voice_select
+
+
 func is_active() -> bool:
 	return _state != STATE_IDLE and _state != STATE_COACHING
 
@@ -152,32 +160,46 @@ func start(spell: SpellDefinition, mode: Mode) -> void:
 	_tome_teaching = false
 	_tome_spell = null
 	_free_cast = false
+	_wand_voice_select = false
 	_free_cast_candidates = []
 	_begin_attempt(spell, mode)
 
 
 func start_free_cast(candidates: Array[SpellDefinition]) -> void:
-	var known_spells := _known_spells_for_player()
+	## Legacy hold-to-cast path; prefer [method start_wand_voice_select].
+	_start_open_mic_cast(candidates, false)
+
+
+func start_wand_voice_select(candidates: Array[SpellDefinition]) -> void:
+	## Raised-wand listen: first matched known spell emits [signal spell_selected].
+	_start_open_mic_cast(candidates, true)
+
+
+func _start_open_mic_cast(candidates: Array[SpellDefinition], wand_select: bool) -> void:
+	## Prefer caller filter (e.g. cooldown / target gates); fall back to full loadout.
+	var known_spells: Array[SpellDefinition] = candidates.duplicate()
 	if known_spells.is_empty():
-		known_spells = candidates.duplicate()
+		known_spells = _known_spells_for_player()
 	if known_spells.is_empty():
-		TomeDebug.log("CastSession", "start_free_cast aborted: no candidates")
+		TomeDebug.log("CastSession", "open mic cast aborted: no candidates")
 		return
 	if _tome_teaching:
 		end_tome_teaching()
 	if _state != STATE_IDLE:
 		TomeDebug.log(
 			"CastSession",
-			"start_free_cast aborted: not idle (state=%s)" % _state
+			"open mic cast aborted: not idle (state=%s)" % _state
 		)
 		return
 	_free_cast = true
+	_wand_voice_select = wand_select
 	_free_cast_candidates = known_spells
 	_mode = Mode.CAST
 	_spell = null
 	TomeDebug.log(
 		"CastSession",
-		"start free cast (%d spells known)" % _free_cast_candidates.size()
+		"start %s (%d spells known)"
+		% ["wand voice select" if wand_select else "free cast", _free_cast_candidates.size()]
 	)
 	_recorded_samples = PackedFloat32Array()
 	_transcript_words = PackedStringArray()
@@ -246,15 +268,16 @@ func cancel() -> void:
 		return
 	_free_cast = false
 	_free_cast_candidates = []
+	_wand_voice_select = false
 	_abort_validation()
 	_stop_mic()
 	_spell = null
 	_set_state(STATE_IDLE)
 
 
-## End a hold-to-cast wand session (free cast only). Release commits immediately.
+## End a hold-to-cast wand session (legacy free cast only). Release commits immediately.
 func release_wand_hold() -> void:
-	if not _free_cast:
+	if not _free_cast or _wand_voice_select:
 		return
 	match _state:
 		STATE_ARMING:
@@ -297,7 +320,18 @@ func _process(delta: float) -> void:
 			listen_level_changed.emit(level)
 			_update_listen_coaching(level, delta)
 			if _listen_left <= 0.0:
-				_begin_validation()
+				if _wand_voice_select:
+					## Keep the raised mic open; roll a fresh buffer.
+					_recorded_samples = PackedFloat32Array()
+					if _capture_worker != null:
+						_capture_worker.reset()
+						_capture_worker.start()
+					_listen_left = WAND_SELECT_MAX_LISTEN_SEC
+					_listen_elapsed = 0.0
+					_speech_detected = false
+					_silence_after_speech = 0.0
+				else:
+					_begin_validation()
 		STATE_COACHING:
 			_coaching_retry_left -= delta
 			tome_retry_tick.emit(_coaching_retry_left)
@@ -313,7 +347,9 @@ func _begin_listening() -> void:
 		_capture_worker.reset()
 		_capture_worker.start()
 	_set_state(STATE_LISTENING)
-	_listen_left = MAX_LISTEN_SEC
+	_listen_left = (
+		WAND_SELECT_MAX_LISTEN_SEC if _wand_voice_select else MAX_LISTEN_SEC
+	)
 	_listen_elapsed = 0.0
 	_speech_detected = false
 	_silence_after_speech = 0.0
@@ -423,7 +459,15 @@ func _update_listen_coaching(level: float, delta: float) -> void:
 			listen_coaching_changed.emit("Good volume — say your spell!")
 		elif _speech_detected:
 			_silence_after_speech += delta
-			listen_coaching_changed.emit("Got it — release to cast.")
+			if _wand_voice_select:
+				listen_coaching_changed.emit("Got it — matching…")
+				if (
+					_listen_elapsed >= MIN_LISTEN_BEFORE_END_SEC
+					and _silence_after_speech >= TRAILING_SILENCE_SEC
+				):
+					_begin_validation()
+			else:
+				listen_coaching_changed.emit("Got it — release to cast.")
 		elif level >= threshold * 0.35:
 			listen_coaching_changed.emit("Almost — speak a little louder.")
 		else:
@@ -455,12 +499,21 @@ func _update_listen_coaching(level: float, delta: float) -> void:
 
 func _free_cast_coaching_text() -> String:
 	var parts: PackedStringArray = PackedStringArray()
-	for spell in _known_spells_for_player():
+	var source: Array[SpellDefinition] = (
+		_free_cast_candidates if not _free_cast_candidates.is_empty()
+		else _known_spells_for_player()
+	)
+	for spell in source:
 		if spell != null:
 			parts.append('"%s"' % spell.get_incantation_text())
 	if parts.is_empty():
 		return "Say a spell you've learned."
-	return "Say any learned incantation: " + ", ".join(parts)
+	var prefix := (
+		"Say a spell to arm: "
+		if _wand_voice_select
+		else "Say any learned incantation: "
+	)
+	return prefix + ", ".join(parts)
 
 
 func _known_spells_for_player() -> Array[SpellDefinition]:
@@ -616,12 +669,17 @@ func _finish_success(validation: CastValidationResult = null) -> void:
 	var mode_name: String = "learn" if _mode == Mode.LEARN else "cast"
 	var finished_spell := _spell
 	var was_tome := _tome_teaching
+	var was_wand_select := _wand_voice_select
 	if was_tome:
 		_tome_teaching = false
 		_tome_spell = null
-	cast_succeeded.emit(finished_spell, mode_name, validation)
+	if was_wand_select and finished_spell != null:
+		spell_selected.emit(finished_spell)
+	else:
+		cast_succeeded.emit(finished_spell, mode_name, validation)
 	_spell = null
 	_free_cast = false
+	_wand_voice_select = false
 	_free_cast_candidates = []
 	_set_state(STATE_IDLE)
 	if was_tome:
@@ -641,6 +699,18 @@ func _finish_fail(
 		_coaching_retry_left = TOME_RETRY_SEC
 		_set_state(STATE_COACHING)
 		return
+	## Wand voice select: keep listening after a miss until Q/Esc cancels.
+	if _wand_voice_select and allow_tome_coaching:
+		cast_failed.emit(failed_spell, reason, partial)
+		_spell = null
+		_recorded_samples = PackedFloat32Array()
+		_transcript_words = PackedStringArray()
+		_word_starts_sec = PackedFloat32Array()
+		_speech_detected = false
+		_silence_after_speech = 0.0
+		_listen_elapsed = 0.0
+		_begin_listening()
+		return
 	var was_tome := _tome_teaching
 	if was_tome:
 		_tome_teaching = false
@@ -648,6 +718,7 @@ func _finish_fail(
 	cast_failed.emit(failed_spell, reason, partial)
 	_spell = null
 	_free_cast = false
+	_wand_voice_select = false
 	_free_cast_candidates = []
 	_set_state(STATE_IDLE)
 	if was_tome:

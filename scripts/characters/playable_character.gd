@@ -1,8 +1,6 @@
 class_name PlayableCharacter
 extends Character
 
-## Playable character: movement, camera, shared wand, spells, and optional trail in derived scenes.
-
 const WALK_SPEED := 3.0
 const SPRINT_SPEED := 5.0
 const JUMP_VELOCITY := 2.5
@@ -20,11 +18,13 @@ const TargetedObjectControlScript := preload("res://scripts/spells/targeted_obje
 const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
+const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
+const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
-## Replicated so remotes show/hide the mounted broom mesh.
 var broom_active := false:
 	set(value):
 		broom_active = value
@@ -34,10 +34,14 @@ var _spell_loadout: Node
 var _casting_session: SpellCastingSession
 var _game_hud: CanvasLayer
 var _effect_applier: Node
+var _armed_spell: SpellDefinition
+var _mana: float = SpellManaScript.MANA_MAX
 var _speed_boost_multiplier: float = 1.0
 var _speed_boost_timer: float = 0.0
 var _wand: PlayerWand
-var _casting_lmb_held := false
+var _wand_raised := false
+var _spell_fire_charging := false
+var _spell_fire_releasing := false
 var _fake_wall_placement: Node
 var _knockback_vel := Vector3.ZERO
 var _knockback_timer := 0.0
@@ -63,6 +67,8 @@ func _ready() -> void:
 	_wand = get_node_or_null("Head/CameraPivot/Wand") as PlayerWand
 	if _wand == null:
 		_wand = get_node_or_null("Head/CameraPivot/FirstPersonCamera/Wand") as PlayerWand
+	if _wand != null:
+		_wand.cache_idle_transform()
 	_character_color = GameState.get_snail_color(player_index)
 	_apply_character_color(_character_color)
 	_setup_view_camera()
@@ -87,9 +93,6 @@ func _is_under_spawn_slot() -> bool:
 
 
 func _enter_editor_preview_mode() -> void:
-	## Spawn-slot or gallery preview: never act as a live player.
-	## Visible in the editor only — hide (and free) at runtime so placeholders
-	## do not show up as extra characters or initialize mic/voice systems.
 	process_mode = Node.PROCESS_MODE_DISABLED
 	collision_layer = 0
 	collision_mask = 0
@@ -181,6 +184,8 @@ func configure_interaction(
 			_casting_session.cast_succeeded.connect(_on_wand_cast_succeeded)
 		if not _casting_session.cast_failed.is_connected(_on_wand_cast_failed):
 			_casting_session.cast_failed.connect(_on_wand_cast_failed)
+		if not _casting_session.spell_selected.is_connected(_on_wand_spell_selected):
+			_casting_session.spell_selected.connect(_on_wand_spell_selected)
 
 
 func get_spell_loadout() -> Node:
@@ -222,11 +227,27 @@ func _is_monster_book_busy() -> bool:
 
 
 func _is_spellbook_open() -> bool:
-	## The spellbook is browse-only: LMB must not reach the wand while open.
 	return (
 		_game_hud != null
 		and _game_hud.has_method("is_spellbook_open")
 		and bool(_game_hud.call("is_spellbook_open"))
+	)
+
+
+func _is_player_menu_open() -> bool:
+	return (
+		_game_hud != null
+		and _game_hud.has_method("is_player_menu_open")
+		and bool(_game_hud.call("is_player_menu_open"))
+	)
+
+
+func _wand_controls_blocked() -> bool:
+	return (
+		_is_spellbook_open()
+		or _is_player_menu_open()
+		or _is_monster_book_busy()
+		or get_tree().paused
 	)
 
 
@@ -289,7 +310,6 @@ func get_wand_cast_origin() -> Vector3:
 
 
 func get_wand_cast_direction() -> Vector3:
-	## Wand pose is cosmetic; spells aim through the crosshair / camera look.
 	return _aim_direction_from_origin(get_wand_cast_origin())
 
 
@@ -346,12 +366,18 @@ func _aim_fireball_origin() -> Vector3:
 	return get_wand_cast_origin()
 
 
+func _input(event: InputEvent) -> void:
+	if not is_multiplayer_authority():
+		return
+	if event.is_action_pressed("ui_cancel") and _wand_raised and not _wand_controls_blocked():
+		_lower_wand(true)
+		get_viewport().set_input_as_handled()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		## Yaw on Head (look L/R); Body mirrors yaw so broom/torso turn as one.
-		## Pitch stays on CameraPivot only — never tips the body or broom.
 		head.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
 		camera_pivot.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
 		camera_pivot.rotation.x = clampf(
@@ -371,28 +397,50 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact"):
 		_try_interact()
 
-	if event is InputEventMouseButton \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_on_wand_button_pressed()
-		else:
-			_on_wand_button_released()
+	if event.is_action_pressed("wand_raise"):
+		if _try_toggle_wand_raise():
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("spell_fire"):
+		if _try_begin_spell_fire():
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_released("spell_fire"):
+		if _try_release_spell_fire():
+			get_viewport().set_input_as_handled()
 
 
 func _on_cast_session_state_changed(state: String, _spell: SpellDefinition) -> void:
 	if _wand == null:
 		return
-	var armed := (
-		state == SpellCastingSession.STATE_ARMING
-		or state == SpellCastingSession.STATE_LISTENING
-		or state == SpellCastingSession.STATE_VALIDATING
+	var tip_armed := (
+		_wand_raised
+		and (
+			state == SpellCastingSession.STATE_ARMING
+			or state == SpellCastingSession.STATE_LISTENING
+			or state == SpellCastingSession.STATE_VALIDATING
+		)
 	)
-	_wand.set_armed(armed)
+	_wand.set_armed(tip_armed)
 
 
 func _on_cast_listen_level_changed(level: float) -> void:
 	if _wand != null:
 		_wand.set_listen_level(level)
+
+
+func _on_wand_spell_selected(spell: SpellDefinition) -> void:
+	_armed_spell = spell
+	_refill_mana()
+	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
+		_game_hud.call("reveal_cast_spell", spell)
+	if _wand != null and _wand.has_method("play_spell_recognition"):
+		await _wand.play_spell_recognition(spell)
+	_lower_wand(false)
+	if _wand != null:
+		_wand.play_cast_success(spell, true)
 
 
 func _on_wand_cast_succeeded(
@@ -413,6 +461,8 @@ func _on_wand_cast_failed(
 	if _wand == null or _casting_session == null:
 		return
 	if _casting_session.is_tome_teaching():
+		return
+	if _casting_session.is_wand_voice_select() and _wand_raised:
 		return
 	_wand.play_fizzle()
 
@@ -468,55 +518,185 @@ func stop_casting_for_relic_carry() -> void:
 		_casting_session.end_tome_teaching()
 	elif _casting_session.is_active():
 		_casting_session.cancel()
-	_casting_lmb_held = false
+	_lower_wand(true)
 	if _game_hud != null and _game_hud.has_method("hide_casting"):
 		_game_hud.hide_casting()
 
 
-func _on_wand_button_pressed() -> void:
+func _try_toggle_wand_raise() -> bool:
 	if not is_multiplayer_authority():
-		return
-	if _wand_press_consumed_by_ui():
-		return
+		return false
+	if _wand_controls_blocked():
+		return false
 	if is_carrying_relic():
 		stop_casting_for_relic_carry()
-		return
+		return true
 	if _casting_session != null and _casting_session.is_tome_teaching():
-		return
-	_casting_lmb_held = true
-	if _casting_session != null and _casting_session.is_active():
-		_casting_session.cancel()
-		return
-	_try_free_cast()
-
-
-## Open book UI and fake-wall placement each handle left-click themselves.
-func _wand_press_consumed_by_ui() -> bool:
-	if _is_monster_book_busy():
-		## Placement confirms via its own unhandled_input; book UI eats LMB.
-		return true
-	if _is_spellbook_open():
-		## Spellbook has no left-click select; clicks stay on the page UI.
-		return true
-	if not _is_fake_wall_placing():
 		return false
-	_fake_wall_placement.cancel()
+	if _wand_raised:
+		_lower_wand(true)
+		return true
+	return _raise_wand_and_listen()
+
+
+func _raise_wand_and_listen() -> bool:
+	if _spell_loadout == null or _casting_session == null:
+		return false
+	var candidates: Array[SpellDefinition] = _filter_free_cast_candidates(
+		_spell_loadout.get_known_spells()
+	)
+	if candidates.is_empty():
+		return false
+	_cancel_spell_fire_charge(true)
+	_wand_raised = true
+	if _wand != null:
+		_wand.set_raised(true)
+		_wand.set_armed(true)
+	_casting_session.start_wand_voice_select(candidates)
 	return true
 
 
-func _on_wand_button_released() -> void:
+func _lower_wand(cancel_listen: bool) -> void:
+	_wand_raised = false
+	if cancel_listen and _casting_session != null and _casting_session.is_wand_voice_select():
+		_casting_session.cancel()
+	if _wand != null:
+		_wand.set_raised(false)
+		_wand.set_armed(false)
+
+
+func _can_fire_armed_spell() -> bool:
+	if not (
+		is_multiplayer_authority()
+		and not _wand_controls_blocked()
+		and not _wand_raised
+		and not is_carrying_relic()
+		and _armed_spell != null
+		and _effect_applier != null
+		and (_casting_session == null or not _casting_session.is_tome_teaching())
+	):
+		return false
+	if _mana <= 0.0:
+		return false
+	var one: Array[SpellDefinition] = []
+	one.append(_armed_spell)
+	return not _filter_free_cast_candidates(one).is_empty()
+
+func _try_begin_spell_fire() -> bool:
+	if _spell_fire_charging or _spell_fire_releasing:
+		return false
+	if not _can_fire_armed_spell():
+		return false
+	_spell_fire_charging = true
+	if _wand != null:
+		_wand.begin_cast_charge(_armed_spell)
+	return true
+
+func _try_release_spell_fire() -> bool:
+	if not _spell_fire_charging:
+		return false
+	_spell_fire_charging = false
+	if _wand == null or not _wand.is_cast_charge_ready():
+		if _wand != null:
+			_wand.cancel_cast_charge()
+		return false
+	if not _can_fire_armed_spell():
+		_wand.fizzle_cast_charge()
+		return false
+	_spell_fire_releasing = true
+	_fire_armed_spell()
+	return true
+
+func _cancel_spell_fire_charge(instant: bool = false) -> void:
+	if _spell_fire_charging:
+		_spell_fire_charging = false
+		if _wand != null:
+			_wand.cancel_cast_charge(instant)
+	if _spell_fire_releasing and _wand != null and instant:
+		_wand.cancel_cast_charge(true)
+
+func _fire_armed_spell() -> void:
+	var cost := SpellManaScript.cast_cost(_armed_spell)
+	var spell := _armed_spell
+	if _wand != null:
+		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+			_wand.return_from_cast_charge()
+		else:
+			await _wand.return_from_cast_charge()
+	if not is_instance_valid(self) or spell == null:
+		_spell_fire_releasing = false
+		return
+	if _armed_spell != spell or _mana <= 0.0:
+		_spell_fire_releasing = false
+		return
+	if spell.effect_id == "fake_wall":
+		if _begin_fake_wall_placement(spell):
+			if _wand != null:
+				_wand.play_cast_success(spell, true)
+			_spend_mana(cost)
+		_spell_fire_releasing = false
+		return
+	var params := SpellEffectSyncScript.build_params(spell, self)
+	var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
+	if _effect_applier.has_method("cast_spell"):
+		_effect_applier.cast_spell(self, spell)
+	if spell.id == "clone" and _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
+		_spell_loadout.start_cooldown(spell.id)
+	if effect_duration > 0.0 and _game_hud != null and _game_hud.has_method("show_spell_active"):
+		_game_hud.call("show_spell_active", spell.id, effect_duration)
+	if _wand != null:
+		_wand.play_cast_success(spell, true)
+	_spend_mana(cost)
+	_spell_fire_releasing = false
+
+
+func _refill_mana() -> void:
+	_mana = SpellManaScript.MANA_MAX
+	_sync_mana_hud()
+
+func _spend_mana(amount: float) -> void:
+	if amount <= 0.0:
+		_sync_mana_hud()
+		return
+	_mana = maxf(0.0, _mana - amount)
+	if _mana <= 0.001:
+		_deplete_mana()
+	else:
+		_sync_mana_hud()
+
+func _deplete_mana() -> void:
+	_mana = 0.0
+	_cancel_spell_fire_charge(true)
+	_armed_spell = null
+	if _game_hud != null:
+		if _game_hud.has_method("hide_mana"):
+			_game_hud.call("hide_mana")
+		if _game_hud.has_method("clear_spell_word"):
+			_game_hud.call("clear_spell_word")
+
+func _sync_mana_hud() -> void:
+	if _game_hud == null:
+		return
+	if _armed_spell == null or _mana <= 0.001:
+		if _game_hud.has_method("hide_mana"):
+			_game_hud.call("hide_mana")
+		return
+	var bar_color := _armed_spell.get_display_color()
+	if _game_hud.has_method("show_mana"):
+		_game_hud.call("show_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
+	elif _game_hud.has_method("set_mana"):
+		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
+
+func _tick_mana_drain(delta: float) -> void:
 	if not is_multiplayer_authority():
 		return
-	if is_carrying_relic():
+	if _armed_spell == null or _mana <= 0.0:
 		return
-	if not _casting_lmb_held:
-		return
-	_casting_lmb_held = false
-	if _casting_session == null:
-		return
-	if not _casting_session.is_free_cast() or not _casting_session.is_active():
-		return
-	_casting_session.release_wand_hold()
+	_mana = maxf(0.0, _mana - SpellManaScript.drain_rate(_armed_spell) * delta)
+	if _mana <= 0.001:
+		_deplete_mana()
+	else:
+		_sync_mana_hud()
 
 
 func _try_tome_teaching_interact() -> bool:
@@ -526,20 +706,6 @@ func _try_tome_teaching_interact() -> bool:
 	if tome == null or not tome.can_interact(self):
 		return false
 	tome.interact(self)
-	return true
-
-
-func _try_free_cast() -> bool:
-	if is_carrying_relic():
-		return false
-	if _spell_loadout == null or _casting_session == null:
-		return false
-	var candidates: Array[SpellDefinition] = _filter_free_cast_candidates(
-		_spell_loadout.get_known_spells()
-	)
-	if candidates.is_empty():
-		return false
-	_casting_session.start_free_cast(candidates)
 	return true
 
 
@@ -677,6 +843,72 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	velocity += impulse
 
 
+func apply_ember_halo_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
+	var flat := Vector3(hit_dir.x, 0.0, hit_dir.z)
+	if flat.length_squared() > 0.0001:
+		flat = flat.normalized()
+		var impulse := flat * EmberHaloFlightScript.HIT_KNOCKBACK_SPEED
+		_knockback_vel = impulse
+		_knockback_timer = 0.25
+		velocity.x += impulse.x
+		velocity.z += impulse.z
+	apply_speed_boost(
+		EmberHaloFlightScript.SLOW_DURATION_SEC,
+		EmberHaloFlightScript.SLOW_MULTIPLIER
+	)
+
+
+func apply_wretch_command_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 6.0 + Vector3.UP * 1.5
+	_knockback_vel = impulse
+	_knockback_timer = 0.28
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(2.0, 0.1)
+
+
+func apply_rat_explode_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 14.0 + Vector3.UP * 4.0
+	_knockback_vel = impulse
+	_knockback_timer = 0.5
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(0.75, 0.25)
+
+
 func _get_broom_flight() -> Node:
 	return get_node_or_null("BroomFlight")
 
@@ -693,7 +925,6 @@ func _refresh_broom_visual() -> void:
 
 
 func _sync_body_yaw_to_head() -> void:
-	## Body (and BroomMount under it) yaw with look; pitch never touches them.
 	var body := get_node_or_null("Body") as Node3D
 	if body == null or head == null:
 		return
@@ -705,6 +936,7 @@ func _physics_process(delta: float) -> void:
 	if not is_multiplayer_authority():
 		_refresh_broom_visual()
 		return
+	_tick_mana_drain(delta)
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:

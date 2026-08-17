@@ -3,7 +3,9 @@ extends RefCounted
 
 ## Pure helpers for Monster FSM / targeting / interest preferencing.
 
-enum State { IDLE, PATROL, CHASE }
+enum State { IDLE, PATROL, CHASE, ALERT }
+## Lookdev pose → eyes. Chase shows eyes; Patrol hides them.
+enum LookdevPose { PATROL, CHASE }
 
 
 static func apply_damage(current_health: float, amount: float) -> float:
@@ -66,19 +68,22 @@ static func prefer_highest_urgency(candidates: Array) -> RefCounted:
 	return best
 
 
-## Chase overrides other states. Leaving chase returns IDLE;
-## IDLE→PATROL is owned by the monster tick.
+## Interest always forces CHASE. Without interest, CHASE/ALERT persist so the
+## monster can time CHASE→ALERT (lost target) and ALERT→PATROL. IDLE→PATROL is
+## owned by the monster idle tick.
 static func resolve_state(current: State, has_chase_target: bool) -> State:
 	if has_chase_target:
 		return State.CHASE
-	if current == State.CHASE:
-		return State.IDLE
 	return current
 
 
-## Eyes are a chase-only tell — hidden in IDLE/PATROL.
+## Eyes stay on while chasing or alert (lost-player vigilance).
 static func chase_eyes_visible(state: State) -> bool:
-	return state == State.CHASE
+	return state == State.CHASE or state == State.ALERT
+
+
+static func lookdev_eyes_visible(pose: LookdevPose) -> bool:
+	return pose == LookdevPose.CHASE
 
 
 static func random_patrol_point(
@@ -100,3 +105,116 @@ static func horizontal_velocity_toward(
 		return Vector3(0.0, y_velocity, 0.0)
 	var dir := flat.normalized()
 	return Vector3(dir.x * speed, y_velocity, dir.z * speed)
+
+
+## Rotate current yaw toward a flat desired facing vector at speed_rad.
+static func rotate_yaw_toward(
+	current_yaw: float, desired_flat: Vector3, speed_rad: float, delta: float
+) -> float:
+	var flat := Vector3(desired_flat.x, 0.0, desired_flat.z)
+	if flat.length_squared() < 0.0001:
+		return current_yaw
+	var target_yaw := Basis.looking_at(flat.normalized(), Vector3.UP).get_euler().y
+	return rotate_toward(current_yaw, target_yaw, maxf(speed_rad, 0.01) * delta)
+
+
+## Max distance from the player for chase reposition (80% of aggro / chase_range).
+static func max_aggro_move_distance(chase_range: float) -> float:
+	return maxf(0.0, chase_range) * 0.8
+
+
+static func pick_chase_wait_sec(
+	rng: RandomNumberGenerator, min_sec: float = 1.0, max_sec: float = 3.0
+) -> float:
+	return rng.randf_range(minf(min_sec, max_sec), maxf(min_sec, max_sec))
+
+
+static func pick_chase_strafe_sec(
+	rng: RandomNumberGenerator, min_sec: float = 1.2, max_sec: float = 2.0
+) -> float:
+	return rng.randf_range(minf(min_sec, max_sec), maxf(min_sec, max_sec))
+
+
+static func pick_chase_retreat_sec(
+	rng: RandomNumberGenerator, min_sec: float = 1.2, max_sec: float = 3.2
+) -> float:
+	return rng.randf_range(minf(min_sec, max_sec), maxf(min_sec, max_sec))
+
+
+static func pick_wretch_post_cast_move_sec(
+	rng: RandomNumberGenerator, min_sec: float = 0.5, max_sec: float = 1.5
+) -> float:
+	return rng.randf_range(minf(min_sec, max_sec), maxf(min_sec, max_sec))
+
+
+static func horizontal_distance(from: Vector3, to: Vector3) -> float:
+	return Vector3(to.x - from.x, 0.0, to.z - from.z).length()
+
+
+## Flat unit vector from monster toward player. Zero if coincident.
+static func toward_player_flat(from: Vector3, player: Vector3) -> Vector3:
+	var flat := Vector3(player.x - from.x, 0.0, player.z - from.z)
+	if flat.length_squared() < 0.0001:
+		return Vector3.ZERO
+	return flat.normalized()
+
+
+## Angled strafe: mostly sideways with a small radial blend (positive = toward player).
+static func angled_strafe_dir(
+	from: Vector3,
+	player: Vector3,
+	side_sign: float,
+	radial_blend: float = 0.28
+) -> Vector3:
+	var toward := toward_player_flat(from, player)
+	if toward.length_squared() < 0.0001:
+		return Vector3.ZERO
+	var side := Vector3(-toward.z, 0.0, toward.x) * signf(side_sign)
+	if side.length_squared() < 0.0001:
+		return toward
+	var blend := clampf(radial_blend, 0.0, 0.85)
+	var dir := (side * (1.0 - blend) + toward * blend).normalized()
+	return dir
+
+
+## Angled retreat: mostly away from player with a lateral bias.
+static func angled_retreat_dir(
+	from: Vector3,
+	player: Vector3,
+	side_sign: float,
+	lateral_blend: float = 0.38
+) -> Vector3:
+	var toward := toward_player_flat(from, player)
+	if toward.length_squared() < 0.0001:
+		return Vector3.ZERO
+	var away := -toward
+	var side := Vector3(-toward.z, 0.0, toward.x) * signf(side_sign)
+	var blend := clampf(lateral_blend, 0.0, 0.85)
+	var dir := (away * (1.0 - blend) + side * blend).normalized()
+	return dir
+
+
+static func can_retreat_farther(from: Vector3, player: Vector3, max_dist: float) -> bool:
+	return horizontal_distance(from, player) < max_dist - 0.05
+
+
+## Zero horizontal retreat when already at/over the aggro move cap.
+static func retreat_velocity_clamped(
+	from: Vector3,
+	player: Vector3,
+	move_dir: Vector3,
+	speed: float,
+	y_velocity: float,
+	max_dist: float
+) -> Vector3:
+	if not can_retreat_farther(from, player, max_dist):
+		return Vector3(0.0, y_velocity, 0.0)
+	var flat_dir := Vector3(move_dir.x, 0.0, move_dir.z)
+	if flat_dir.length_squared() < 0.0001:
+		return Vector3(0.0, y_velocity, 0.0)
+	flat_dir = flat_dir.normalized()
+	var step := maxf(speed, 0.0) * 0.05
+	var next := from + flat_dir * step
+	if horizontal_distance(next, player) > max_dist:
+		return Vector3(0.0, y_velocity, 0.0)
+	return Vector3(flat_dir.x * speed, y_velocity, flat_dir.z * speed)
