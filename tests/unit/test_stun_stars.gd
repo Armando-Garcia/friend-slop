@@ -1,0 +1,29 @@
+extends RefCounted
+
+const StunStarMeshScript := preload("res://scripts/fx/stun_star_mesh.gd")
+
+
+func run() -> int:
+	var failures := 0
+	failures += _test_star_mesh_has_five_points()
+	return failures
+
+
+func _test_star_mesh_has_five_points() -> int:
+	var mesh := StunStarMeshScript.build(0.07)
+	if mesh == null or mesh.get_surface_count() < 1:
+		push_error("Expected stun star mesh to have a surface")
+		return 1
+	var faces := mesh.get_faces()
+	## 10 triangles (5 tips × 2) × 3 verts. Inner radius is below 0.06.
+	if faces.size() < 30:
+		push_error("Expected a 5-point star (10 triangles), got %s face verts" % faces.size())
+		return 1
+	var outer_hits := 0
+	for v in faces:
+		if v.length() > 0.06:
+			outer_hits += 1
+	if outer_hits < 10:
+		push_error("Expected outer star tips, got %s far vertices" % outer_hits)
+		return 1
+	return 0

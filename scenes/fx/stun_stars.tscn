@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://7shalb8dn4r4"]
+
+[ext_resource type="Script" uid="uid://c0hnbxcgp5m5w" path="res://scripts/fx/stun_stars.gd" id="1_stars"]
+
+[node name="StunStars" type="Node3D" unique_id=50988472]
+process_mode = 3
+editor_description = "Orbiting 5-point stun stars. Inspector Play/Stop previews the orbit; gameplay uses set_active()."
+visible = false
+script = ExtResource("1_stars")
