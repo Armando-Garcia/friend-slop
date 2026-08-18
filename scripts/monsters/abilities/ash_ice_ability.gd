@@ -2,12 +2,13 @@
 class_name AshIceAbility
 extends "res://scripts/monsters/monster_ability.gd"
 
-## Right-hand ice bolts: two curved shots 0.5s apart, then cooldown.
+## Right-hand ice bolts: two curved shots 0.5s apart (combo fires that burst twice).
 
 const AshIceProjectileScript := preload(
 	"res://scripts/monsters/abilities/ash_ice_projectile.gd"
 )
 const GameWorldScript := preload("res://scripts/game_world.gd")
+const COMBO_BURST_COUNT := 2
 
 @export_range(1, 4, 1) var shots_per_burst: int = 2
 @export_range(0.1, 2.0, 0.05) var burst_gap_sec: float = 0.5
@@ -62,6 +63,20 @@ func release_charge(monster: Node3D, target: Node3D) -> void:
 	_run_burst(monster, target)
 
 
+func release_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	stop_windup_fx()
+	_run_burst(monster, target, COMBO_BURST_COUNT)
+
+
+func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	stop_windup_fx()
+	if monster == null:
+		return
+	_run_burst(monster, target, COMBO_BURST_COUNT)
+
+
 func start_windup_fx(monster: Node3D) -> void:
 	stop_windup_fx()
 	var hand := resolve_hand(monster)
@@ -99,28 +114,31 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 	_run_burst(monster, target)
 
 
-func _run_burst(monster: Node3D, target: Node3D) -> void:
+func _run_burst(monster: Node3D, target: Node3D, burst_count: int = 1) -> void:
 	if _burst_active:
 		return
 	if monster == null:
 		return
 	_burst_active = true
+	var bursts := maxi(burst_count, 1)
 	var shots := maxi(shots_per_burst, 1)
-	for i in shots:
-		if not is_inside_tree():
-			break
-		if monster == null or not is_instance_valid(monster):
-			break
-		var aim: Variant = _resolve_aim_point(monster, target)
-		if not aim is Vector3:
-			break
-		var side := 1.0 if (i % 2) == 0 else -1.0
-		_spawn_bolt_at(monster, aim as Vector3, side)
-		if i < shots - 1:
-			var tree := get_tree()
-			if tree == null:
+	for burst_i in bursts:
+		for i in shots:
+			if not is_inside_tree():
 				break
-			await tree.create_timer(burst_gap_sec).timeout
+			if monster == null or not is_instance_valid(monster):
+				break
+			var aim: Variant = _resolve_aim_point(monster, target)
+			if not aim is Vector3:
+				break
+			var side := 1.0 if (i % 2) == 0 else -1.0
+			_spawn_bolt_at(monster, aim as Vector3, side)
+			var more_shots := i < shots - 1 or burst_i < bursts - 1
+			if more_shots:
+				var tree := get_tree()
+				if tree == null:
+					break
+				await tree.create_timer(burst_gap_sec).timeout
 	begin_cooldown()
 	_burst_active = false
 

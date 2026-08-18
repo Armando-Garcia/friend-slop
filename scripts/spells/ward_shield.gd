@@ -76,7 +76,9 @@ func set_caster(caster: Node3D) -> void:
 	_apply_caster_collision_exception()
 
 
-func is_owned_by(node: Node) -> bool:
+func is_owned_by(node: Variant = null) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
 	return _caster != null and is_instance_valid(_caster) and node == _caster
 
 
@@ -383,17 +385,27 @@ func _process(delta: float) -> void:
 		_dissolve()
 
 
-func notify_spell_blocked(blocked_damage: float = 0.0) -> void:
+func notify_spell_blocked(blocked_damage: float = 0.0, incoming_from: Variant = null) -> void:
 	## Each blocked spell spends one hit; dissolve when capacity is empty.
 	if not _persist_through_blocks and _hits_remaining <= 0:
 		return
+	if incoming_from != null and not is_instance_valid(incoming_from):
+		incoming_from = null
 	if _block_listener.is_valid():
 		_block_listener.call(blocked_damage)
+	_notify_owner_blocked(incoming_from as Node)
 	if _persist_through_blocks:
 		return
 	_hits_remaining -= 1
 	if _hits_remaining <= 0:
 		_dissolve()
+
+
+func _notify_owner_blocked(incoming_from: Node) -> void:
+	if _caster == null or not is_instance_valid(_caster):
+		return
+	if _caster.has_method("on_own_ward_blocked"):
+		_caster.call("on_own_ward_blocked", incoming_from)
 
 
 func _dissolve() -> void:

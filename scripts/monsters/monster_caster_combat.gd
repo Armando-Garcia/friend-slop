@@ -20,6 +20,7 @@ const FROST_TELEGRAPH_META := &"frost_breath_telegraph_fx"
 @export var combo_steps: Array = []
 @export var debug_force_combo: bool = false
 @export_range(0.0, 20.0, 0.1) var combo_trigger_max_range: float = 8.0
+@export_range(0.0, 30.0, 0.1) var combo_lockout_sec: float = 0.0
 
 var _state: State = State.NEUTRAL
 var _held_ability: Node = null
@@ -31,6 +32,8 @@ var _combo_phase: int = ComboPhase.WAIT_DELAY
 var _combo_charge_ability: Node = null
 var _monster: Node3D = null
 var _rng := RandomNumberGenerator.new()
+var _combo_lockout_left: float = 0.0
+var _charged_retreat_rolled: bool = false
 
 
 func _ready() -> void:
@@ -45,9 +48,11 @@ func uses_caster_combat() -> bool:
 func tick(delta: float, ai_state: int, target: Node3D) -> void:
 	if not uses_caster_combat():
 		return
+	if _combo_lockout_left > 0.0:
+		_combo_lockout_left = maxf(0.0, _combo_lockout_left - delta)
 	if _is_dashing():
 		_tick_active_dash(delta)
-		if _state == State.COMBO_ACTIVE and _combo_phase == ComboPhase.WAIT_DASH:
+		if _is_dashing():
 			return
 	if ai_state != MonsterAIScript.State.CHASE:
 		_reset_charge_state()
@@ -74,6 +79,10 @@ func configure_combo(steps: Array) -> void:
 	combo_steps = steps
 
 
+func is_combo_active() -> bool:
+	return _state == State.COMBO_ACTIVE
+
+
 func try_combo_instead_of_retreat(target: Node3D) -> bool:
 	if _state == State.COMBO_ACTIVE:
 		return true
@@ -84,19 +93,21 @@ func try_combo_instead_of_retreat(target: Node3D) -> bool:
 	return try_trigger_combo(target, chance)
 
 
-func try_trigger_combo(target: Node3D, chance: float) -> bool:
+func try_trigger_combo(
+	target: Node3D, chance: float, require_range: bool = true
+) -> bool:
 	if _state == State.COMBO_ACTIVE:
 		return true
-	target = _resolve_target(target)
-	if not _can_start_combo_at_range(target):
+	if _combo_lockout_left > 0.0 and not debug_force_combo:
 		return false
-	if _state != State.COMBO_ACTIVE and has_active_charge():
-		_cancel_charge()
+	target = _resolve_target(target)
+	if require_range and not _can_start_combo_at_range(target):
+		return false
 	if debug_force_combo or chance >= 1.0:
-		return _start_combo(target)
+		return _start_combo(target, require_range)
 	if chance <= 0.0:
 		return false
-	return _start_combo(target) if _rng.randf() <= chance else false
+	return _start_combo(target, require_range) if _rng.randf() <= chance else false
 
 
 func has_active_charge() -> bool:
@@ -141,6 +152,16 @@ static func is_standing_still_velocity(horiz: Vector2, eps: float = STANDSTILL_S
 func _tick_neutral(delta: float, target: Node3D) -> void:
 	if debug_force_combo and _try_start_combo(target):
 		return
+	if _uses_offensive_spacing() and _monster.has_method("try_close_range_sidestep"):
+		if bool(_monster.call("try_close_range_sidestep", target)):
+			return
+	if (
+		_uses_offensive_spacing()
+		and _monster.has_method("tick_occasional_chase_walk")
+		and bool(_monster.call("tick_occasional_chase_walk", delta, target))
+	):
+		_tick_locomotion(delta, target)
+		return
 	if _can_start_charge():
 		var ability := _pick_charge_ability(target)
 		if ability != null:
@@ -163,6 +184,12 @@ func _tick_charged(delta: float, target: Node3D) -> void:
 	_face_target(target)
 	if _held_ability != null and _ability_in_range(_held_ability, target):
 		_release_held(target)
+		return
+	if _uses_offensive_spacing():
+		if _monster.has_method("try_close_range_sidestep"):
+			if bool(_monster.call("try_close_range_sidestep", target)):
+				return
+		_tick_locomotion(delta, target, true)
 		return
 	if _should_retreat_with_charge(target):
 		_start_retreat_with_charge(target)
@@ -211,7 +238,12 @@ func _tick_combo(delta: float, target: Node3D) -> void:
 		ComboPhase.CHARGED:
 			_zero_velocity()
 			_face_target(target)
-			if _combo_charge_ability != null:
+			var charged_step: Resource = combo_steps[_combo_step_index] as Resource
+			if (
+				charged_step != null
+				and charged_step.step_type == MonsterComboStepScript.StepType.CHARGE_THROW
+				and _combo_charge_ability != null
+			):
 				_fire_release(_combo_charge_ability, target)
 			_combo_charge_ability = null
 			_advance_combo_step()
@@ -230,19 +262,25 @@ func _run_combo_step(step: Resource, target: Node3D) -> void:
 		return
 	match step.step_type:
 		MonsterComboStepScript.StepType.INSTANT:
-			_fire_instant_step(ability, target)
-			if step.ability_id == "ember_dash":
+			_fire_instant_step(ability, target, str(step.get("combo_variant")))
+			if _is_dashing():
 				_combo_phase = ComboPhase.WAIT_DASH
 			else:
 				_advance_combo_step()
-		MonsterComboStepScript.StepType.CHARGE_THROW:
+		MonsterComboStepScript.StepType.CHARGE_THROW, MonsterComboStepScript.StepType.CHARGE_HOLD:
 			_combo_charge_ability = ability
 			_begin_charge(ability, false, false)
 			_combo_phase = ComboPhase.CHARGING
 
 
-func _fire_instant_step(ability: Node, target: Node3D) -> void:
-	if ability.has_method("fire_combo_step"):
+func _fire_instant_step(ability: Node, target: Node3D, variant: String = "") -> void:
+	if str(ability.get("ability_id")) == "ash_frost_breath":
+		_stop_cloud_pre_fx()
+	if variant == "close" and ability.has_method("fire_combo_close_dash"):
+		ability.call("fire_combo_close_dash", _monster, target)
+	elif variant == "away" and ability.has_method("fire_combo_away_dash"):
+		ability.call("fire_combo_away_dash", _monster, target)
+	elif ability.has_method("fire_combo_step"):
 		ability.call("fire_combo_step", _monster, target)
 	elif ability.has_method("fire_instant"):
 		ability.call("fire_instant", _monster, target)
@@ -258,10 +296,22 @@ func _advance_combo_step() -> void:
 	var step: Resource = combo_steps[_combo_step_index] as Resource
 	_combo_delay_left = step.delay_after_prev_sec if step != null else 0.0
 	_combo_phase = ComboPhase.WAIT_DELAY
+	if (
+		step != null
+		and str(step.ability_id) == "ash_frost_breath"
+		and _combo_delay_left > 0.0
+	):
+		_start_cloud_pre_fx()
 
 
-func _start_combo(target: Node3D) -> bool:
-	if not _can_start_combo_at_range(target):
+func _start_combo(target: Node3D, require_range: bool = true) -> bool:
+	if require_range and not _can_start_combo_at_range(target):
+		return false
+	if _monster.has_method("select_combo_steps"):
+		var picked: Variant = _monster.call("select_combo_steps", target)
+		if picked is Array and (picked as Array).size() > 0:
+			combo_steps = picked as Array
+	if combo_steps.is_empty():
 		return false
 	_cancel_charge()
 	_reset_combo_abilities()
@@ -270,14 +320,19 @@ func _start_combo(target: Node3D) -> bool:
 	_combo_phase = ComboPhase.WAIT_DELAY
 	_combo_delay_left = 0.0
 	_combo_charge_ability = null
+	_combo_lockout_left = combo_lockout_sec
 	if combo_steps.size() > 0 and combo_steps[0] != null:
 		_combo_delay_left = combo_steps[0].delay_after_prev_sec
-	_start_frost_telegraph()
+	if _monster.has_method("on_combo_started"):
+		_monster.call("on_combo_started")
 	return true
 
 
 func _finish_combo() -> void:
 	_stop_frost_telegraph()
+	_stop_cloud_pre_fx()
+	if _monster.has_method("on_combo_finished"):
+		_monster.call("on_combo_finished")
 	_state = State.NEUTRAL
 	_combo_step_index = 0
 	_combo_phase = ComboPhase.WAIT_DELAY
@@ -309,6 +364,7 @@ func _can_start_combo_at_range(target: Node3D) -> bool:
 func _begin_charge(ability: Node, set_state: bool = true, track_held: bool = true) -> void:
 	if track_held:
 		_held_ability = ability
+		_charged_retreat_rolled = false
 	_charge_left = float(ability.get("windup_sec")) if "windup_sec" in ability else 0.55
 	if ability.has_method("start_windup_fx"):
 		ability.call("start_windup_fx", _monster)
@@ -382,7 +438,17 @@ func _should_retreat_with_charge(target: Node3D) -> bool:
 		return false
 	if _ability_too_close(_held_ability, target):
 		return true
+	if _charged_retreat_rolled:
+		return false
+	_charged_retreat_rolled = true
 	return _rng.randf() < 0.35
+
+
+func _uses_offensive_spacing() -> bool:
+	return (
+		_monster.has_method("uses_offensive_spacing")
+		and bool(_monster.call("uses_offensive_spacing"))
+	)
 
 
 func _can_start_charge() -> bool:
@@ -489,25 +555,38 @@ func _zero_velocity() -> void:
 
 
 func _is_dashing() -> bool:
-	var dash := _find_ability("ember_dash")
-	if dash != null and dash.has_method("is_dashing"):
-		return bool(dash.call("is_dashing"))
-	return false
+	return _find_dashing_ability() != null
 
 
 func _tick_active_dash(delta: float) -> void:
-	var dash := _find_ability("ember_dash")
+	var dash := _find_dashing_ability()
 	if dash != null and dash.has_method("tick_dash") and _monster is CharacterBody3D:
 		dash.call("tick_dash", _monster as CharacterBody3D, delta)
 
 
-func _start_frost_telegraph() -> void:
-	var frost := _find_ability("ash_frost_breath")
-	if frost != null and frost.has_method("start_retreat_telegraph"):
-		frost.call("start_retreat_telegraph", _monster)
+func _find_dashing_ability() -> Node:
+	var root := _monster.get_node_or_null("Abilities")
+	if root == null:
+		return null
+	for child in root.get_children():
+		if child.has_method("is_dashing") and bool(child.call("is_dashing")):
+			return child
+	return null
 
 
 func _stop_frost_telegraph() -> void:
 	var frost := _find_ability("ash_frost_breath")
 	if frost != null and frost.has_method("stop_retreat_telegraph"):
 		frost.call("stop_retreat_telegraph", _monster)
+
+
+func _start_cloud_pre_fx() -> void:
+	var frost := _find_ability("ash_frost_breath")
+	if frost != null and frost.has_method("start_cloud_pre_fx"):
+		frost.call("start_cloud_pre_fx", _monster)
+
+
+func _stop_cloud_pre_fx() -> void:
+	var frost := _find_ability("ash_frost_breath")
+	if frost != null and frost.has_method("stop_cloud_pre_fx"):
+		frost.call("stop_cloud_pre_fx", _monster)

@@ -100,6 +100,8 @@ func setup(target: Node3D, caster: Node3D = null) -> void:
 func _physics_process(delta: float) -> void:
 	if _finished:
 		return
+	if _caster != null and not is_instance_valid(_caster):
+		_caster = null
 	_age += delta
 	if _age >= MAX_LIFE_SEC:
 		_finish(true)
@@ -152,7 +154,7 @@ func _try_block_ward_overlap() -> bool:
 
 
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body):
+	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE, _caster):
 		return false
 	## Ward eats the spell — vanish with no ground impact burst.
 	_finish(false)

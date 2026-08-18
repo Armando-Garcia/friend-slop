@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://dve1ig5c1dmse" path="res://scripts/monsters/abilities/ash_ward_ability.gd" id="5_ward"]
 [ext_resource type="Script" path="res://scripts/monsters/abilities/ash_frost_breath_ability.gd" id="6_frost"]
 [ext_resource type="Script" path="res://scripts/monsters/monster_caster_combat.gd" id="7_caster"]
+[ext_resource type="Script" path="res://scripts/monsters/abilities/ash_retreat_dash_ability.gd" id="8_dash"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_51b5b"]
 albedo_color = Color(0.42, 0.4, 0.48, 1)
@@ -41,7 +42,7 @@ shading_mode = 0
 albedo_color = Color(0.55, 0.55, 0.58, 1)
 
 [node name="AshWretch" unique_id=611691207 instance=ExtResource("1_monster")]
-editor_description = "Ash Wretch. Caster combat: charge spells, retreat with held charge, ward→frost→ice combo."
+editor_description = "Ash Wretch. Caster combat: charge spells, backdash+strafe, ward-block combo (close ward / far dash-in)."
 script = ExtResource("2_ash")
 body_tint = Color(0.42, 0.4, 0.48, 1)
 eye_glow_color = Color(0.55, 0.55, 0.58, 1)
@@ -74,7 +75,7 @@ layers = 2
 material_override = SubResource("StandardMaterial3D_51b5b")
 
 [node name="Hands" type="Node3D" parent="Body" index="0" unique_id=1423862136]
-editor_description = "Cast hands. Right = Ice Bolt, Left = Ward. Frost Breath = retreat combo."
+editor_description = "Cast hands. Right = Ice Bolt, Left = Ward. Frost Breath = combo cloud."
 
 [node name="RightHand" type="MeshInstance3D" parent="Body/Hands" index="0" unique_id=2093616357]
 unique_name_in_owner = true
@@ -110,13 +111,13 @@ light_energy = 2.6
 light_cull_mask = 3
 
 [node name="Abilities" type="Node3D" parent="." index="4" unique_id=973519715]
-editor_description = "Ice Bolt, Ash Ward, Frost Breath (retreat combo)."
+editor_description = "Ice Bolt, Ash Ward, Frost Breath (combo cloud), Retreat Dash."
 
 [node name="IceBolt" type="Node3D" parent="Abilities" index="0" unique_id=1516377762]
 script = ExtResource("4_ice")
 ability_id = "ash_ice"
 display_name = "Ice Bolt"
-description = "Two curved ice bolts 0.5s apart, then cooldown. Path rises and veers aside toward the player."
+description = "Two curved ice bolts 0.5s apart, then cooldown. Combo fires that burst twice (four bolts)."
 cooldown_sec = 6.0
 windup_sec = 0.5
 telegraph_color = Color(0.45, 0.8, 1, 1)
@@ -139,15 +140,26 @@ max_cast_range = 20.0
 script = ExtResource("6_frost")
 ability_id = "ash_frost_breath"
 display_name = "Frost Breath"
-description = "Retreat combo: ward then frost cloud toward the player. Knockback, 50% slow 2.2s, 10 damage, 40 mana drain if spell armed."
+description = "Combo frost cloud toward the player. Knockback, 50% slow 2.2s, no HP damage, 40 mana drain if spell armed."
 cooldown_sec = 10.0
 windup_sec = 0.25
 telegraph_color = Color(0.55, 0.82, 1, 1)
 requires_chase_target = true
 min_cast_range = 0.0
-max_cast_range = 7.0
+max_cast_range = 16.9
 retreat_combo_chance = 0.85
+
+[node name="AshRetreatDash" type="Node3D" parent="Abilities" index="3"]
+script = ExtResource("8_dash")
+ability_id = "ash_retreat_dash"
+display_name = "Ash Retreat Dash"
+description = "Dash backward away from the player, then strafe. Used instead of a slow walk-back."
+cooldown_sec = 5.0
+windup_sec = 0.0
+telegraph_color = Color(0.45, 0.75, 1, 1)
+participates_in_cast_rotation = false
 
 [node name="CasterCombat" type="Node3D" parent="." index="5"]
 script = ExtResource("7_caster")
-combo_trigger_max_range = 8.0
+combo_trigger_max_range = 16.9
+combo_lockout_sec = 8.0

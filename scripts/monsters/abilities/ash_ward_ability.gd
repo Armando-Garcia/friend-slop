@@ -87,6 +87,7 @@ func fire_instant(monster: Node3D, target: Node3D) -> void:
 
 func fire_combo_step(monster: Node3D, target: Node3D) -> void:
 	reset_for_combo()
+	stop_windup_fx()
 	if monster == null:
 		return
 	_fire_cast(monster, target)

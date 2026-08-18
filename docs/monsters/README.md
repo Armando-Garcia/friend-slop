@@ -11,8 +11,8 @@ Documented **as-is**. Ember uses [ember_wretch.gd](../../scripts/monsters/ember_
 | Type | Scene | Script | Kit / behavior |
 |------|-------|--------|----------------|
 | **Wretch** | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) | [wretch.gd](../../scripts/monsters/wretch.gd) | Summon Rats + Command Pack; `KEEP_AWAY` @ 20 m; Sight + Hearing |
-| **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd) | Caster combat: charge/hold/throw; ward→frost→ice combo; `CLOSE_IN` |
-| **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: charge/hold/throw; halo→dash→lob combo; `CLOSE_IN` |
+| **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd) | Caster combat: charge/hold/throw; ward-block combo; `CLOSE_IN` |
+| **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: hold range, occasional weighted strafe; halo→dash→lob combo; `CLOSE_IN` |
 | **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
 Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev gallery: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
@@ -142,7 +142,8 @@ Interest sources in play: `player`, `sight`, `hearing`, `summon_sight`, `summon_
 
 | Who | Behavior |
 |-----|----------|
-| Monster / Ash / Ember | Continuous chase-move timer: wait near optimal range → strafe or retreat (face player while strafing). Retreat capped at `0.8 * chase_range`. |
+| Monster / Ember | Continuous chase-move timer: wait near optimal range → strafe or retreat (face player while strafing). Retreat capped at `0.8 * chase_range`. |
+| Ash | Same wait loop, but too-close “backup” is a **4 m backdash** (4.05× speed, **5** s CD) then a side strafe — not a slow walk-back. On CD, strafe only. |
 | Wretch | Continuous loop **off**. KEEP_AWAY spacing at `keep_away_range`. After lost-contact Command Pack → **ALERT**. |
 | Ranged CLOSE_IN | Cast-band hold via `MonsterCombatSpacing` when abilities have `min_cast_range > 0.5`. |
 
@@ -187,31 +188,29 @@ stateDiagram-v2
 	Charged --> RetreatingCharged: out of band or too close
 	RetreatingCharged --> Throwing: re-enter band while holding
 	Throwing --> Neutral: release + cooldown
-	Neutral --> ComboActive: retreat triggers combo roll
+	Neutral --> ComboActive: combo trigger
 	ComboActive --> Neutral: pattern done
 ```
 
 | Rule | Behavior |
 |------|----------|
 | Charge | Only while standing still (not strafing/retreating/dashing) |
-| Hold | Hand FX stays after windup; monster may retreat while charged |
+| Hold | Hand FX stays after windup; Ash may **backdash then strafe** while charged (5 s CD); Ember holds range |
 | Release | `release_charge()` when target enters acceptable range |
 | Combo | Fixed ability order; **resets all ability cooldowns** on start and runs each step via combo fire paths (ignores prior casts / range gates); see wretch-specific triggers below or `debug_force_combo` |
 
 Combo patterns ([monster_combo_step.gd](../../scripts/monsters/monster_combo_step.gd)):
 
-- **Ash:** ward (instant) → frost cloud (instant, **0.6** s delay) → ice burst (charge+throw, 2 bolts)
+- **Ash:** **50%** when Ash ward blocks a player spell (**8** s lockout). Within **5** m: ward → **0.6** s → cloud → **0.3** s → dash away → ice (**two** bursts / **4** bolts). Beyond **5** m: dash in → **0.6** s → cloud → **0.3** s → dash away → ice. Combo start: both hands + eyes at full brightness.
 - **Ember:** halo (charge+throw) → dash (instant) → lob (charge+throw)
 
-Combo triggers (within **8** m where range applies):
+Combo triggers (Ash: **8** s lockout; Ember: **8** m where a range gate applies):
 
 | Wretch | Trigger | Chance |
 |--------|---------|--------|
-| Ash | Backing up under pressure (retreat) | **85%** |
-| Ash | Taking damage while a player is within **8** m | **85%** |
-| Ember | Backing up under pressure (retreat) | **70%** |
-| Ember | Taking damage while a player is within **8** m | **70%** (each hit; resolves player from projectiles) |
-| Ember | First time dropping below **35%** HP | **100%** (once per life) |
+| Ash | Ash **ward** blocks a player spell | **50%** (any range; **8** s lockout). Sequence depends on distance (**5** m split). |
+| Ember | Player **wards** any Ember spell | **35%** (any range) |
+| Ember | First time dropping below **35%** HP | **100%** (once per life; **8** m range gate) |
 
 ---
 
@@ -221,9 +220,9 @@ Combo triggers (within **8** m where range applies):
 
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
-| Ember Lob | `ember_lob` | 5.5 s / 0.55 s | 3.5–13 m | Arc then dive; **20** damage + fireball knockback; ward-blockable |
-| Ember Halo | `ember_halo` | 7 s / 0.6 s | 2.5–11 m | Expanding **ring** glides toward player at **14 m/s**; rim = light-moderate knockback + brief slow; **center jump pad** launches **2 m**; **no HP damage** |
-| Ember Dash | `ember_dash` | **9** s / instant | combo step 2 | Dash behind player (4.05× speed); burn trail; CD resets below **35%** HP; low-HP also triggers combo |
+| Ember Lob | `ember_lob` | **5** s / 0.55 s | 3.5–13 m | Arc then dive; **20** damage + fireball knockback; ward-blockable |
+| Ember Halo | `ember_halo` | **7.5** s / 0.6 s | 2.5–11 m | Expanding **ring** glides toward player at **14 m/s**; rim = light-moderate knockback + brief slow; **center jump pad** launches **2 m**; **no HP damage** |
+| Ember Dash | `ember_dash` | **5** s / instant | combo + **8** m sidestep | Combo: behind player at 4.05× speed. Close range: half-distance dash; burn trail; CD resets below **35%** HP. Chase: occasional left/right walk, **70:30** toward the farther side |
 
 Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_ability.gd), [ember_halo_ability.gd](../../scripts/monsters/abilities/ember_halo_ability.gd), [ember_dash_ability.gd](../../scripts/monsters/abilities/ember_dash_ability.gd), [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd). Projectiles under [scenes/monsters/abilities/](../../scenes/monsters/abilities/).
 
@@ -231,11 +230,12 @@ Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_abili
 
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
-| Ice Bolt | `ash_ice` | 6 s / 0.5 s | 3–14 m | Burst of **2** bolts (0.5 s apart); **14** damage + knockback each |
-| Ash Ward | `ash_ward` | 7 s / 0.45 s | needs chase target | Player-style ward **2.5** s; blocks **1** spell then shatters |
-| Frost Breath | `ash_frost_breath` | **10** s / instant | 0–**8** m | Combo step 2 only: frost cloud **projectile**; **10** dmg, knockback, **50%** slow **2.2** s, **40** mana drain if spell armed |
+| Ice Bolt | `ash_ice` | 6 s / 0.5 s | 3–14 m | Burst of **2** bolts (0.5 s apart); **14** damage + knockback each. Combo: that burst **twice** (**4** bolts), fired immediately after the away dash |
+| Ash Ward | `ash_ward` | 7 s / 0.45 s | needs chase target | Player-style ward **2.5** s; blocks **1** spell then shatters. Combo opener when the player is within **5** m |
+| Frost Breath | `ash_frost_breath` | **10** s / instant | 0–**16.9** m | Combo: **0.6** s white-light hold, then frost cloud **projectile** pitched **10°** down; launches at **18** m/s then **log-decelerates** over **2.125×** the old 7 m range **+ 2 m**; **no HP damage**, knockback **away + slight lift**, **50%** slow **2.2** s, **40** mana drain if spell armed |
+| Retreat Dash | `ash_retreat_dash` | **5** s / instant | backup + combo | Backup: **4 m** backdash then strafe. Combo: dash in to **2.5** m if the player is beyond **5** m; both variants dash away ~**90°** (**4** m) after the cloud. |
 
-Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd), [ash_frost_breath_ability.gd](../../scripts/monsters/abilities/ash_frost_breath_ability.gd), [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd).
+Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd), [ash_frost_breath_ability.gd](../../scripts/monsters/abilities/ash_frost_breath_ability.gd), [ash_retreat_dash_ability.gd](../../scripts/monsters/abilities/ash_retreat_dash_ability.gd), [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd).
 
 ### Wretch (packmaster)
 

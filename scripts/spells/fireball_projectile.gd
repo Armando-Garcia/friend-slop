@@ -873,7 +873,7 @@ func _ward_from_node(node: Node) -> Node:
 func _notify_ward_blocked(blocked_by: Node) -> void:
 	var ward := _ward_from_node(blocked_by) if blocked_by != null else _find_ward_hit()
 	if ward != null:
-		ward.call("notify_spell_blocked", hit_damage)
+		ward.call("notify_spell_blocked", hit_damage, _caster)
 
 
 func _clear_projectile_visuals() -> void:

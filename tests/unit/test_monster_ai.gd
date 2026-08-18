@@ -165,6 +165,8 @@ func _test_chase_move_helpers() -> int:
 	failures += _assert_chase_move_durations()
 	failures += _assert_chase_move_directions()
 	failures += _assert_chase_move_aggro_clamp()
+	failures += _assert_weighted_strafe_away()
+	failures += _assert_dash_landing_away()
 	return 1 if failures > 0 else 0
 
 
@@ -237,5 +239,41 @@ func _assert_chase_move_aggro_clamp() -> int:
 	)
 	if is_equal_approx(yaw1, yaw0):
 		push_error("Expected rotate_yaw_toward to change yaw toward -Z")
+		return 1
+	return 0
+
+
+func _assert_weighted_strafe_away() -> int:
+	var from := Vector3(8.0, 0.0, 0.0)
+	var player := Vector3(0.0, 0.0, 1.0)
+	var further := MonsterAIScript.strafe_sign_further_from_player(from, player)
+	var toward := MonsterAIScript.toward_player_flat(from, player)
+	var right := Vector3(-toward.z, 0.0, toward.x).normalized()
+	var d_pos := MonsterAIScript.horizontal_distance(from + right * 0.5, player)
+	var d_neg := MonsterAIScript.horizontal_distance(from - right * 0.5, player)
+	var expected := 1.0 if d_pos >= d_neg else -1.0
+	if not is_equal_approx(further, expected):
+		push_error("Expected strafe sign to pick the farther lateral, got %s" % further)
+		return 1
+	if not is_equal_approx(MonsterAIScript.pick_weighted_strafe_sign(1.0, 0.0, 0.7), 1.0):
+		push_error("Expected 70% band to keep the farther strafe sign")
+		return 1
+	if not is_equal_approx(MonsterAIScript.pick_weighted_strafe_sign(1.0, 0.69, 0.7), 1.0):
+		push_error("Expected roll under 0.7 to keep the farther strafe sign")
+		return 1
+	if not is_equal_approx(MonsterAIScript.pick_weighted_strafe_sign(1.0, 0.7, 0.7), -1.0):
+		push_error("Expected 30% band to flip toward the closer strafe")
+		return 1
+	return 0
+
+
+func _assert_dash_landing_away() -> int:
+	var player := Node3D.new()
+	player.global_position = Vector3.ZERO
+	var from := Vector3(0.0, 0.0, 3.0)
+	var landing: Vector3 = MonsterAIScript.pick_dash_landing_away(from, player, 4.0, 20.0)
+	player.free()
+	if landing.z <= from.z:
+		push_error("Expected pick_dash_landing_away to move farther from the player")
 		return 1
 	return 0

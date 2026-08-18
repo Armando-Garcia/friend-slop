@@ -12,8 +12,8 @@ const PlayerFrostBreathScript := preload("res://scripts/characters/player_frost_
 
 var _caster: Node3D = null
 var _direction: Vector3 = Vector3.FORWARD
-var _speed: float = AshFrostBreathFlightScript.TRAVEL_SPEED
 var _age: float = 0.0
+var _traveled: float = 0.0
 var _finished: bool = false
 var _hit_bodies: Dictionary = {}
 var _mesh: MeshInstance3D = null
@@ -84,6 +84,8 @@ func setup(origin: Vector3, toward: Vector3, caster: Node3D = null) -> void:
 func _physics_process(delta: float) -> void:
 	if _finished:
 		return
+	if _caster != null and not is_instance_valid(_caster):
+		_caster = null
 	_age += delta
 	var grow_end := _grow_sec
 	var min_life := AshFrostBreathFlightScript.total_life_sec(_grow_sec, _linger_sec)
@@ -92,7 +94,10 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 
-	global_position += _direction * _speed * delta
+	var step := AshFrostBreathFlightScript.travel_step(_traveled, delta)
+	if step > 0.0:
+		global_position += _direction * step
+		_traveled += step
 
 	var radius := AshFrostBreathFlightScript.radius_at_age(_age, _grow_sec, _max_radius)
 	if _sphere != null:
@@ -137,9 +142,14 @@ func _block_if_ward(body: Node) -> bool:
 
 func _apply_hit(body: Node3D) -> void:
 	var apply_local := _should_apply_local(body)
-	var hit_dir := AshFrostBreathFlightScript.flat_direction(global_position, body.global_position)
+	var origin := global_position
+	if _caster != null and is_instance_valid(_caster):
+		origin = _caster.global_position
+	var away := AshFrostBreathFlightScript.flat_direction(origin, body.global_position)
+	if away.length_squared() < 0.0001:
+		away = Vector3(_direction.x, 0.0, _direction.z)
 	if apply_local:
-		PlayerFrostBreathScript.apply(body, hit_dir)
+		PlayerFrostBreathScript.apply(body, away)
 	if body.has_method("take_damage") and AshFrostBreathFlightScript.HIT_DAMAGE > 0.0:
 		body.call("take_damage", AshFrostBreathFlightScript.HIT_DAMAGE, self)
 

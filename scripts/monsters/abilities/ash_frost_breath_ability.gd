@@ -13,6 +13,7 @@ const AshFrostBreathFlightScript := preload(
 const GameWorldScript := preload("res://scripts/game_world.gd")
 
 const _TELEGRAPH_META := &"frost_breath_telegraph_fx"
+const _CLOUD_PRE_FX_META := &"ash_cloud_pre_fx"
 
 @export_range(0.0, 1.0, 0.05) var retreat_combo_chance: float = 0.85
 
@@ -27,13 +28,13 @@ func _ready() -> void:
 		display_name = "Frost Breath"
 	description = (
 		"Combo step: frost cloud projectile toward the player. "
-		+ "Knockback, slow, light damage, mana drain if spell armed."
+		+ "Knockback, slow, mana drain if spell armed. No HP damage."
 	)
 	telegraph_color = Color(0.55, 0.82, 1.0, 1.0)
 	cooldown_sec = 10.0
 	windup_sec = 0.25
 	min_cast_range = 0.0
-	max_cast_range = 7.0
+	max_cast_range = AshFrostBreathFlightScript.MAX_TRAVEL_RANGE
 
 
 func can_cast() -> bool:
@@ -74,6 +75,53 @@ func stop_retreat_telegraph(monster: Node3D) -> void:
 	monster.remove_meta(_TELEGRAPH_META)
 
 
+func start_cloud_pre_fx(monster: Node3D) -> void:
+	stop_cloud_pre_fx(monster)
+	if monster == null:
+		return
+	var fx := _build_cloud_pre_fx()
+	monster.add_child(fx)
+	var origin := _cast_origin_between_hands(monster)
+	fx.global_position = origin + Vector3(0.0, 0.08, 0.0)
+	monster.set_meta(_CLOUD_PRE_FX_META, fx)
+
+
+func stop_cloud_pre_fx(monster: Node3D) -> void:
+	if monster == null or not monster.has_meta(_CLOUD_PRE_FX_META):
+		return
+	var fx: Variant = monster.get_meta(_CLOUD_PRE_FX_META)
+	if fx is Node and is_instance_valid(fx):
+		(fx as Node).queue_free()
+	monster.remove_meta(_CLOUD_PRE_FX_META)
+
+
+func _build_cloud_pre_fx() -> Node3D:
+	var root := Node3D.new()
+	root.name = "AshCloudPreFx"
+	var sphere := MeshInstance3D.new()
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.2
+	mesh.height = 0.4
+	sphere.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 0.95)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 1.0, 1.0)
+	mat.emission_energy_multiplier = 14.0
+	sphere.material_override = mat
+	sphere.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(sphere)
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 1.0, 1.0)
+	light.light_energy = 12.0
+	light.omni_range = 3.2
+	light.shadow_enabled = false
+	root.add_child(light)
+	return root
+
+
 func fire_instant(monster: Node3D, target: Node3D) -> void:
 	if monster == null or not can_cast():
 		return
@@ -86,6 +134,7 @@ func fire_instant(monster: Node3D, target: Node3D) -> void:
 
 func fire_combo_step(monster: Node3D, target: Node3D) -> void:
 	reset_for_combo()
+	stop_cloud_pre_fx(monster)
 	if monster == null:
 		return
 	var aim := _resolve_target_pos(monster, target)
