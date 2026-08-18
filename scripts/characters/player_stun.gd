@@ -21,15 +21,22 @@ var _stunned: bool = false
 var _airborne: bool = false
 var _post_land_left: float = 0.0
 var _launch_vel: Vector3 = Vector3.ZERO
+var _ground_y: float = 0.0
 var _overlay_root: Node3D = null
 var _world_stars: Node = null
 var _cam_stars: Node = null
 
 
 func _ready() -> void:
-	_player = get_parent() as CharacterBody3D
-	_cache_fx_nodes()
+	_ensure_player()
 	_sync_visuals()
+
+
+func _ensure_player() -> CharacterBody3D:
+	if _player == null or not is_instance_valid(_player):
+		_player = get_parent() as CharacterBody3D
+		_cache_fx_nodes()
+	return _player
 
 
 func is_stunned() -> bool:
@@ -41,12 +48,14 @@ func is_launching() -> bool:
 
 
 func begin_charger_hit(landing_world: Vector3, gravity: float) -> void:
+	_ensure_player()
 	if _player != null and not _player.is_multiplayer_authority() and GameState.is_multiplayer:
 		return
 	if _player == null:
 		return
 	_cancel_player_actions()
 	var from := _player.global_position
+	_ground_y = from.y
 	var to := _snap_landing(landing_world, from.y)
 	var horiz := Vector3(to.x - from.x, 0.0, to.z - from.z).length()
 	var flight := ChargerLaunchScript.flight_time_for_distance(horiz)
@@ -57,6 +66,23 @@ func begin_charger_hit(landing_world: Vector3, gravity: float) -> void:
 	_post_land_left = 0.0
 	visual_active = true
 	_knock_off_broom()
+
+
+func tick_lookdev(delta: float, gravity: float) -> void:
+	_ensure_player()
+	if not _stunned or _player == null:
+		return
+	if _airborne:
+		_player.velocity.y -= maxf(gravity, 0.0) * delta
+		_player.global_position += _player.velocity * delta
+		if _player.global_position.y <= _ground_y:
+			_player.global_position.y = _ground_y
+			_begin_post_land()
+		return
+	_player.velocity = Vector3.ZERO
+	_post_land_left -= delta
+	if _post_land_left <= 0.0:
+		_end_stun()
 
 
 func tick_physics(player: CharacterBody3D, delta: float, gravity: float) -> void:
@@ -84,9 +110,8 @@ func rpc_begin_charger_hit(landing_world: Vector3) -> void:
 		var sender := multiplayer.get_remote_sender_id()
 		if sender != 0 and sender != 1:
 			return
-	var g := 18.0
-	if _player != null and "gravity" in _player:
-		g = float(_player.get("gravity"))
+	_ensure_player()
+	var g := ChargerLaunchScript.gravity_of(_player, 18.0)
 	begin_charger_hit(landing_world, g)
 
 

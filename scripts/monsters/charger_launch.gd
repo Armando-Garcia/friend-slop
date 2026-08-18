@@ -3,7 +3,8 @@ extends RefCounted
 
 ## Pure helpers for Charger ram speed, maze-safe landings, and launch arcs.
 
-const CHARGE_SPEED_MULT := 2.0
+const CHARGE_SPEED_MULT := 2.3
+const PATROL_SPEED_MULT := 0.8
 const MIN_CELL_DISTANCE := 2
 const DEFAULT_CELL_SIZE_M := 3.0
 const MIN_FLIGHT_SEC := 0.7
@@ -11,8 +12,22 @@ const MAX_FLIGHT_SEC := 1.35
 const FLIGHT_DIST_REF_M := 12.0
 
 
+static func plunge_pitch_rad(plunge_deg: float) -> float:
+	## 360° = looking ahead. 330° = 30° down. Snout-down is negative X pitch.
+	return deg_to_rad(plunge_deg - 360.0)
+
+
+static func toss_pitch_rad(toss_deg: float) -> float:
+	## Positive X pitch lifts the snout (gore / throw).
+	return deg_to_rad(toss_deg)
+
+
 static func charge_speed(sprint_speed: float) -> float:
 	return maxf(0.0, sprint_speed) * CHARGE_SPEED_MULT
+
+
+static func patrol_speed(walk_speed: float) -> float:
+	return maxf(0.0, walk_speed) * PATROL_SPEED_MULT
 
 
 static func chebyshev(a: Vector2i, b: Vector2i) -> int:
@@ -61,6 +76,17 @@ static func pick_landing_cell(
 	if rng != null:
 		idx = rng.randi_range(0, pool.size() - 1)
 	return pool[idx]
+
+
+static func gravity_of(node: Object, fallback: float) -> float:
+	if node == null:
+		return fallback
+	var raw: Variant = node.get("gravity")
+	if raw is float:
+		return raw
+	if raw is int:
+		return float(raw)
+	return fallback
 
 
 static func flight_time_for_distance(horiz_m: float) -> float:

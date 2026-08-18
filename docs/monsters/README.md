@@ -16,14 +16,14 @@ Documented **as-is**. Ash / Ember are scene variants of `Monster` (no subclasses
 | **Charger** | [scenes/monsters/charger.tscn](../../scenes/monsters/charger.tscn) | [charger.gd](../../scripts/monsters/charger.gd) | Facing-cone ram + held ward; `CLOSE_IN` |
 | **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
-Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev gallery: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
+Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev sandbox: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn) — select **PatrolArea** and move/scale it on XZ (independent of spawn). Pathing and spawn pads stay on: **green** lines are preferred patrol corridors; **red** lines with arrows are one-way maze routes back into the patrol rect. Magenta / cyan beacons mark the selected monster and player spawn pads. Orange/yellow fills are maze clearings.
 
 | Type | HP | Speed | Chase range | Notes |
 |------|----|-------|-------------|-------|
 | Wretch | 50 | 3.2 | 2.5 | No default proximity aggro; senses + rat relay |
 | Ash | 55 | 2.8 | 11 | Grey tint |
 | Ember | 45 | 3.6 | 14 | Orange/red tint |
-| Charger | 60 | 3.0 | 3.0 | Green; ram at 2× player sprint |
+| Charger | 60 | 2.4 patrol | 3.0 | Green; patrol 80% player walk; ram at 230% sprint |
 | Rat | 10 | 4.4 | 10 | Leashed to host |
 
 ---
@@ -60,7 +60,9 @@ flowchart TB
 | `MonsterChaseMove` | [monster_chase_move.gd](../../scripts/monsters/monster_chase_move.gd) |
 | `MonsterCombatSpacing` | [monster_combat_spacing.gd](../../scripts/monsters/monster_combat_spacing.gd) |
 | `MonsterRangeGizmos` | [monster_range_gizmos.gd](../../scripts/monsters/monster_range_gizmos.gd) |
+| `MonsterSenseGizmos` | [monster_sense_gizmos.gd](../../scripts/monsters/monster_sense_gizmos.gd) |
 | `ChargerLaunch` | [charger_launch.gd](../../scripts/monsters/charger_launch.gd) |
+| `ChargerCharge` | [charger_charge.gd](../../scripts/monsters/charger_charge.gd) |
 
 ---
 
@@ -73,7 +75,8 @@ Prefer authored children over invisible script-only wiring.
 ```
 Monster (Character + monster.gd)
 ├── Body / Eyes
-└── Senses/          # empty by default; add Sight / Hearing children
+├── Senses/          # empty by default; add Sight / Hearing / Light children
+└── SenseGizmos      # cyan hear, green sight, yellow light, LOS ray
 ```
 
 ### Casters (Ash / Ember)
@@ -104,7 +107,8 @@ Wretch (wretch.gd)
 ```
 WretchRat (Summon → wretch_rat)
 ├── Body/ExplodeLight
-└── Senses/Sight
+├── Senses/Sight
+└── SenseGizmos
 ```
 
 ### Charger
@@ -214,19 +218,19 @@ Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.g
 
 ### Charger
 
-Sight-only ram. No default proximity aggro. Poor hearing (1.8 m); a 24 m facing cone with LOS starts the attack.
+Sight-only ram. No default proximity aggro. Poor hearing (1.8 m); a 24 m facing cone with LOS starts the attack. The same three phases run in `charger.tscn` lookdev, monster workspace, and the match (`ChargerCharge`).
 
-1. Turn to face the seen player.
-2. Wind up **1.2 s** while tinting green → red. Casts a held ward onto `ShieldHold` (**80** HP = **4** fireballs); the dome tints red as HP drops.
-3. Ram at **2× player sprint**, locked direction.
-4. Slide hits on the per-part body shapes (haunch, shoulders, neck, head, snout, legs) launch every rammed player into a random open maze cell **≥ 2** away (never walls / out of maze). Players stay stunned until **1.5 s after landing**.
-5. Charge ends on a wall: ward shatters, Charger is stunned **3 s** with orbiting stars.
+1. **Lock-on / telegraph:** Sight lock. Immediately casts a held ward onto `ShieldHold` (**80** HP = **4** fireballs). Always faces that player. Bows its head and tints green → red. Telegraph ends only when fully red **and** the head bow is finished (~**1.2 s**).
+2. **Charge:** Runs at **230% player sprint**. Direction is locked; it cannot steer. Hitting a player bucks the head up and launches them into a random open maze cell **≥ 2** away. The player is stunned until **1.5 s after landing**. The Charger is **not** stunned by a player hit.
+3. **Wall stun:** The ram ends only on a maze wall (not the held ward, not a player). Ward shatters; Charger is stunned **3 s** with orbiting stars, then returns to patrol.
+
+Inspector on [charger.tscn](../../scenes/monsters/charger.tscn): **Preview Telegraph**, **Preview Charge** (pose in place), **Preview Wall Stun**. Monster workspace: the same buttons on the last spawned Charger run the live phases (charge runs toward the spawned player).
 
 | Ability | ID | Effect |
 |---------|----|--------|
-| Charge Ward | `charger_ward` | Held ward from windup; **80** HP (4 fireballs); red as it weakens; shatters on wall |
+| Charge Ward | `charger_ward` | Held ward from lock-on; **80** HP (4 fireballs); red as it weakens; shatters on wall |
 
-Scripts: [charger.gd](../../scripts/monsters/charger.gd), [charger_ward_ability.gd](../../scripts/monsters/abilities/charger_ward_ability.gd), [charger_launch.gd](../../scripts/monsters/charger_launch.gd). Stun overlay lives on `PlayableCharacter/Stun`.
+Scripts: [charger.gd](../../scripts/monsters/charger.gd), [charger_charge.gd](../../scripts/monsters/charger_charge.gd), [charger_ward_ability.gd](../../scripts/monsters/abilities/charger_ward_ability.gd), [charger_launch.gd](../../scripts/monsters/charger_launch.gd). Stun overlay lives on `PlayableCharacter/Stun`.
 
 ### Wretch (packmaster)
 
@@ -313,6 +317,7 @@ Any host with a `SummonHost` child gets pack wipe on death. Bound summons also d
 | [monster_combat_spacing.gd](../../scripts/monsters/monster_combat_spacing.gd) |
 | [monster_sight_sense.gd](../../scripts/monsters/monster_sight_sense.gd) |
 | [monster_hearing_sense.gd](../../scripts/monsters/monster_hearing_sense.gd) |
+| [monster_sense_gizmos.gd](../../scripts/monsters/monster_sense_gizmos.gd) |
 | [monster_ability.gd](../../scripts/monsters/monster_ability.gd) |
 
 ### Abilities
@@ -334,6 +339,7 @@ Any host with a `SummonHost` child gets pack wipe on death. Bound summons also d
 | Path |
 |------|
 | [tests/unit/test_monster_ai.gd](../../tests/unit/test_monster_ai.gd) |
+| [tests/unit/test_monster_sense_gizmos.gd](../../tests/unit/test_monster_sense_gizmos.gd) |
 | [tests/unit/test_summon.gd](../../tests/unit/test_summon.gd) |
 
 ---

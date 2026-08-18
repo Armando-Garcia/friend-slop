@@ -11,6 +11,8 @@ res://tests/unit/test_monster_ai.gd
 res://tests/unit/test_monster_patrol.gd
 res://tests/unit/test_maze_path_graph.gd
 res://tests/unit/test_charger_launch.gd
+res://tests/unit/test_charger_charge.gd
+res://tests/unit/test_charger_charge_target.gd
 res://tests/unit/test_monster_sense_gizmos.gd
 res://tests/unit/test_monster_sense.gd
 res://tests/unit/test_stun_stars.gd

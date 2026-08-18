@@ -10,7 +10,9 @@ const FireballProjectileScript := preload("res://scripts/spells/fireball_project
 const GameWorldScript := preload("res://scripts/game_world.gd")
 const FIREBALL_EQUIVALENT := 4
 
+## Dome radius (m) of the ward held during telegraph and the ram.
 @export_range(0.4, 1.4, 0.05) var shield_radius: float = 0.7
+## Ward HP. Default 80 = four fireballs at 20 damage each. Dome tints red as it drops.
 @export_range(20.0, 200.0, 1.0) var shield_hit_points: float = 80.0
 
 
