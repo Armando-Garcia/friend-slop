@@ -244,11 +244,17 @@ func _is_player_menu_open() -> bool:
 
 func _wand_controls_blocked() -> bool:
 	return (
-		_is_spellbook_open()
+		is_stunned()
+		or _is_spellbook_open()
 		or _is_player_menu_open()
 		or _is_monster_book_busy()
 		or get_tree().paused
 	)
+
+
+func is_stunned() -> bool:
+	var stun := get_node_or_null("Stun")
+	return stun != null and stun.has_method("is_stunned") and bool(stun.call("is_stunned"))
 
 
 func _confirm_fake_wall_placement(spell: SpellDefinition, params: Dictionary) -> void:
@@ -941,6 +947,15 @@ func _physics_process(delta: float) -> void:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
+
+	if is_stunned():
+		var stun := get_node("Stun")
+		stun.call("tick_physics", self, delta, gravity)
+		move_and_slide()
+		if not bool(stun.call("is_launching")):
+			_separate_from_players()
+		_update_interaction_prompt()
+		return
 
 	var flight := _get_broom_flight()
 	if flight != null and flight.has_method("is_active") and bool(flight.call("is_active")):
