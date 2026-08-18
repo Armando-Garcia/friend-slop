@@ -31,7 +31,33 @@ func can_cast() -> bool:
 	return _cooldown_left <= 0.0 and not _burst_active and is_inside_tree()
 
 
+func reset_for_combo() -> void:
+	super.reset_for_combo()
+	_burst_active = false
+
+
+func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
+	if not can_cast():
+		return false
+	var aim: Variant = _resolve_aim_point(monster, target)
+	if not aim is Vector3:
+		return false
+	return _is_aim_in_cast_range(monster, aim as Vector3)
+
+
+func is_target_in_range(monster: Node3D, target: Node3D) -> bool:
+	var aim: Variant = _resolve_aim_point(monster, target)
+	if not aim is Vector3:
+		return false
+	return _is_aim_in_cast_range(monster, aim as Vector3)
+
+
 func begin_cast(monster: Node3D, target: Node3D) -> void:
+	stop_windup_fx()
+	_run_burst(monster, target)
+
+
+func release_charge(monster: Node3D, target: Node3D) -> void:
 	stop_windup_fx()
 	_run_burst(monster, target)
 
@@ -76,7 +102,7 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 func _run_burst(monster: Node3D, target: Node3D) -> void:
 	if _burst_active:
 		return
-	if monster == null or target == null:
+	if monster == null:
 		return
 	_burst_active = true
 	var shots := maxi(shots_per_burst, 1)
@@ -85,11 +111,11 @@ func _run_burst(monster: Node3D, target: Node3D) -> void:
 			break
 		if monster == null or not is_instance_valid(monster):
 			break
-		var aim := target
-		if aim == null or not is_instance_valid(aim):
+		var aim: Variant = _resolve_aim_point(monster, target)
+		if not aim is Vector3:
 			break
 		var side := 1.0 if (i % 2) == 0 else -1.0
-		_spawn_bolt(monster, aim, side)
+		_spawn_bolt_at(monster, aim as Vector3, side)
 		if i < shots - 1:
 			var tree := get_tree()
 			if tree == null:
@@ -99,10 +125,43 @@ func _run_burst(monster: Node3D, target: Node3D) -> void:
 	_burst_active = false
 
 
-func _spawn_bolt(monster: Node3D, target: Node3D, side_sign: float) -> void:
+func _spawn_bolt_at(monster: Node3D, aim: Vector3, side_sign: float) -> void:
 	var parent := _projectile_parent(monster)
 	var origin := resolve_cast_origin(monster)
-	AshIceProjectileScript.spawn(parent, origin, target, monster, side_sign)
+	AshIceProjectileScript.spawn_toward_point(parent, origin, aim, monster, side_sign)
+
+
+func _resolve_aim_point(monster: Node3D, target: Node3D) -> Variant:
+	var live := _get_aggro_player(monster)
+	if live != null:
+		return live.global_position
+	if monster != null and monster.has_method("get_last_aggro_player_aim"):
+		var last = monster.call("get_last_aggro_player_aim")
+		if last is Vector3:
+			return last
+	if target != null and is_instance_valid(target) and target.is_in_group("player"):
+		return target.global_position
+	return null
+
+
+func _get_aggro_player(monster: Node3D) -> Node3D:
+	if monster != null and monster.has_method("get_aggro_player_target"):
+		var aggro: Variant = monster.call("get_aggro_player_target")
+		if aggro is Node3D and is_instance_valid(aggro as Node3D):
+			return aggro as Node3D
+	return null
+
+
+func _is_aim_in_cast_range(monster: Node3D, aim: Vector3) -> bool:
+	if monster == null:
+		return false
+	var flat := Vector3(
+		aim.x - monster.global_position.x,
+		0.0,
+		aim.z - monster.global_position.z
+	)
+	var dist := flat.length()
+	return dist >= min_cast_range and dist <= max_cast_range
 
 
 func _projectile_parent(monster: Node3D) -> Node:

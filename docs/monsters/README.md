@@ -2,7 +2,7 @@
 
 Developer map of how combat monsters are wired today: class hierarchy, scene ownership, AI, abilities, and Wretch summons.
 
-Documented **as-is**. Ash / Ember are scene variants of `Monster` (no subclasses). Summons use their own `Character` → `Summon` base (not `Monster`).
+Documented **as-is**. Ember uses [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd). Ash uses [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd). Summons use their own `Character` → `Summon` base (not `Monster`).
 
 ---
 
@@ -11,8 +11,8 @@ Documented **as-is**. Ash / Ember are scene variants of `Monster` (no subclasses
 | Type | Scene | Script | Kit / behavior |
 |------|-------|--------|----------------|
 | **Wretch** | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) | [wretch.gd](../../scripts/monsters/wretch.gd) | Summon Rats + Command Pack; `KEEP_AWAY` @ 20 m; Sight + Hearing |
-| **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | base [monster.gd](../../scripts/monsters/monster.gd) | Ice Bolt + Ash Ward; `CLOSE_IN` |
-| **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | base [monster.gd](../../scripts/monsters/monster.gd) | Ember Lob + Ember Halo; `CLOSE_IN` |
+| **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd) | Caster combat: charge/hold/throw; ward→frost→ice combo; `CLOSE_IN` |
+| **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: charge/hold/throw; halo→dash→lob combo; `CLOSE_IN` |
 | **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
 Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev gallery: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
@@ -21,7 +21,7 @@ Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn
 |------|----|-------|-------------|-------|
 | Wretch | 50 | 3.2 | 2.5 | No default proximity aggro; senses + rat relay |
 | Ash | 55 | 2.8 | 11 | Grey tint |
-| Ember | 45 | 3.6 | 14 | Orange/red tint |
+| Ember | 45 | 3.24 | 14 | Orange/red tint |
 | Rat | 10 | 4.4 | 10 | Leashed to host |
 
 ---
@@ -35,8 +35,8 @@ flowchart TB
   Character --> Summon
   Monster --> Wretch
   Summon --> WretchRat
-  Monster --> AshWretch["Ash Wretch scene variant"]
-  Monster --> EmberWretch["Ember Wretch scene variant"]
+  Monster --> AshWretch["Ash Wretch (ash_wretch.gd)"]
+  Monster --> EmberWretch["Ember Wretch (ember_wretch.gd)"]
 ```
 
 | Class | File | Role |
@@ -77,8 +77,8 @@ Monster (Character + monster.gd)
 *Wretch (Monster)
 ├── Body/Hands/{RightHand, LeftHand}   # %unique for cast FX
 └── Abilities/
-    ├── <AbilityA>   # MonsterAbility child
-    └── <AbilityB>
+	├── <AbilityA>   # MonsterAbility child
+	└── <AbilityB>
 ```
 
 ### Wretch
@@ -90,8 +90,8 @@ Wretch (wretch.gd)
 ├── SummonHost          # max_summons = 3
 ├── Ritual              # WretchRitualPose
 └── Abilities/
-    ├── SummonRats      # requires_target = false
-    └── CommandPack     # requires_target = false; hearing aim OK
+	├── SummonRats      # requires_target = false
+	└── CommandPack     # requires_target = false; hearing aim OK
 ```
 
 ### Wretch Rat
@@ -174,6 +174,47 @@ flowchart LR
 
 ---
 
+## Caster combat (Ash / Ember)
+
+Both wretches use a `CasterCombat` child node ([monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd)) instead of the legacy walk-or-cast loop.
+
+```mermaid
+stateDiagram-v2
+	[*] --> Neutral
+	Neutral --> Charging: standing still, hand glow windup
+	Charging --> Charged: windup done, spell held
+	Charged --> Throwing: in cast band
+	Charged --> RetreatingCharged: out of band or too close
+	RetreatingCharged --> Throwing: re-enter band while holding
+	Throwing --> Neutral: release + cooldown
+	Neutral --> ComboActive: retreat triggers combo roll
+	ComboActive --> Neutral: pattern done
+```
+
+| Rule | Behavior |
+|------|----------|
+| Charge | Only while standing still (not strafing/retreating/dashing) |
+| Hold | Hand FX stays after windup; monster may retreat while charged |
+| Release | `release_charge()` when target enters acceptable range |
+| Combo | Fixed ability order; **resets all ability cooldowns** on start and runs each step via combo fire paths (ignores prior casts / range gates); see wretch-specific triggers below or `debug_force_combo` |
+
+Combo patterns ([monster_combo_step.gd](../../scripts/monsters/monster_combo_step.gd)):
+
+- **Ash:** ward (instant) → frost cloud (instant, **0.6** s delay) → ice burst (charge+throw, 2 bolts)
+- **Ember:** halo (charge+throw) → dash (instant) → lob (charge+throw)
+
+Combo triggers (within **8** m where range applies):
+
+| Wretch | Trigger | Chance |
+|--------|---------|--------|
+| Ash | Backing up under pressure (retreat) | **85%** |
+| Ash | Taking damage while a player is within **8** m | **85%** |
+| Ember | Backing up under pressure (retreat) | **70%** |
+| Ember | Taking damage while a player is within **8** m | **70%** (each hit; resolves player from projectiles) |
+| Ember | First time dropping below **35%** HP | **100%** (once per life) |
+
+---
+
 ## Kits
 
 ### Ember Wretch
@@ -181,18 +222,20 @@ flowchart LR
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
 | Ember Lob | `ember_lob` | 5.5 s / 0.55 s | 3.5–13 m | Arc then dive; **20** damage + fireball knockback; ward-blockable |
-| Ember Halo | `ember_halo` | 7 s / 0.6 s | 2.5–11 m | Expanding ring; player knockback ×0.35 + brief slow; **no HP damage** |
+| Ember Halo | `ember_halo` | 7 s / 0.6 s | 2.5–11 m | Expanding **ring** glides toward player at **14 m/s**; rim = light-moderate knockback + brief slow; **center jump pad** launches **2 m**; **no HP damage** |
+| Ember Dash | `ember_dash` | **9** s / instant | combo step 2 | Dash behind player (4.05× speed); burn trail; CD resets below **35%** HP; low-HP also triggers combo |
 
-Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_ability.gd), [ember_halo_ability.gd](../../scripts/monsters/abilities/ember_halo_ability.gd). Projectiles under [scenes/monsters/abilities/](../../scenes/monsters/abilities/).
+Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_ability.gd), [ember_halo_ability.gd](../../scripts/monsters/abilities/ember_halo_ability.gd), [ember_dash_ability.gd](../../scripts/monsters/abilities/ember_dash_ability.gd), [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd). Projectiles under [scenes/monsters/abilities/](../../scenes/monsters/abilities/).
 
 ### Ash Wretch
 
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
 | Ice Bolt | `ash_ice` | 6 s / 0.5 s | 3–14 m | Burst of **2** bolts (0.5 s apart); **14** damage + knockback each |
-| Ash Ward | `ash_ward` | 7 s / 0.45 s | needs chase target | Spawns player-style ward for **3** s |
+| Ash Ward | `ash_ward` | 7 s / 0.45 s | needs chase target | Player-style ward **2.5** s; blocks **1** spell then shatters |
+| Frost Breath | `ash_frost_breath` | **10** s / instant | 0–**8** m | Combo step 2 only: frost cloud **projectile**; **10** dmg, knockback, **50%** slow **2.2** s, **40** mana drain if spell armed |
 
-Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd).
+Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd), [ash_frost_breath_ability.gd](../../scripts/monsters/abilities/ash_frost_breath_ability.gd), [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd).
 
 ### Wretch (packmaster)
 

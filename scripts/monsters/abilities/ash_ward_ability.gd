@@ -2,12 +2,12 @@
 class_name AshWardAbility
 extends "res://scripts/monsters/monster_ability.gd"
 
-## Left-hand ward: same shield as the player spell, lasting 3 seconds.
+## Left-hand ward: same shield as the player spell, lasting 2.5 seconds.
 
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
 const GameWorldScript := preload("res://scripts/game_world.gd")
 
-@export_range(0.5, 10.0, 0.1) var ward_duration_sec: float = 3.0
+@export_range(0.5, 10.0, 0.1) var ward_duration_sec: float = 2.5
 
 
 func _ready() -> void:
@@ -73,9 +73,24 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 			dir = -monster.global_transform.basis.z
 		else:
 			dir = dir.normalized()
-	var ward: Node = WardShieldScript.spawn(parent, origin, dir)
-	if ward != null and ward.has_method("set_duration_sec"):
-		ward.call("set_duration_sec", ward_duration_sec)
+	var ward: Node = WardShieldScript.spawn(parent, origin, dir, 1, ward_duration_sec)
+	if ward != null and ward.has_method("set_caster"):
+		ward.call("set_caster", monster)
+
+
+func fire_instant(monster: Node3D, target: Node3D) -> void:
+	if not can_cast() or monster == null:
+		return
+	_fire_cast(monster, target)
+	begin_cooldown()
+
+
+func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	if monster == null:
+		return
+	_fire_cast(monster, target)
+	begin_cooldown()
 
 
 func _ward_parent(monster: Node3D) -> Node:

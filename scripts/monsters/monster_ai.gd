@@ -218,3 +218,47 @@ static func retreat_velocity_clamped(
 	if horizontal_distance(next, player) > max_dist:
 		return Vector3(0.0, y_velocity, 0.0)
 	return Vector3(flat_dir.x * speed, y_velocity, flat_dir.z * speed)
+
+
+## Flat unit vector of where the player is looking (XZ only).
+static func player_facing_flat(player: Node3D) -> Vector3:
+	if player == null:
+		return Vector3(0.0, 0.0, -1.0)
+	var head := player.get_node_or_null("Head") as Node3D
+	var basis: Basis = head.global_transform.basis if head != null else player.global_transform.basis
+	var forward := Vector3(-basis.z.x, 0.0, -basis.z.z)
+	if forward.length_squared() < 0.0001:
+		return Vector3(0.0, 0.0, -1.0)
+	return forward.normalized()
+
+
+## Landing spot behind the player's view at preferred range, biased to the monster's side.
+static func pick_dash_landing_behind(
+	monster_pos: Vector3,
+	player: Node3D,
+	preferred_range: float,
+	max_dist_from_player: float
+) -> Vector3:
+	if player == null:
+		return monster_pos
+	var player_pos := player.global_position
+	var forward := player_facing_flat(player)
+	var behind := -forward
+	var lateral := Vector3(-forward.z, 0.0, forward.x)
+	var to_monster := Vector3(
+		monster_pos.x - player_pos.x, 0.0, monster_pos.z - player_pos.z
+	)
+	var side_sign := signf(lateral.dot(to_monster))
+	if absf(side_sign) < 0.01:
+		side_sign = 1.0
+	var dist := clampf(preferred_range * 0.95, 1.0, max_dist_from_player)
+	var landing := player_pos + behind * dist + lateral * side_sign * 0.5
+	landing.y = monster_pos.y
+	var to_landing := Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.dot(forward) > 0.0:
+		landing = player_pos + behind * dist + lateral * side_sign * 0.5
+		to_landing = Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.length_squared() > 0.0001 and to_landing.length() > max_dist_from_player:
+		landing = player_pos + to_landing.normalized() * max_dist_from_player
+		landing.y = monster_pos.y
+	return landing

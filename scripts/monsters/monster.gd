@@ -21,6 +21,7 @@ const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const MonsterChaseMoveScript := preload("res://scripts/monsters/monster_chase_move.gd")
 const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_combat_spacing.gd")
+const MonsterCasterCombatScript := preload("res://scripts/monsters/monster_caster_combat.gd")
 const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
 
 const DEFAULT_TINT := Color(0.72, 0.28, 0.22, 1.0)
@@ -202,6 +203,9 @@ func get_combat_abilities() -> Array[Node]:
 	if root == null:
 		return out
 	for child in root.get_children():
+		if "participates_in_cast_rotation" in child:
+			if not bool(child.get("participates_in_cast_rotation")):
+				continue
 		if (
 			child.has_method("can_cast")
 			and child.has_method("begin_cast")
@@ -289,7 +293,7 @@ func _apply_hurt_knockback() -> void:
 	_knockback_timer = maxf(_knockback_timer, HURT_KNOCKBACK_TIMER_SEC)
 
 
-func _health_ratio() -> float:
+func get_health_ratio() -> float:
 	if max_health <= 0.001:
 		return 1.0
 	return clampf(current_health / max_health, 0.0, 1.0)
@@ -297,7 +301,7 @@ func _health_ratio() -> float:
 
 func _apply_eye_glow_from_health() -> void:
 	## Full HP = authored glow; near death = darker / dimmer (Wretch green dims hard).
-	var t := 1.0 if Engine.is_editor_hint() else _health_ratio()
+	var t := 1.0 if Engine.is_editor_hint() else get_health_ratio()
 	var dead := Color(
 		eye_glow_color.r * EYE_DEAD_RGB_SCALE.x,
 		eye_glow_color.g * EYE_DEAD_RGB_SCALE.y,
@@ -535,7 +539,12 @@ func _physics_process(delta: float) -> void:
 	if _interest != null:
 		chase_target = _interest.get("target") as Node3D
 
-	if _casting_ability != null:
+	var caster_chase := MonsterCasterCombatScript.tick_monster_if_present(
+		self, delta, _ai_state, chase_target
+	)
+	if caster_chase:
+		pass
+	elif _casting_ability != null:
 		_tick_cast_windup(delta, chase_target)
 	elif _try_start_cast(chase_target):
 		pass
@@ -732,6 +741,10 @@ func is_chase_retreating() -> bool:
 	return _chase_move != null and _chase_move.is_retreating()
 
 
+func is_chase_moving() -> bool:
+	return _chase_move != null and _chase_move.is_moving()
+
+
 func _clear_chase_move() -> void:
 	if _chase_move != null:
 		_chase_move.clear()
@@ -753,7 +766,7 @@ func _optimal_combat_range() -> float:
 	if chase_style == ChaseStyle.KEEP_AWAY:
 		return keep_away_range
 	if _has_ranged_spacing_abilities():
-		var ability := _preferred_spacing_ability()
+		var ability := MonsterCombatSpacingScript.preferred_spacing(get_combat_abilities())
 		if ability != null:
 			return MonsterCombatSpacingScript.preferred_cast_ideal(ability)
 	return attack_range
@@ -781,6 +794,14 @@ func start_chase_strafe(target: Node3D, side_sign: float, duration_sec: float) -
 
 
 func start_chase_retreat(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	if MonsterCasterCombatScript.try_combo_instead_of_retreat_on(self, target):
+		return
+	_begin_chase_retreat_move(target, side_sign, duration_sec)
+
+
+func _begin_chase_retreat_move(
+	target: Node3D, side_sign: float, duration_sec: float
+) -> void:
 	_sync_chase_move_config()
 	if _chase_move != null:
 		_chase_move.start_retreat(
@@ -853,38 +874,16 @@ func _tick_ranged_cast_chase(target: Node3D) -> bool:
 		_tick_cast_windup(0.0, target)
 		return true
 
-	var awaiting := _first_ranged_castable_ability()
+	var awaiting := MonsterCombatSpacingScript.first_ranged_castable(get_combat_abilities())
 	if awaiting != null:
 		_move_toward_cast_range(target, awaiting)
 		return true
 
-	var spacer := _preferred_spacing_ability()
+	var spacer := MonsterCombatSpacingScript.preferred_spacing(get_combat_abilities())
 	if spacer != null:
 		_move_toward_cast_range(target, spacer)
 		return true
 	return false
-
-
-func _first_ranged_castable_ability() -> Node:
-	var abilities := get_combat_abilities()
-	for ability in abilities:
-		if "requires_target" in ability and not bool(ability.get("requires_target")):
-			continue
-		if not bool(ability.call("can_cast")):
-			continue
-		return ability
-	return null
-
-
-func _preferred_spacing_ability() -> Node:
-	var abilities := get_combat_abilities()
-	for ability in abilities:
-		if "requires_target" in ability and not bool(ability.get("requires_target")):
-			continue
-		return ability
-	if abilities.is_empty():
-		return null
-	return abilities[0]
 
 
 func _move_toward_cast_range(target: Node3D, ability: Node) -> void:

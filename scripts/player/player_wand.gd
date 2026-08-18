@@ -388,10 +388,17 @@ func return_from_cast_charge() -> void:
 			_start_defensive_return_to_idle()
 		_:
 			_start_p_shaped_wand_fx(height_t)
-			if _pose_tween != null and is_instance_valid(_pose_tween):
-				await _pose_tween.finished
+			await _await_pose_tween()
 			_pose_tween = null
 			_snap_to_pre_click_pose()
+
+
+func _await_pose_tween() -> void:
+	var tween := _pose_tween
+	if tween == null or not is_instance_valid(tween):
+		return
+	while tween.is_valid() and tween.is_running():
+		await get_tree().process_frame
 
 
 ## Workshop: return tip, then tip FX when idle again.

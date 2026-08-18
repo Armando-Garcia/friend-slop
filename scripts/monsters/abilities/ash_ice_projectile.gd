@@ -14,16 +14,16 @@ var _target: Node3D = null
 var _from: Vector3 = Vector3.ZERO
 var _control: Vector3 = Vector3.ZERO
 var _to: Vector3 = Vector3.ZERO
-var _t: float = 0.0
+var _arc_dist: float = 0.0
 var _age: float = 0.0
 var _finished: bool = false
 var _last_dir: Vector3 = Vector3.FORWARD
 
 
-static func spawn(
+static func spawn_toward_point(
 	parent: Node,
 	origin: Vector3,
-	target: Node3D,
+	aim_position: Vector3,
 	caster: Node3D = null,
 	side_sign: float = 1.0
 ) -> AshIceProjectile:
@@ -33,13 +33,46 @@ static func spawn(
 	var proj: AshIceProjectile = packed.instantiate() as AshIceProjectile
 	parent.add_child(proj)
 	proj.global_position = origin
-	proj.setup(target, caster, side_sign)
+	proj.setup_toward_point(aim_position, caster, side_sign)
 	return proj
 
 
-func setup(target: Node3D, caster: Node3D = null, side_sign: float = 1.0) -> void:
-	_target = target
+static func spawn(
+	parent: Node,
+	origin: Vector3,
+	target: Node3D,
+	caster: Node3D = null,
+	side_sign: float = 1.0
+) -> AshIceProjectile:
+	var aim := origin + Vector3.FORWARD * 8.0
+	if target != null and is_instance_valid(target):
+		aim = target.global_position
+	return spawn_toward_point(parent, origin, aim, caster, side_sign)
+
+
+func setup_toward_point(
+	aim_position: Vector3, caster: Node3D = null, side_sign: float = 1.0
+) -> void:
+	_target = null
 	_caster = caster
+	_build_projectile_body()
+	_from = global_position
+	_to = aim_position
+	_to.y = maxf(_to.y, 0.4)
+	_control = AshIceFlightScript.make_control(_from, _to, side_sign)
+	_arc_dist = 0.0
+	_last_dir = AshIceFlightScript.tangent(_from, _control, _to, 0.0)
+	set_physics_process(true)
+
+
+func setup(target: Node3D, caster: Node3D = null, side_sign: float = 1.0) -> void:
+	var aim := global_position + Vector3.FORWARD * 8.0
+	if target != null and is_instance_valid(target):
+		aim = target.global_position
+	setup_toward_point(aim, caster, side_sign)
+
+
+func _build_projectile_body() -> void:
 	monitoring = true
 	monitorable = false
 	collision_layer = 0
@@ -93,14 +126,6 @@ func setup(target: Node3D, caster: Node3D = null, side_sign: float = 1.0) -> voi
 	flakes.draw_pass_1 = smesh
 	add_child(flakes)
 
-	_from = global_position
-	_to = target.global_position if target != null else global_position + Vector3.FORWARD * 8.0
-	_to.y = maxf(_to.y, 0.4)
-	_control = AshIceFlightScript.make_control(_from, _to, side_sign)
-	_t = 0.0
-	_last_dir = AshIceFlightScript.tangent(_from, _control, _to, 0.0)
-	set_physics_process(true)
-
 
 func _physics_process(delta: float) -> void:
 	if _finished:
@@ -110,20 +135,18 @@ func _physics_process(delta: float) -> void:
 		_finish()
 		return
 
-	if _target != null and is_instance_valid(_target):
-		## Soft retarget so the curve still lands near a moving player.
-		var live := _target.global_position
-		live.y = maxf(live.y, 0.4)
-		_to = _to.lerp(live, clampf(delta * 2.5, 0.0, 1.0))
-
-	var next_t := AshIceFlightScript.advance_t(_from, _control, _to, _t, delta)
-	var next_pos := AshIceFlightScript.point_on_curve(_from, _control, _to, next_t)
+	var step := AshIceFlightScript.advance_arc_distance(
+		_from, _control, _to, _arc_dist, delta
+	)
+	var next_pos: Vector3 = step["position"]
+	var next_t: float = float(step["t"])
 	_last_dir = AshIceFlightScript.tangent(_from, _control, _to, next_t)
 	global_position = next_pos
-	_t = next_t
+	_arc_dist = float(step["distance"])
 	if _try_block_ward_overlap():
 		return
-	if _t >= 0.999:
+	var total_len := float(step["total_length"])
+	if _arc_dist >= total_len - 0.05 or next_t >= 0.999:
 		_finish()
 
 
@@ -131,6 +154,8 @@ func _on_body_entered(body: Node3D) -> void:
 	if _finished:
 		return
 	if body == _caster:
+		return
+	if _is_own_ward(body):
 		return
 	if _block_if_ward(body):
 		return
@@ -145,13 +170,24 @@ func _try_block_ward_overlap() -> bool:
 	for body in get_overlapping_bodies():
 		if body == _caster:
 			continue
+		if _is_own_ward(body):
+			continue
 		if _block_if_ward(body):
 			return true
 	return false
 
 
+func _is_own_ward(body: Node) -> bool:
+	var ward := SpellWardBlockScript.ward_from_node(body)
+	if ward == null or _caster == null:
+		return false
+	if not ward.has_method("is_owned_by"):
+		return false
+	return bool(ward.call("is_owned_by", _caster))
+
+
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body):
+	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE, _caster):
 		return false
 	_finish()
 	return true

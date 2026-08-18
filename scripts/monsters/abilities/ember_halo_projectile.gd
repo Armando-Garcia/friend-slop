@@ -1,7 +1,7 @@
 class_name EmberHaloProjectile
 extends Area3D
 
-## Flat expanding ring that travels toward the player. Jump + knockback + slow on hit.
+## Flat expanding ring toward the player. Rim = knockback + slow; center = jump pad.
 
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
@@ -18,7 +18,8 @@ var _distance: float = 0.0
 var _radius: float = EmberHaloFlightScript.START_RADIUS
 var _age: float = 0.0
 var _finished: bool = false
-var _hit_bodies: Dictionary = {}
+var _ring_hit_bodies: Dictionary = {}
+var _jump_pad_bodies: Dictionary = {}
 var _mesh: MeshInstance3D = null
 var _shape: CollisionShape3D = null
 var _cyl_shape: CylinderShape3D = null
@@ -54,15 +55,14 @@ func setup(toward: Vector3, caster: Node3D = null) -> void:
 
 	_shape = CollisionShape3D.new()
 	_cyl_shape = CylinderShape3D.new()
-	_cyl_shape.height = 0.35
+	_cyl_shape.height = 2.5
 	_cyl_shape.radius = _radius
 	_shape.shape = _cyl_shape
 	add_child(_shape)
-	body_entered.connect(_on_body_entered)
 
 	_mesh = MeshInstance3D.new()
 	var torus := TorusMesh.new()
-	torus.inner_radius = maxf(0.05, _radius * 0.72)
+	torus.inner_radius = EmberHaloFlightScript.inner_radius(_radius)
 	torus.outer_radius = _radius
 	torus.rings = 16
 	torus.ring_segments = 24
@@ -108,39 +108,67 @@ func _physics_process(delta: float) -> void:
 	)
 	_sync_radius_visual()
 	_try_block_ward_overlap()
+	_check_player_overlaps()
 
 
 func _sync_radius_visual() -> void:
 	if _cyl_shape != null:
-		_cyl_shape.radius = 0.5
+		_cyl_shape.radius = _radius
 	if _mesh != null and _mesh.mesh is TorusMesh:
 		var torus := _mesh.mesh as TorusMesh
 		torus.outer_radius = _radius
-		torus.inner_radius = maxf(0.05, _radius * 0.85)
+		torus.inner_radius = EmberHaloFlightScript.inner_radius(_radius)
 		_mesh.scale.y = 1
 
 
-func _on_body_entered(body: Node3D) -> void:
-	if _finished or body == null or body == _caster:
+func _check_player_overlaps() -> void:
+	if _finished:
 		return
-	if _block_if_ward(body):
-		return
-	if not body.is_in_group("player"):
-		return
-	var id := body.get_instance_id()
-	if _hit_bodies.has(id):
-		return
-	_hit_bodies[id] = true
-	var apply_local := true
+	for body in get_overlapping_bodies():
+		if body == null or body == _caster or not body.is_in_group("player"):
+			continue
+		if not body is Node3D:
+			continue
+		var player := body as Node3D
+		var flat_dist := EmberHaloFlightScript.flat_distance(global_position, player.global_position)
+		var id := player.get_instance_id()
+		if EmberHaloFlightScript.is_in_center(flat_dist, _radius):
+			if _jump_pad_bodies.has(id):
+				continue
+			_jump_pad_bodies[id] = true
+			_apply_jump_pad(player)
+		elif EmberHaloFlightScript.is_in_ring(flat_dist, _radius):
+			if _ring_hit_bodies.has(id):
+				continue
+			_ring_hit_bodies[id] = true
+			_apply_ring_hit(player)
+
+
+func _should_apply_local(body: Node) -> bool:
 	var state := get_tree().root.get_node_or_null("GameState") if get_tree() != null else null
 	var mp := state != null and bool(state.get("is_multiplayer"))
 	if mp and body is Node:
-		apply_local = (body as Node).is_multiplayer_authority()
-	if apply_local and body.has_method("apply_ember_halo_hit"):
+		return (body as Node).is_multiplayer_authority()
+	return true
+
+
+func _apply_jump_pad(body: Node3D) -> void:
+	if not _should_apply_local(body):
+		return
+	if body.has_method("apply_ember_halo_jump_pad"):
+		body.call("apply_ember_halo_jump_pad")
+	elif body.has_method("apply_ember_halo_hit"):
+		## Fallback for stubs without jump-pad hook.
+		body.call("apply_ember_halo_hit", Vector3.ZERO)
+
+
+func _apply_ring_hit(body: Node3D) -> void:
+	if not _should_apply_local(body):
+		return
+	if body.has_method("apply_ember_halo_hit"):
 		body.call("apply_ember_halo_hit", _direction)
-	elif apply_local:
-		if body.has_method("apply_fireball_knockback"):
-			body.call("apply_fireball_knockback", _direction * 0.35)
+	elif body.has_method("apply_fireball_knockback"):
+		body.call("apply_fireball_knockback", _direction * 0.35)
 		if body.has_method("apply_speed_boost"):
 			body.call(
 				"apply_speed_boost",

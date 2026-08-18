@@ -57,13 +57,42 @@ var _beam_mat: StandardMaterial3D
 var _rim: MeshInstance3D
 var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
+var _block_listener: Callable = Callable()
+var _persist_through_blocks := false
+var _caster: Node3D = null
+
+
+func set_block_listener(listener: Callable) -> void:
+	_block_listener = listener
+
+
+func set_persist_through_blocks(enabled: bool) -> void:
+	## When true, blocked spells feed listeners but the dome stays until duration ends.
+	_persist_through_blocks = enabled
+
+
+func set_caster(caster: Node3D) -> void:
+	_caster = caster
+	_apply_caster_collision_exception()
+
+
+func is_owned_by(node: Node) -> bool:
+	return _caster != null and is_instance_valid(_caster) and node == _caster
+
+
+func _apply_caster_collision_exception() -> void:
+	if _body == null or _caster == null:
+		return
+	if _caster is CollisionObject3D:
+		_body.add_collision_exception_with(_caster as CollisionObject3D)
 
 
 static func spawn(
 	parent: Node,
 	origin: Vector3,
 	direction: Vector3,
-	hit_capacity: int = 1
+	hit_capacity: int = 1,
+	duration_sec: float = -1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
 	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
@@ -72,6 +101,8 @@ static func spawn(
 		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)
 	elif parent != null:
 		parent.add_child(ward)
+	if duration_sec > 0.0 and ward.has_method("set_duration_sec"):
+		ward.call("set_duration_sec", duration_sec)
 	if ward.has_method("setup_cast"):
 		ward.call("setup_cast", origin, direction, hit_capacity)
 	return ward
@@ -134,6 +165,22 @@ func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> v
 	_hits_remaining = maxi(hit_capacity, 1)
 	_lifetime_active = false
 	## Editor look-dev trees are often paused; keep cast FX + lifetime ticking.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(true)
+	_ensure_runtime_material()
+	_prepare_for_cast_fx()
+	_play_cast_sequence()
+
+
+func setup_sphere_cast(origin: Vector3, hit_capacity: int, sphere_radius: float) -> void:
+	radius = maxf(sphere_radius, 0.05)
+	surface_fraction = 0.95
+	_rebuild_geometry()
+	_wand_origin = origin
+	global_transform = Transform3D(Basis.IDENTITY, origin)
+	_lifetime = 0.0
+	_hits_remaining = maxi(hit_capacity, 1)
+	_lifetime_active = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process(true)
 	_ensure_runtime_material()
@@ -320,6 +367,7 @@ func _finish_form() -> void:
 func _enable_collision() -> void:
 	if _body != null:
 		_body.collision_layer = _body_collision_layer
+		_apply_caster_collision_exception()
 
 
 func _process(delta: float) -> void:
@@ -335,9 +383,13 @@ func _process(delta: float) -> void:
 		_dissolve()
 
 
-func notify_spell_blocked() -> void:
+func notify_spell_blocked(blocked_damage: float = 0.0) -> void:
 	## Each blocked spell spends one hit; dissolve when capacity is empty.
-	if _hits_remaining <= 0:
+	if not _persist_through_blocks and _hits_remaining <= 0:
+		return
+	if _block_listener.is_valid():
+		_block_listener.call(blocked_damage)
+	if _persist_through_blocks:
 		return
 	_hits_remaining -= 1
 	if _hits_remaining <= 0:

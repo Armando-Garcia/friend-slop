@@ -6,7 +6,8 @@
 [ext_resource type="Script" uid="uid://bs40kshe12kjn" path="res://scripts/monsters/wretch.gd" id="4_1qyjm"]
 [ext_resource type="PackedScene" uid="uid://dtmkhfh4qil65" path="res://scenes/monsters/ember_wretch.tscn" id="4_ember"]
 [ext_resource type="PackedScene" uid="uid://bplayerwand1" path="res://scenes/characters/player_wand.tscn" id="5_wand"]
-[ext_resource type="Script" uid="uid://cmonster001gd" path="res://scripts/monsters/monster.gd" id="8_32ji6"]
+[ext_resource type="Script" uid="uid://rxpnsswg71kr" path="res://scripts/monsters/ash_wretch.gd" id="6_32ji6"]
+[ext_resource type="Script" uid="uid://beg1fd8htdtoo" path="res://scripts/monsters/ember_wretch.gd" id="8_y2ad6"]
 
 [sub_resource type="Environment" id="Environment_studio"]
 background_mode = 1
@@ -24,27 +25,15 @@ roughness = 0.92
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
 size = Vector3(16, 0.2, 16)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rxmn7"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2ad6"]
 transparency = 1
 cull_mode = 2
 shading_mode = 0
 albedo_color = Color(1, 0.35, 0.2, 0.22)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_32ji6"]
+[sub_resource type="CylinderMesh" id="CylinderMesh_eh2yq"]
 top_radius = 2.0
 bottom_radius = 2.0
-height = 0.02
-radial_segments = 48
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_y2ad6"]
-transparency = 1
-cull_mode = 2
-shading_mode = 0
-albedo_color = Color(1, 0.85, 0.2, 0.28)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_eh2yq"]
-top_radius = 1.4
-bottom_radius = 1.4
 height = 0.02
 radial_segments = 48
 
@@ -52,11 +41,11 @@ radial_segments = 48
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(1, 0.35, 0.2, 0.22)
+albedo_color = Color(1, 0.85, 0.2, 0.28)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_bg0kg"]
-top_radius = 11.0
-bottom_radius = 11.0
+top_radius = 1.4
+bottom_radius = 1.4
 height = 0.02
 radial_segments = 48
 
@@ -64,11 +53,11 @@ radial_segments = 48
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(1, 0.85, 0.2, 0.28)
+albedo_color = Color(1, 0.35, 0.2, 0.22)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_dw527"]
-top_radius = 1.35
-bottom_radius = 1.35
+top_radius = 11.0
+bottom_radius = 11.0
 height = 0.02
 radial_segments = 48
 
@@ -76,11 +65,11 @@ radial_segments = 48
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(1, 0.35, 0.2, 0.22)
+albedo_color = Color(1, 0.85, 0.2, 0.28)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_5sn8k"]
-top_radius = 14.0
-bottom_radius = 14.0
+top_radius = 1.35
+bottom_radius = 1.35
 height = 0.02
 radial_segments = 48
 
@@ -88,9 +77,21 @@ radial_segments = 48
 transparency = 1
 cull_mode = 2
 shading_mode = 0
-albedo_color = Color(1, 0.85, 0.2, 0.28)
+albedo_color = Color(1, 0.35, 0.2, 0.22)
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_o638l"]
+top_radius = 14.0
+bottom_radius = 14.0
+height = 0.02
+radial_segments = 48
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_s0sgb"]
+transparency = 1
+cull_mode = 2
+shading_mode = 0
+albedo_color = Color(1, 0.85, 0.2, 0.28)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_by6m0"]
 top_radius = 1.5
 bottom_radius = 1.5
 height = 0.02
@@ -100,8 +101,9 @@ radial_segments = 48
 process_mode = 3
 editor_description = "Monster look-dev gallery: Wretch / Ash / Ember. Dropdown picks the active target; Patrol/Chase, ability preview, and fireball hit that one."
 script = ExtResource("1_workspace")
-ability_1_name = "Summon Rats (Right)"
-ability_2_name = "Command Pack (Left)"
+monster_type = 1
+ability_1_name = "Ice Bolt (Right)"
+ability_2_name = "Ash Ward (Left)"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=772191922]
 environment = SubResource("Environment_studio")
@@ -126,46 +128,40 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_floor")
 
 [node name="Wand" parent="." unique_id=1812444268 instance=ExtResource("5_wand")]
-transform = Transform3D(0.7840458, -0.119392894, 0.6091119, 0, 0.98132604, 0.1923511, -0.6207029, -0.15081209, 0.76940453, -1.6, 1.05, 2.4)
+transform = Transform3D(0.8320503, 0.11296646, -0.5430752, 0, 0.97904295, 0.20365319, 0.55470014, -0.16944972, 0.8146129, -1.6, 1.05, 2.4)
 
 [node name="SpawnRoot" type="Node3D" parent="." unique_id=856043268]
 editor_description = "Gallery of current type scenes (Wretch left, Ash center, Ember right). Reloaded from packs on open."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 
-[node name="Wretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=329714363 instance=ExtResource("2_wretch")]
+[node name="Wretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=1794904746 instance=ExtResource("2_wretch")]
 process_mode = 3
-editor_description = "Packmaster Wretch. Tiny sight, moderate hearing, rat shared vision, ritual chase."
+editor_description = "Packmaster Wretch. Narrow 20m vision cone, moderate hearing, rat shared vision, ritual chase."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.5, 0, 0)
 script = ExtResource("4_1qyjm")
-chase_summon_cooldown_sec = 8.0
-face_turn_speed_rad = null
 eye_glow_color = Color(0.25, 1, 0.35, 1)
 lookdev_override = true
 show_combat_ranges = true
-max_health = 20.0
+max_health = 50.0
 chase_range = 2.0
-lost_chase_to_alert_sec = null
-alert_duration_sec = null
-death_linger_sec = 10.0
-death_fade_sec = 2.0
 chase_style = 1
 
-[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/Wretch" unique_id=187649091]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
-material_override = SubResource("StandardMaterial3D_rxmn7")
-cast_shadow = 0
-mesh = SubResource("CylinderMesh_32ji6")
-
-[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/Wretch" unique_id=1289213080]
+[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/Wretch" unique_id=1369814348]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
 material_override = SubResource("StandardMaterial3D_y2ad6")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_eh2yq")
 
-[node name="AshWretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=1830221347 instance=ExtResource("3_ash")]
+[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/Wretch" unique_id=209085220]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+material_override = SubResource("StandardMaterial3D_dsvrg")
+cast_shadow = 0
+mesh = SubResource("CylinderMesh_bg0kg")
+
+[node name="AshWretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=611691207 instance=ExtResource("3_ash")]
 process_mode = 3
-editor_description = "Ash Wretch. Grey chase eyes. Right hand Ice Bolt (2-shot burst), left hand 3s Ward."
-script = ExtResource("8_32ji6")
+editor_description = "Ash Wretch. Ice Bolt + Ash Ward."
+script = ExtResource("6_32ji6")
 body_tint = Color(0.42, 0.4, 0.48, 1)
 eye_glow_color = Color(0.55, 0.55, 0.58, 1)
 lookdev_override = true
@@ -175,51 +171,47 @@ move_speed = 2.8
 chase_range = 11.0
 attack_range = 1.35
 touch_damage = 7.0
-lost_chase_to_alert_sec = null
-alert_duration_sec = null
 death_linger_sec = 10.0
 death_fade_sec = 2.0
 
-[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/AshWretch" unique_id=388158098]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
-material_override = SubResource("StandardMaterial3D_dsvrg")
-cast_shadow = 0
-mesh = SubResource("CylinderMesh_bg0kg")
-
-[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/AshWretch" unique_id=2092375022]
+[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/AshWretch" unique_id=1866987643]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
 material_override = SubResource("StandardMaterial3D_ngyco")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_dw527")
 
-[node name="EmberWretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=1837978996 instance=ExtResource("4_ember")]
-process_mode = 3
-editor_description = "Pre-baked Ember Wretch. Red chase eyes, hand spheres, Ember Lob + Halo Ring."
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 0)
-script = ExtResource("8_32ji6")
-body_tint = Color(0.85, 0.38, 0.12, 1)
-eye_glow_color = Color(1, 0.12, 0.08, 1)
-lookdev_override = true
-show_combat_ranges = true
-max_health = 45.0
-move_speed = 3.6
-chase_range = 14.0
-attack_range = 1.5
-touch_damage = 9.0
-lost_chase_to_alert_sec = null
-alert_duration_sec = null
-
-[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/EmberWretch" unique_id=76905808]
+[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/AshWretch" unique_id=1062823661]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
 material_override = SubResource("StandardMaterial3D_jpesr")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_5sn8k")
 
-[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/EmberWretch" unique_id=563028816]
+[node name="EmberWretch" type="CharacterBody3D" parent="SpawnRoot" unique_id=115133860 instance=ExtResource("4_ember")]
+process_mode = 3
+editor_description = "Pre-baked Ember Wretch. Red chase eyes, hand spheres, Ember Lob + Halo Ring + behind-player dash."
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 0)
+script = ExtResource("8_y2ad6")
+body_tint = Color(0.85, 0.38, 0.12, 1)
+eye_glow_color = Color(1, 0.12, 0.08, 1)
+lookdev_override = true
+show_combat_ranges = true
+max_health = 45.0
+move_speed = 3.24
+chase_range = 14.0
+attack_range = 1.5
+touch_damage = 9.0
+
+[node name="ChaseRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/EmberWretch" unique_id=677867056]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
 material_override = SubResource("StandardMaterial3D_jnk7k")
 cast_shadow = 0
 mesh = SubResource("CylinderMesh_o638l")
+
+[node name="AttackRangeGizmo" type="MeshInstance3D" parent="SpawnRoot/EmberWretch" unique_id=1722804773]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, 0)
+material_override = SubResource("StandardMaterial3D_s0sgb")
+cast_shadow = 0
+mesh = SubResource("CylinderMesh_by6m0")
 
 [node name="FireballPreview" type="Node3D" parent="." unique_id=371105502]
 process_mode = 3

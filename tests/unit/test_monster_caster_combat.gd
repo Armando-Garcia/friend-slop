@@ -1,0 +1,136 @@
+extends RefCounted
+
+const MonsterCasterCombatScript := preload(
+	"res://scripts/monsters/monster_caster_combat.gd"
+)
+const MonsterComboStepScript := preload("res://scripts/monsters/monster_combo_step.gd")
+const AshWretchScript := preload("res://scripts/monsters/ash_wretch.gd")
+const EmberWretchScript := preload("res://scripts/monsters/ember_wretch.gd")
+const AshIceAbilityScript := preload("res://scripts/monsters/abilities/ash_ice_ability.gd")
+const AshFrostBreathFlightScript := preload(
+	"res://scripts/monsters/abilities/ash_frost_breath_flight.gd"
+)
+
+
+func run() -> int:
+	var failures := 0
+	failures += _test_standing_still_gate()
+	failures += _test_ash_combo_step_shape()
+	failures += _test_ember_combo_step_shape()
+	failures += _test_combo_trigger_constants()
+	failures += _test_combo_cooldown_reset()
+	return failures
+
+
+func _test_standing_still_gate() -> int:
+	if not MonsterCasterCombatScript.is_standing_still_velocity(Vector2.ZERO):
+		push_error("Expected zero velocity to count as standing still")
+		return 1
+	if MonsterCasterCombatScript.is_standing_still_velocity(Vector2(0.2, 0.0)):
+		push_error("Expected fast velocity to block charging")
+		return 1
+	if not MonsterCasterCombatScript.is_standing_still_velocity(Vector2(0.04, 0.04)):
+		push_error("Expected slow drift to count as standing still")
+		return 1
+	return 0
+
+
+func _test_ash_combo_step_shape() -> int:
+	var steps := _build_ash_combo_steps()
+	if steps.size() != 3:
+		push_error("Expected 3 Ash combo steps, got %s" % steps.size())
+		return 1
+	var ok: bool = (
+		str(steps[0].ability_id) == "ash_ward"
+		and steps[0].step_type == MonsterComboStepScript.StepType.INSTANT
+		and str(steps[1].ability_id) == "ash_frost_breath"
+		and is_equal_approx(
+			steps[1].delay_after_prev_sec, AshFrostBreathFlightScript.COMBO_WARD_DELAY_SEC
+		)
+		and steps[2].step_type == MonsterComboStepScript.StepType.CHARGE_THROW
+	)
+	if not ok:
+		push_error("Ash combo step shape mismatch")
+		return 1
+	return 0
+
+
+func _test_ember_combo_step_shape() -> int:
+	var steps := _build_ember_combo_steps()
+	if steps.size() != 3:
+		push_error("Expected 3 Ember combo steps, got %s" % steps.size())
+		return 1
+	if str(steps[0].ability_id) != "ember_halo":
+		push_error("Expected Ember combo step 1 ember_halo")
+		return 1
+	if str(steps[1].ability_id) != "ember_dash":
+		push_error("Expected Ember combo step 2 ember_dash")
+		return 1
+	if steps[1].step_type != MonsterComboStepScript.StepType.INSTANT:
+		push_error("Expected Ember dash step INSTANT")
+		return 1
+	if str(steps[2].ability_id) != "ember_lob":
+		push_error("Expected Ember combo step 3 ember_lob")
+		return 1
+	return 0
+
+
+func _test_combo_trigger_constants() -> int:
+	var ok := (
+		is_equal_approx(AshWretchScript.RETREAT_COMBO_CHANCE, 0.85)
+		and is_equal_approx(AshWretchScript.DAMAGE_COMBO_CHANCE, 0.85)
+		and is_equal_approx(AshWretchScript.COMBO_TRIGGER_RANGE, 8.0)
+		and is_equal_approx(EmberWretchScript.RETREAT_COMBO_CHANCE, 0.7)
+		and is_equal_approx(EmberWretchScript.DAMAGE_COMBO_CHANCE, 0.7)
+		and is_equal_approx(EmberWretchScript.LOW_HP_COMBO_RATIO, 0.35)
+	)
+	if not ok:
+		push_error("Combo trigger constants mismatch")
+		return 1
+	return 0
+
+
+func _test_combo_cooldown_reset() -> int:
+	var ice := AshIceAbilityScript.new()
+	ice.begin_cooldown()
+	ice._burst_active = true
+	ice.reset_for_combo()
+	if not ice.can_cast():
+		push_error("Expected Ash ice reset_for_combo to clear cooldown and burst lock")
+		return 1
+	return 0
+
+
+func _build_ash_combo_steps() -> Array:
+	var steps: Array = []
+	var ward := MonsterComboStepScript.new()
+	ward.ability_id = "ash_ward"
+	ward.step_type = MonsterComboStepScript.StepType.INSTANT
+	steps.append(ward)
+	var frost := MonsterComboStepScript.new()
+	frost.ability_id = "ash_frost_breath"
+	frost.step_type = MonsterComboStepScript.StepType.INSTANT
+	frost.delay_after_prev_sec = AshFrostBreathFlightScript.COMBO_WARD_DELAY_SEC
+	steps.append(frost)
+	var ice := MonsterComboStepScript.new()
+	ice.ability_id = "ash_ice"
+	ice.step_type = MonsterComboStepScript.StepType.CHARGE_THROW
+	steps.append(ice)
+	return steps
+
+
+func _build_ember_combo_steps() -> Array:
+	var steps: Array = []
+	var halo := MonsterComboStepScript.new()
+	halo.ability_id = "ember_halo"
+	halo.step_type = MonsterComboStepScript.StepType.CHARGE_THROW
+	steps.append(halo)
+	var dash := MonsterComboStepScript.new()
+	dash.ability_id = "ember_dash"
+	dash.step_type = MonsterComboStepScript.StepType.INSTANT
+	steps.append(dash)
+	var lob := MonsterComboStepScript.new()
+	lob.ability_id = "ember_lob"
+	lob.step_type = MonsterComboStepScript.StepType.CHARGE_THROW
+	steps.append(lob)
+	return steps

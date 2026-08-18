@@ -34,7 +34,7 @@ SteamProximityVoiceHub="*res://scripts/voice/steam_proximity_voice_hub.gd"
 [display]
 
 window/size/viewport_width=3840
-window/size/viewport_height=2160
+window/size/viewport_height=2054
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

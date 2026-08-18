@@ -22,6 +22,8 @@ const WINDUP_SEC_DEFAULT := 0.55
 @export var requires_chase_target: bool = false
 @export_range(0.0, 30.0, 0.1) var min_cast_range: float = 3.0
 @export_range(0.0, 40.0, 0.1) var max_cast_range: float = 12.0
+## When false, ability is excluded from cast rotation (e.g. chase reposition dashes).
+@export var participates_in_cast_rotation: bool = true
 
 @export_tool_button("Preview Cast", "Callable")
 var preview_cast_action := preview_cast
@@ -85,6 +87,27 @@ func begin_cooldown() -> void:
 	_cooldown_left = maxf(0.0, cooldown_sec)
 
 
+func reset_cooldown() -> void:
+	_cooldown_left = 0.0
+
+
+## Combo opener: clear cooldown and any ability-specific cast locks.
+func reset_for_combo() -> void:
+	reset_cooldown()
+
+
+## Combo runner: fire immediately without range/cooldown gates.
+func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	fire_instant(monster, target)
+
+
+## Combo runner: release a held charge regardless of normal gates.
+func release_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	release_charge(monster, target)
+
+
 ## Override: attach windup VFX to the correct hand.
 func start_windup_fx(monster: Node3D) -> void:
 	stop_windup_fx()
@@ -101,11 +124,26 @@ func stop_windup_fx() -> void:
 	_windup_fx = null
 
 
-## Override to spawn combat projectile. Called after windup completes.
+## Override to spawn combat projectile. Called after windup completes (legacy cast path).
 func begin_cast(monster: Node3D, target: Node3D) -> void:
 	stop_windup_fx()
 	begin_cooldown()
 	_fire_cast(monster, target)
+
+
+## Caster combat: release a held charge — fire the spell and start cooldown.
+func release_charge(monster: Node3D, target: Node3D) -> void:
+	stop_windup_fx()
+	begin_cooldown()
+	_fire_cast(monster, target)
+
+
+## Combo / bypass path — no windup, immediate fire + cooldown when off CD.
+func fire_instant(monster: Node3D, target: Node3D) -> void:
+	if not can_cast() or monster == null:
+		return
+	_fire_cast(monster, target)
+	begin_cooldown()
 
 
 func preview_cast() -> void:
