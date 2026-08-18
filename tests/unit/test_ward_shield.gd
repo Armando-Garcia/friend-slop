@@ -9,6 +9,7 @@ func run() -> int:
 	failures += _test_cap_is_one_third_sphere_surface()
 	failures += _test_duration_and_radius_constants()
 	failures += _test_builder_makes_mesh()
+	failures += _test_integrity_tint_goes_red()
 	return failures
 
 
@@ -45,5 +46,17 @@ func _test_builder_makes_mesh() -> int:
 	var larger := WardMeshBuilderScript.build_mesh(2.5, 0.5)
 	if larger == null or larger.get_surface_count() < 1:
 		push_error("Expected builder to accept radius / surface_fraction overrides")
+		return 1
+	return 0
+
+
+func _test_integrity_tint_goes_red() -> int:
+	var full := WardShieldScript.integrity_tint(1.0)
+	var empty := WardShieldScript.integrity_tint(0.0)
+	if not full.is_equal_approx(WardShieldScript.SHIELD_BLUE):
+		push_error("Expected full-integrity ward to stay shield blue")
+		return 1
+	if empty.r <= full.r or empty.g >= full.g:
+		push_error("Expected depleted ward tint to read redder than blue")
 		return 1
 	return 0

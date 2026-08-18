@@ -152,7 +152,7 @@ func _try_block_ward_overlap() -> bool:
 
 
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body):
+	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE):
 		return false
 	## Ward eats the spell — vanish with no ground impact burst.
 	_finish(false)

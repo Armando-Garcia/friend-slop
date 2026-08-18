@@ -14,9 +14,10 @@ static func ward_from_node(node: Node) -> Node:
 
 
 ## If `body` belongs to a live ward, spend it and return true.
-static func try_block(body: Node) -> bool:
+## `damage` is subtracted on HP wards; hit-count wards still spend one cast.
+static func try_block(body: Node, damage: float = 0.0) -> bool:
 	var ward := ward_from_node(body)
 	if ward == null:
 		return false
-	ward.call("notify_spell_blocked")
+	ward.call("notify_spell_blocked", damage)
 	return true

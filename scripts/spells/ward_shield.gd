@@ -2,7 +2,8 @@
 class_name WardShield
 extends Node3D
 
-## Forward-facing spherical-cap blue shield. Blocks 1–2 incoming spells, then shatters.
+## Forward-facing spherical-cap blue shield. Player wards spend spell hits;
+## HP wards (Charger) absorb spell damage and tint red as they weaken.
 ## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
 ## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
 
@@ -19,6 +20,8 @@ const CAST_TRAVEL_SEC := 0.05
 const FORM_SEC := 0.08
 const SHIELD_BLUE := Color(0.35, 0.65, 1.0, 0.38)
 const SHIELD_EDGE := Color(0.55, 0.85, 1.0, 0.72)
+const SHIELD_STRESS := Color(0.92, 0.12, 0.08, 0.42)
+const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 
 @export_group("Dome shape")
 @export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = 1.35:
@@ -46,6 +49,8 @@ var _mesh_instance: MeshInstance3D
 var _collision_shape: CollisionShape3D
 var _material: StandardMaterial3D
 var _hits_remaining := 1
+var _max_hp := 0.0
+var _hp := 0.0
 var _lifetime := 0.0
 var _lifetime_active := false
 ## Instance duration; defaults to DURATION_SEC (player ward). Monster casts may extend.
@@ -57,6 +62,7 @@ var _beam_mat: StandardMaterial3D
 var _rim: MeshInstance3D
 var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
+var _held := false
 
 
 static func spawn(
@@ -79,6 +85,25 @@ static func spawn(
 
 func set_duration_sec(seconds: float) -> void:
 	_duration_sec = maxf(seconds, 0.05)
+
+
+func hold_until_broken() -> void:
+	## Keep the shield up until shatter() — used by the Charger ram.
+	_held = true
+	_lifetime_active = false
+
+
+func set_hit_points(hp: float) -> void:
+	## Damage-absorb mode. Survives until HP is spent; ignores hit-count.
+	_max_hp = maxf(hp, 0.01)
+	_hp = _max_hp
+	_apply_integrity_color()
+
+
+func shatter() -> void:
+	_held = false
+	_dissolve()
+
 
 func _ready() -> void:
 	_cache_nodes()
@@ -249,7 +274,7 @@ func _form_shield() -> void:
 	_spawn_rim_bloom()
 	_enable_collision()
 	_lifetime = 0.0
-	_lifetime_active = true
+	_lifetime_active = not _held
 	set_process(true)
 	if _mesh_instance != null:
 		_mesh_instance.visible = true
@@ -314,6 +339,7 @@ func _finish_form() -> void:
 		_material.albedo_color.a = SHIELD_BLUE.a
 		_material.emission = SHIELD_EDGE
 		_material.emission_energy_multiplier = 0.75
+	_apply_integrity_color()
 	_enable_collision()
 
 
@@ -323,7 +349,7 @@ func _enable_collision() -> void:
 
 
 func _process(delta: float) -> void:
-	if not _lifetime_active or _hits_remaining <= 0:
+	if _held or not _lifetime_active or _is_broken():
 		return
 	_lifetime += delta
 	var duration := maxf(_duration_sec, 0.05)
@@ -331,21 +357,62 @@ func _process(delta: float) -> void:
 		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
 		_material.albedo_color.a = SHIELD_BLUE.a * fade
 		_material.emission = SHIELD_EDGE * (0.35 + 0.4 * fade)
-	if _lifetime >= duration and _hits_remaining > 0:
+	if _lifetime >= duration and not _is_broken():
 		_dissolve()
 
 
-func notify_spell_blocked() -> void:
-	## Each blocked spell spends one hit; dissolve when capacity is empty.
-	if _hits_remaining <= 0:
+func notify_spell_blocked(damage: float = 0.0) -> void:
+	## Hit-count wards spend one cast. HP wards subtract spell damage and tint red.
+	if _is_broken():
+		return
+	if _max_hp > 0.0:
+		if damage > 0.0:
+			_hp -= damage
+			_apply_integrity_color()
+		if _hp <= 0.0:
+			_dissolve()
 		return
 	_hits_remaining -= 1
 	if _hits_remaining <= 0:
 		_dissolve()
 
 
+func _is_broken() -> bool:
+	if _max_hp > 0.0:
+		return _hp <= 0.0
+	return _hits_remaining <= 0
+
+
+func integrity_ratio() -> float:
+	if _max_hp <= 0.001:
+		return 1.0
+	return clampf(_hp / _max_hp, 0.0, 1.0)
+
+
+static func integrity_tint(integrity: float) -> Color:
+	var t := 1.0 - clampf(integrity, 0.0, 1.0)
+	return SHIELD_BLUE.lerp(SHIELD_STRESS, t)
+
+
+static func integrity_edge(integrity: float) -> Color:
+	var t := 1.0 - clampf(integrity, 0.0, 1.0)
+	return SHIELD_EDGE.lerp(SHIELD_STRESS_EDGE, t)
+
+
+func _apply_integrity_color() -> void:
+	if _material == null or _max_hp <= 0.0:
+		return
+	var integrity := integrity_ratio()
+	var fill := integrity_tint(integrity)
+	var alpha := _material.albedo_color.a
+	_material.albedo_color = Color(fill.r, fill.g, fill.b, alpha)
+	_material.emission = integrity_edge(integrity)
+	_material.emission_energy_multiplier = lerpf(0.75, 1.8, 1.0 - integrity)
+
+
 func _dissolve() -> void:
 	_hits_remaining = 0
+	_hp = 0.0
 	_lifetime_active = false
 	set_process(false)
 	_kill_cast_tween()
