@@ -2,15 +2,7 @@
 class_name Monster
 extends Character
 
-## Combat-ready AI character. Extends Character (not PlayableCharacter):
-## no camera, wand, "player" group, or multiplayer authority.
-##
-## AI: senses append interest candidates → _prefer_interest → IDLE/PATROL/CHASE/ALERT.
-## Override _prefer_interest / _append_default_interest_candidates on children;
-## add MonsterSense nodes under Senses to customize perception without forking the FSM.
-## Eyes (Head/Eyes) glow while chasing or alert — color from body_tint / eye_glow exports.
-## Glow darkens and dims with missing health so hits read without an HP bar.
-## Lookdev: set lookdev_override + lookdev_pose to preview chase/patrol in the editor.
+## Combat-ready AI. Senses → IDLE/PATROL/CHASE/ALERT. Eyes glow while chasing.
 
 enum ChaseStyle { CLOSE_IN, KEEP_AWAY }
 
@@ -22,10 +14,10 @@ const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const MonsterChaseMoveScript := preload("res://scripts/monsters/monster_chase_move.gd")
 const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_combat_spacing.gd")
 const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
+const MonsterPatrolScript := preload("res://scripts/monsters/monster_patrol.gd")
 
 const DEFAULT_TINT := Color(0.72, 0.28, 0.22, 1.0)
 const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
-const PATROL_ARRIVE_DIST := 0.45
 const KNOCKBACK_TIMER_SEC := 0.35
 const DEFAULT_PLAYER_SOURCE := &"player"
 const DEATH_IMPULSE_SCALE := 1.35
@@ -59,17 +51,23 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 		if is_inside_tree():
 			_refresh_lookdev_eyes()
 
+## Patrol hides chase eyes; Chase shows them. Workspace pose buttons set this.
 @export var lookdev_pose: MonsterAIScript.LookdevPose = MonsterAIScript.LookdevPose.PATROL:
 	set(value):
 		lookdev_pose = value
 		if is_inside_tree():
 			_refresh_lookdev_eyes()
 
+@export_group("Gizmos")
+## Orange chase disc and yellow attack disc (meters = Combat chase/attack range).
 @export var show_combat_ranges: bool = false:
 	set(value):
 		show_combat_ranges = value
 		if is_inside_tree():
 			_refresh_range_gizmos()
+
+## Cyan hearing, green sight, yellow light, LOS ray — reads live Senses/ children.
+@export var show_sense_ranges: bool = false
 
 @export_group("Combat")
 @export var max_health: float = 60.0
@@ -89,7 +87,8 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 @export var touch_damage: float = 8.0
 @export var gravity: float = 18.0
 @export var idle_duration_sec: float = 1.2
-@export var patrol_radius: float = 4.0
+@export var patrol_speed: float = 2.4
+@export var patrol_radius: float = 8.0
 ## After chase loses all sight/hearing interest for this long → ALERT.
 @export_range(0.5, 30.0, 0.25) var lost_chase_to_alert_sec: float = 4.0
 ## How long ALERT lasts with no detection before returning to PATROL.
@@ -118,7 +117,7 @@ var _ai_state: int = MonsterAIScript.State.IDLE
 var _idle_timer: float = 0.0
 var _undetected_sec: float = 0.0
 var _alert_timer: float = 0.0
-var _patrol_goal: Vector3 = Vector3.ZERO
+var _patrol: RefCounted = null
 var _interest: RefCounted = null
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
@@ -137,7 +136,6 @@ var _casting_ability: Node = null
 var _cast_prefer_index: int = 0
 var _chase_move: MonsterChaseMove = null
 
-
 func _ready() -> void:
 	if not Engine.is_editor_hint():
 		add_to_group("monster")
@@ -150,16 +148,27 @@ func _ready() -> void:
 	_senses_root = get_node_or_null("Senses")
 	_cache_eyes()
 	_refresh_appearance()
-	if lookdev_override or Engine.is_editor_hint():
+	var live_ai := bool(get_meta("lookdev_live_ai", false))
+	if lookdev_override or (Engine.is_editor_hint() and not live_ai):
 		_refresh_lookdev_eyes()
 	else:
 		_set_chase_eyes_active(false)
 	_refresh_range_gizmos()
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() and not live_ai:
 		set_physics_process(false)
+		return
+	if Engine.is_editor_hint() and live_ai:
+		set_physics_process(false)
+		set_process(true)
+		call_deferred("_begin_patrol")
 		return
 	_enter_idle()
 	set_physics_process(true)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint() and bool(get_meta("lookdev_live_ai", false)):
+		_physics_process(delta)
 
 
 func _sync_chase_move_config() -> void:
@@ -173,7 +182,6 @@ func _sync_chase_move_config() -> void:
 
 
 func apply_summon_appearance(tint: Color, p_eye_glow_color: Color = DEFAULT_EYE_GLOW) -> void:
-	## Used by the headmaster summon book after instantiate.
 	body_tint = tint
 	eye_glow_color = p_eye_glow_color
 	_refresh_appearance()
@@ -283,7 +291,6 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 
 
 func _apply_hurt_knockback() -> void:
-	## Small hop so hits read even without an HP bar.
 	velocity.y = maxf(velocity.y, HURT_UP_IMPULSE)
 	_knockback_vel.y = maxf(_knockback_vel.y, HURT_UP_IMPULSE * 0.45)
 	_knockback_timer = maxf(_knockback_timer, HURT_KNOCKBACK_TIMER_SEC)
@@ -514,7 +521,7 @@ func _append_sense_interest_candidates(out: Array) -> void:
 	if _senses_root == null:
 		return
 	for child in _senses_root.get_children():
-		if child.has_method("append_interest_candidates"):
+		if MonsterSense.can_append_from(child):
 			child.call("append_interest_candidates", self, out)
 
 
@@ -524,12 +531,11 @@ func _prefer_interest(candidates: Array) -> RefCounted:
 
 
 func _physics_process(delta: float) -> void:
-	if Engine.is_editor_hint() or not is_alive:
+	if not is_alive:
 		return
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-	else:
-		velocity.y = 0.0
+	if Engine.is_editor_hint() and not bool(get_meta("lookdev_live_ai", false)):
+		return
+	MonsterAIScript.apply_gravity(self, delta, gravity)
 
 	_interest = _gather_interest()
 	var has_interest := _interest_is_actionable(_interest)
@@ -563,7 +569,7 @@ func _physics_process(delta: float) -> void:
 			_set_chase_eyes_active(want_eyes)
 
 	_apply_knockback_bleed(delta)
-	move_and_slide()
+	MonsterAIScript.apply_move(self, delta)
 
 
 func _update_alert_timers(delta: float, has_interest: bool) -> void:
@@ -623,38 +629,30 @@ func _tick_idle(delta: float) -> void:
 		_begin_patrol()
 
 
+func _ensure_patrol() -> RefCounted:
+	if _patrol == null:
+		_patrol = MonsterPatrolScript.new()
+	return _patrol
+
+
 func _begin_patrol() -> void:
 	_ai_state = MonsterAIScript.State.PATROL
 	_undetected_sec = 0.0
 	_alert_timer = 0.0
 	_clear_chase_move()
-	_patrol_goal = MonsterAIScript.random_patrol_point(
-		global_position,
-		patrol_radius,
-		_rng.randf() * TAU,
-		_rng.randf_range(0.35, 1.0)
-	)
+	_ensure_patrol().call("begin", self, _rng, patrol_radius)
 
 
 func _tick_patrol(_delta: float) -> void:
-	var flat := Vector3(
-		_patrol_goal.x - global_position.x,
-		0.0,
-		_patrol_goal.z - global_position.z
-	)
-	if flat.length() <= PATROL_ARRIVE_DIST:
-		_enter_idle()
-		return
-	var desired: Vector3 = MonsterAIScript.horizontal_velocity_toward(
-		global_position, _patrol_goal, move_speed, velocity.y
-	)
+	var patrol := _ensure_patrol()
+	patrol.call("tick", self, _rng)
+	var desired: Vector3 = patrol.call("follow_velocity", self, patrol_speed)
 	velocity.x = desired.x
 	velocity.z = desired.z
 	_face_horizontal(desired)
 
 
 func _tick_alert(_delta: float) -> void:
-	## Vigilant standstill while waiting to re-detect or drop to patrol.
 	velocity.x = 0.0
 	velocity.z = 0.0
 

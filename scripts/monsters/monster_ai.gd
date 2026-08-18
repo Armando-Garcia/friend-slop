@@ -7,6 +7,10 @@ enum State { IDLE, PATROL, CHASE, ALERT }
 ## Lookdev pose → eyes. Chase shows eyes; Patrol hides them.
 enum LookdevPose { PATROL, CHASE }
 
+const MonsterPatrolScript := preload("res://scripts/monsters/monster_patrol.gd")
+const MazePathGraphScript := preload("res://scripts/maze_path_graph.gd")
+const MAZE_BODY_RADIUS := 0.38
+
 
 static func apply_damage(current_health: float, amount: float) -> float:
 	return maxf(0.0, current_health - maxf(0.0, amount))
@@ -218,3 +222,79 @@ static func retreat_velocity_clamped(
 	if horizontal_distance(next, player) > max_dist:
 		return Vector3(0.0, y_velocity, 0.0)
 	return Vector3(flat_dir.x * speed, y_velocity, flat_dir.z * speed)
+
+
+static func is_lookdev_live(node: Node) -> bool:
+	return Engine.is_editor_hint() and node != null and bool(node.get_meta("lookdev_live_ai", false))
+
+
+static func apply_gravity(body: CharacterBody3D, delta: float, gravity: float) -> void:
+	## Lookdev editor has no reliable floor contact — hold Y so LOS stays valid.
+	if body == null:
+		return
+	var v := body.velocity
+	if is_lookdev_live(body) or body.is_on_floor():
+		v.y = 0.0
+	else:
+		v.y -= gravity * delta
+	body.velocity = v
+
+
+static func apply_move(body: CharacterBody3D, delta: float) -> void:
+	if body == null:
+		return
+	_limit_velocity_to_maze(body, delta)
+	if is_lookdev_live(body):
+		body.velocity.y = 0.0
+		var before := body.global_position
+		body.move_and_slide()
+		var moved := Vector3(
+			body.global_position.x - before.x, 0.0, body.global_position.z - before.z
+		)
+		if moved.length() < 0.0001:
+			_lookdev_translate(body, delta)
+		_recover_into_maze(body)
+		return
+	body.move_and_slide()
+	_recover_into_maze(body)
+
+
+static func _limit_velocity_to_maze(body: CharacterBody3D, delta: float) -> void:
+	var graph: Dictionary = MonsterPatrolScript.find_graph(body)
+	if graph.is_empty() or delta <= 0.0001:
+		return
+	var from := body.global_position
+	var raw := from + Vector3(body.velocity.x, 0.0, body.velocity.z) * delta
+	var clipped: Vector3 = MazePathGraphScript.clip_world_move(
+		graph, from, raw, MAZE_BODY_RADIUS
+	)
+	var allowed := Vector3(clipped.x - from.x, 0.0, clipped.z - from.z)
+	if allowed.length() < 0.0001:
+		body.velocity.x = 0.0
+		body.velocity.z = 0.0
+		return
+	body.velocity.x = allowed.x / delta
+	body.velocity.z = allowed.z / delta
+
+
+static func _lookdev_translate(body: CharacterBody3D, delta: float) -> void:
+	var step := Vector3(body.velocity.x, 0.0, body.velocity.z) * delta
+	if step.length() < 0.0001:
+		return
+	var graph: Dictionary = MonsterPatrolScript.find_graph(body)
+	var dest := body.global_position + step
+	if not graph.is_empty():
+		dest = MazePathGraphScript.clip_world_move(
+			graph, body.global_position, dest, MAZE_BODY_RADIUS
+		)
+	body.global_position = Vector3(dest.x, body.global_position.y, dest.z)
+
+
+static func _recover_into_maze(body: CharacterBody3D) -> void:
+	var graph: Dictionary = MonsterPatrolScript.find_graph(body)
+	if graph.is_empty():
+		return
+	var safe: Vector3 = MazePathGraphScript.recover_open_position(
+		graph, body.global_position, MAZE_BODY_RADIUS
+	)
+	body.global_position = Vector3(safe.x, body.global_position.y, safe.z)
