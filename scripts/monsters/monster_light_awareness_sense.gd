@@ -1,3 +1,4 @@
+@tool
 class_name MonsterLightAwarenessSense
 extends MonsterSense
 
@@ -5,9 +6,11 @@ const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.
 
 ## Stub light awareness. Samples can be wired to OmniLights / flare later.
 
+## Max distance (m) to a notify_light point. Yellow gizmo matches this.
 @export var sense_range: float = 10.0
+## How strongly a bright point pulls (or pushes, if flee_bright).
 @export var light_urgency: float = 1.1
-## When true, bright interest is framed as something to avoid (hint only for v1).
+## If on, bright interest is treated as something to avoid (v1 hint only).
 @export var flee_bright: bool = true
 
 ## Last sampled bright point (set by notify_light or future probe).

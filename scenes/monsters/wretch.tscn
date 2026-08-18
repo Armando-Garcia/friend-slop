@@ -102,7 +102,7 @@ cast_shadow = 1
 
 [node name="Sight" type="Node" parent="Senses" index="0"]
 script = ExtResource("6_sight")
-editor_description = "Blind on patrol/idle; 20m player-wide cone only in alert/chase."
+editor_description = "Blind on patrol/idle. 20 m player-thin cone (green gizmo) only in ALERT or CHASE. Tune Sight Range and Cone Width At Max Range."
 sight_range = 20.0
 require_line_of_sight = true
 eye_height = 0.95
@@ -113,7 +113,7 @@ only_when_alert_or_chase = true
 
 [node name="Hearing" type="Node" parent="Senses" index="1"]
 script = ExtResource("7_hear")
-editor_description = "Low-moderate audio detection. Directs rats toward sound."
+editor_description = "Pack hearing (cyan gizmo). Tune Hear Range; this is how the Wretch aims Command Pack and directs rats."
 hear_range = 10.0
 speech_urgency = 1.15
 sample_speaking_players = true

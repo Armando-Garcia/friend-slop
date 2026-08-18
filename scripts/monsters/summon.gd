@@ -47,6 +47,10 @@ const DEFAULT_EYE_GLOW := Color(0.25, 1.0, 0.35, 1.0)
 		if is_node_ready():
 			_apply_eye_glow_from_health()
 
+@export_group("Gizmos")
+## Cyan hearing, green sight, yellow light, LOS ray — reads live Senses/ children.
+@export var show_sense_ranges: bool = false
+
 @export_group("Combat")
 @export var max_health: float = 10.0
 @export var move_speed: float = 4.0
@@ -381,7 +385,7 @@ func _append_sense_interest_candidates(out: Array) -> void:
 	if _senses_root == null:
 		return
 	for child in _senses_root.get_children():
-		if child.has_method("append_interest_candidates"):
+		if MonsterSense.can_append_from(child):
 			child.call("append_interest_candidates", self, out)
 
 
@@ -392,7 +396,7 @@ func _append_hearing_sense_candidates(out: Array) -> void:
 		return
 	for child in _senses_root.get_children():
 		## Duck-type Hearing sense nodes (hear_range export).
-		if child.has_method("append_interest_candidates") and "hear_range" in child:
+		if MonsterSense.can_append_from(child) and "hear_range" in child:
 			child.call("append_interest_candidates", self, out)
 
 

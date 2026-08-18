@@ -39,14 +39,15 @@ static func ensure_disc(
 	node_name: String,
 	radius: float,
 	color: Color,
-	disc_height: float
+	disc_height: float,
+	set_editor_owner: bool = true
 ) -> MeshInstance3D:
 	var mesh_inst := existing
 	if mesh_inst == null or not is_instance_valid(mesh_inst):
 		mesh_inst = MeshInstance3D.new()
 		mesh_inst.name = node_name
 		host.add_child(mesh_inst)
-		if Engine.is_editor_hint() and host.get_tree() != null:
+		if set_editor_owner and Engine.is_editor_hint() and host.get_tree() != null:
 			var edited := host.get_tree().edited_scene_root
 			if edited != null:
 				mesh_inst.owner = edited
@@ -64,7 +65,16 @@ static func ensure_disc(
 	mesh_inst.material_override = mat
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_inst.position = Vector3(0.0, disc_height * 0.5, 0.0)
+	apply_debug_aabb(mesh_inst)
 	return mesh_inst
+
+
+static func apply_debug_aabb(mesh_inst: MeshInstance3D) -> void:
+	## Keep editor selection on the monster body, not the 20m+ disc/cone.
+	if mesh_inst == null:
+		return
+	mesh_inst.custom_aabb = AABB(Vector3(-0.35, 0.0, -0.35), Vector3(0.7, 0.9, 0.7))
+	mesh_inst.extra_cull_margin = 48.0
 
 
 static func free_gizmo(mesh_inst: MeshInstance3D) -> void:

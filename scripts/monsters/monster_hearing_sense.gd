@@ -1,3 +1,4 @@
+@tool
 class_name MonsterHearingSense
 extends MonsterSense
 
@@ -5,9 +6,13 @@ const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.
 
 ## Hearing sense. Samples speaking players in range and accepts notify_heard events.
 
+## Max distance (m) for speech / notify_heard. Cyan gizmo matches this.
 @export var hear_range: float = 10.0
+## How strongly heard speech pulls AI vs sight.
 @export var speech_urgency: float = 1.15
+## If on, speaking players in range are sampled each tick (needs voice hub).
 @export var sample_speaking_players: bool = true
+## Seconds a notify_heard ping stays as last-known before it expires.
 @export var heard_linger_sec: float = 2.5
 
 ## Last heard world position (set by gameplay / voice bus). Cleared when stale.
