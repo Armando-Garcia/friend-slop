@@ -442,17 +442,12 @@ func _clear_cast_fx() -> void:
 
 
 func _free_node(node: Node) -> void:
-	if Engine.is_editor_hint():
-		node.free()
-	else:
+	if is_instance_valid(node):
 		node.queue_free()
 
 
 func _free_self() -> void:
-	if Engine.is_editor_hint():
-		free()
-	else:
-		queue_free()
+	queue_free()
 
 
 func _exit_tree() -> void:

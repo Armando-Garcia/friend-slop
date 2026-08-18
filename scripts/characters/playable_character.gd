@@ -24,6 +24,7 @@ const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+@export var is_alive: bool = true
 
 var broom_active := false:
 	set(value):
@@ -373,7 +374,7 @@ func _aim_fireball_origin() -> Vector3:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if event.is_action_pressed("ui_cancel") and _wand_raised and not _wand_controls_blocked():
 		_lower_wand(true)
@@ -381,7 +382,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		head.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
@@ -530,7 +531,7 @@ func stop_casting_for_relic_carry() -> void:
 
 
 func _try_toggle_wand_raise() -> bool:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return false
 	if _wand_controls_blocked():
 		return false
@@ -573,7 +574,7 @@ func _lower_wand(cancel_listen: bool) -> void:
 
 func _can_fire_armed_spell() -> bool:
 	if not (
-		is_multiplayer_authority()
+		_uses_local_view()
 		and not _wand_controls_blocked()
 		and not _wand_raised
 		and not is_carrying_relic()
@@ -694,7 +695,7 @@ func _sync_mana_hud() -> void:
 		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
 
 func _tick_mana_drain(delta: float) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if _armed_spell == null or _mana <= 0.0:
 		return
@@ -939,7 +940,7 @@ func _sync_body_yaw_to_head() -> void:
 
 func _physics_process(delta: float) -> void:
 	_sync_body_yaw_to_head()
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		_refresh_broom_visual()
 		return
 	_tick_mana_drain(delta)

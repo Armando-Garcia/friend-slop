@@ -33,7 +33,6 @@ properties/4/replication_mode = 1
 editor_description = "Shared playable base. Wand = player_wand.tscn (held pose = Wand transform here). Broom = Body/BroomMount/Broom (hidden until mounted)."
 script = ExtResource("2_playable")
 player_index = 0
-gravity = null
 
 [node name="BroomMount" type="Node3D" parent="Body" parent_id_path=PackedInt32Array(73058391) index="0" unique_id=1571568894]
 editor_description = "Anchor on Body. Move/rotate the Broom child for the riding pose. Keep this visible — hide the Broom child instead."
