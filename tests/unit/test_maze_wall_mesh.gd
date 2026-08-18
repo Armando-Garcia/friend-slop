@@ -2,12 +2,14 @@ class_name TestMazeWallMesh
 extends RefCounted
 
 const MazeWallMeshScript := preload("res://scripts/maze_wall_mesh.gd")
+const MazeGeometryScript := preload("res://scripts/maze_geometry.gd")
 
 
 func run() -> int:
 	var failures := 0
 	failures += _test_solid_wall_normals_point_outward()
 	failures += _test_single_wall_mesh_builds()
+	failures += _test_maze_offset_centers_odd_grid()
 	return failures
 
 
@@ -61,3 +63,12 @@ func _has_normal(normals: PackedVector3Array, target: Vector3) -> bool:
 		if normals[i].dot(target) > 0.99:
 			return true
 	return false
+
+
+func _test_maze_offset_centers_odd_grid() -> int:
+	## 3 maze cells → 7 wall-grid cells. Center cell (3,3) should sit at origin.
+	var origin: Vector3 = MazeGeometryScript.grid_to_world(3, 3, 3, 3, 2.0)
+	if origin.distance_to(Vector3.ZERO) > 0.001:
+		push_error("Expected maze grid center at origin, got %s" % origin)
+		return 1
+	return 0

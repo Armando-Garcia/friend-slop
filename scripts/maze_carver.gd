@@ -50,6 +50,33 @@ static func generate(
 	return grid
 
 
+static func generate_open_box(
+	maze_width: int, maze_height: int, with_cover: bool = false
+) -> Array:
+	## Perimeter walls, fully open interior. Optional center cover for LOS tests.
+	if maze_width < 1 or maze_height < 1:
+		push_error("MazeCarver.generate_open_box: width and height must be >= 1")
+		return []
+	var grid := _create_wall_grid(maze_width, maze_height)
+	var size := grid_size_for(maze_width, maze_height)
+	for x in range(1, size.x - 1):
+		for y in range(1, size.y - 1):
+			grid[x][y] = 0
+	if with_cover:
+		_add_center_cover(grid, size)
+	return grid
+
+
+static func _add_center_cover(grid: Array, size: Vector2i) -> void:
+	var cx := int(size.x / 2)
+	var half := mini(2, maxi(int(size.y / 2) - 2, 1))
+	var cy := int(size.y / 2)
+	for dy in range(-half, half + 1):
+		var gy := cy + dy
+		if gy > 0 and gy < size.y - 1:
+			grid[cx][gy] = 1
+
+
 static func carve_iterative(
 	wall_grid: Array,
 	start_x: int,
