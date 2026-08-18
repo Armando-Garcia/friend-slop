@@ -433,7 +433,12 @@ func _spawn_ragdoll_corpse() -> void:
 	parent_node.add_child(corpse)
 	corpse.global_transform = global_transform
 
-	_reparent_to_corpse(_body_collision, corpse)
+	var body_colliders: Array[CollisionShape3D] = []
+	for child in get_children():
+		if child is CollisionShape3D:
+			body_colliders.append(child as CollisionShape3D)
+	for collider in body_colliders:
+		_reparent_to_corpse(collider, corpse)
 	_reparent_to_corpse(_body_mesh, corpse)
 	_reparent_to_corpse(get_node_or_null("%MidBody"), corpse)
 	_reparent_to_corpse(head, corpse)

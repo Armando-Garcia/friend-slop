@@ -13,6 +13,7 @@ Documented **as-is**. Ash / Ember are scene variants of `Monster` (no subclasses
 | **Wretch** | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) | [wretch.gd](../../scripts/monsters/wretch.gd) | Summon Rats + Command Pack; `KEEP_AWAY` @ 20 m; Sight + Hearing |
 | **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | base [monster.gd](../../scripts/monsters/monster.gd) | Ice Bolt + Ash Ward; `CLOSE_IN` |
 | **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | base [monster.gd](../../scripts/monsters/monster.gd) | Ember Lob + Ember Halo; `CLOSE_IN` |
+| **Charger** | [scenes/monsters/charger.tscn](../../scenes/monsters/charger.tscn) | [charger.gd](../../scripts/monsters/charger.gd) | Facing-cone ram + held ward; `CLOSE_IN` |
 | **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
 Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev gallery: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
@@ -22,6 +23,7 @@ Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn
 | Wretch | 50 | 3.2 | 2.5 | No default proximity aggro; senses + rat relay |
 | Ash | 55 | 2.8 | 11 | Grey tint |
 | Ember | 45 | 3.6 | 14 | Orange/red tint |
+| Charger | 60 | 3.0 | 3.0 | Green; ram at 2× player sprint |
 | Rat | 10 | 4.4 | 10 | Leashed to host |
 
 ---
@@ -34,6 +36,7 @@ flowchart TB
   Character --> Monster
   Character --> Summon
   Monster --> Wretch
+  Monster --> Charger
   Summon --> WretchRat
   Monster --> AshWretch["Ash Wretch scene variant"]
   Monster --> EmberWretch["Ember Wretch scene variant"]
@@ -44,6 +47,7 @@ flowchart TB
 | `Character` | [scripts/characters/character.gd](../../scripts/characters/character.gd) | Shared body / locomotion base |
 | `Monster` | [scripts/monsters/monster.gd](../../scripts/monsters/monster.gd) | AI loop, cast windup, chase move, death |
 | `Wretch` | [scripts/monsters/wretch.gd](../../scripts/monsters/wretch.gd) | Packmaster interest + ability pick overrides |
+| `Charger` | [scripts/monsters/charger.gd](../../scripts/monsters/charger.gd) | Sight-cone ram, held ward, maze launch |
 | `Summon` | [scripts/monsters/summon.gd](../../scripts/monsters/summon.gd) | Host bind, leash, aggro modes, sense relay (no cast/kite) |
 | `WretchRat` | [scripts/monsters/wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode + fireball-instant-kill |
 
@@ -56,6 +60,7 @@ flowchart TB
 | `MonsterChaseMove` | [monster_chase_move.gd](../../scripts/monsters/monster_chase_move.gd) |
 | `MonsterCombatSpacing` | [monster_combat_spacing.gd](../../scripts/monsters/monster_combat_spacing.gd) |
 | `MonsterRangeGizmos` | [monster_range_gizmos.gd](../../scripts/monsters/monster_range_gizmos.gd) |
+| `ChargerLaunch` | [charger_launch.gd](../../scripts/monsters/charger_launch.gd) |
 
 ---
 
@@ -100,6 +105,19 @@ Wretch (wretch.gd)
 WretchRat (Summon → wretch_rat)
 ├── Body/ExplodeLight
 └── Senses/Sight
+```
+
+### Charger
+
+```
+Charger (charger.gd)
+├── CollisionShape3D + MidBody/Neck/Head/Snout/leg colliders  # direct children of the body
+├── Body/{LeftHindleg, RightHindleg}   # elongated haunch
+├── MidBody/{Neck, LeftForeleg, RightForeleg}
+├── Head/{Snout, LeftHorn, RightHorn, StunStars}
+├── ShieldHold
+├── Senses/{Sight, Hearing}
+└── Abilities/ChargeWard
 ```
 
 ---
@@ -194,6 +212,22 @@ Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_abili
 
 Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd).
 
+### Charger
+
+Sight-only ram. No default proximity aggro. Poor hearing (1.8 m); a 24 m facing cone with LOS starts the attack.
+
+1. Turn to face the seen player.
+2. Wind up **1.2 s** while tinting green → red. Casts a held ward onto `ShieldHold` (**80** HP = **4** fireballs); the dome tints red as HP drops.
+3. Ram at **2× player sprint**, locked direction.
+4. Slide hits on the per-part body shapes (haunch, shoulders, neck, head, snout, legs) launch every rammed player into a random open maze cell **≥ 2** away (never walls / out of maze). Players stay stunned until **1.5 s after landing**.
+5. Charge ends on a wall: ward shatters, Charger is stunned **3 s** with orbiting stars.
+
+| Ability | ID | Effect |
+|---------|----|--------|
+| Charge Ward | `charger_ward` | Held ward from windup; **80** HP (4 fireballs); red as it weakens; shatters on wall |
+
+Scripts: [charger.gd](../../scripts/monsters/charger.gd), [charger_ward_ability.gd](../../scripts/monsters/abilities/charger_ward_ability.gd), [charger_launch.gd](../../scripts/monsters/charger_launch.gd). Stun overlay lives on `PlayableCharacter/Stun`.
+
 ### Wretch (packmaster)
 
 | Ability | ID | CD / windup | Effect |
@@ -266,6 +300,7 @@ Any host with a `SummonHost` child gets pack wipe on death. Bound summons also d
 | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) |
 | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) |
 | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) |
+| [scenes/monsters/charger.tscn](../../scenes/monsters/charger.tscn) |
 | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) |
 
 ### AI / senses

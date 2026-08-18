@@ -1,26 +1,28 @@
 @tool
 extends Node3D
 
-## Monster look-dev: all three type scenes side-by-side. Dropdown picks the active
+## Monster look-dev: type scenes side-by-side. Dropdown picks the active
 ## target for pose / abilities / fireball. Works in the editor and Play (F6).
 
 const MONSTER_PICK_WRETCH := 0
 const MONSTER_PICK_ASH_WRETCH := 1
 const MONSTER_PICK_EMBER_WRETCH := 2
+const MONSTER_PICK_CHARGER := 3
 
 const WretchScene := preload("res://scenes/monsters/wretch.tscn")
 const AshWretchScene := preload("res://scenes/monsters/ash_wretch.tscn")
 const EmberWretchScene := preload("res://scenes/monsters/ember_wretch.tscn")
+const ChargerScene := preload("res://scenes/monsters/charger.tscn")
 const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 const FireballSpell := preload("res://resources/spells/fireball.tres")
 const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 
-## Horizontal spacing between the three type previews.
+## Horizontal spacing between type previews.
 const GALLERY_SPACING := 3.5
 
 @export_group("Monster")
 ## Which gallery monster tools (pose / abilities / fireball) target.
-@export_enum("Wretch", "Ash Wretch", "Ember Wretch")
+@export_enum("Wretch", "Ash Wretch", "Ember Wretch", "Charger")
 var monster_type: int = MONSTER_PICK_WRETCH:
 	set(value):
 		monster_type = value
@@ -67,6 +69,8 @@ func get_monster_scene(pick: int = -1) -> PackedScene:
 			return AshWretchScene
 		MONSTER_PICK_EMBER_WRETCH:
 			return EmberWretchScene
+		MONSTER_PICK_CHARGER:
+			return ChargerScene
 		_:
 			return WretchScene
 
@@ -195,7 +199,8 @@ func _respawn_monster_from_scene() -> void:
 	_clear_spawn_root_immediate()
 	_clear_bucket("AbilityPreview")
 	for pick in [
-		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
+		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH,
+		MONSTER_PICK_EMBER_WRETCH, MONSTER_PICK_CHARGER
 	]:
 		_spawn_gallery_monster(pick)
 	_focus_selected_monster()
@@ -233,13 +238,7 @@ func _spawn_gallery_monster(pick: int) -> Node:
 
 
 func _gallery_offset(pick: int) -> Vector3:
-	match pick:
-		MONSTER_PICK_WRETCH:
-			return Vector3(-GALLERY_SPACING, 0.0, 0.0)
-		MONSTER_PICK_EMBER_WRETCH:
-			return Vector3(GALLERY_SPACING, 0.0, 0.0)
-		_:
-			return Vector3.ZERO
+	return Vector3((float(pick) - 1.5) * GALLERY_SPACING, 0.0, 0.0)
 
 
 func _focus_selected_monster() -> void:
@@ -255,7 +254,8 @@ func _focus_selected_monster() -> void:
 
 func _gallery_is_complete() -> bool:
 	for pick in [
-		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
+		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH,
+		MONSTER_PICK_EMBER_WRETCH, MONSTER_PICK_CHARGER
 	]:
 		if _find_gallery_monster(pick) == null:
 			return false
@@ -386,6 +386,8 @@ func _monster_matches_pick(node: Node, pick: int) -> bool:
 				script_path.ends_with("monster.gd")
 				or script_path.ends_with("ember_wretch.gd")
 			)
+		MONSTER_PICK_CHARGER:
+			ok = script_path.ends_with("charger.gd")
 		_:
 			ok = true
 	return ok

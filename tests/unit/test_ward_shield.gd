@@ -2,6 +2,10 @@ extends RefCounted
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
+const ChargerWardAbilityScript := preload(
+	"res://scripts/monsters/abilities/charger_ward_ability.gd"
+)
+const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 
 
 func run() -> int:
@@ -10,6 +14,7 @@ func run() -> int:
 	failures += _test_duration_and_radius_constants()
 	failures += _test_builder_makes_mesh()
 	failures += _test_integrity_tint_goes_red()
+	failures += _test_charger_ward_hp_is_four_fireballs()
 	return failures
 
 
@@ -58,5 +63,14 @@ func _test_integrity_tint_goes_red() -> int:
 		return 1
 	if empty.r <= full.r or empty.g >= full.g:
 		push_error("Expected depleted ward tint to read redder than blue")
+		return 1
+	return 0
+
+
+func _test_charger_ward_hp_is_four_fireballs() -> int:
+	var hp := ChargerWardAbilityScript.default_shield_hit_points()
+	var want := FireballProjectileScript.DEFAULT_HIT_DAMAGE * 4.0
+	if not is_equal_approx(hp, want):
+		push_error("Expected charger ward HP %s (4 fireballs), got %s" % [want, hp])
 		return 1
 	return 0
