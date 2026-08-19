@@ -106,7 +106,8 @@ static func apply_ground_move(
 	head: Node3D,
 	gravity: float,
 	delta: float,
-	boost: float
+	boost: float,
+	preserve_horizontal: bool = false
 ) -> void:
 	var on_slide := prepare(player)
 	if not player.is_on_floor() or on_slide:
@@ -117,7 +118,9 @@ static func apply_ground_move(
 		and not on_slide
 	):
 		player.velocity.y = PlayableCharacter.JUMP_VELOCITY
-	if on_slide:
+	if on_slide or preserve_horizontal:
+		return
+	if not player.is_on_floor():
 		return
 	var direction := camera_relative_move_direction(head)
 	var speed := PlayableCharacter.WALK_SPEED * boost
