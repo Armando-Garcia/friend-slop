@@ -1,12 +1,15 @@
 @tool
 extends Node3D
 
-## Monster look-dev: all three type scenes side-by-side. Dropdown picks the active
-## target for pose / abilities / fireball. Works in the editor and Play (F6).
+## Single-type monster lookdev studio. Dropdown spawns one monster at origin.
+## Dummy + ability buttons work in the inspector; F6 Play Scene enables live aggro.
 
 const MONSTER_PICK_WRETCH := 0
 const MONSTER_PICK_ASH_WRETCH := 1
 const MONSTER_PICK_EMBER_WRETCH := 2
+const ABILITY_SLOT_COUNT := 6
+const DUMMY_DISTANCE := 6.0
+const NONE_LABEL := "—(none)—"
 
 const WretchScene := preload("res://scenes/monsters/wretch.tscn")
 const AshWretchScene := preload("res://scenes/monsters/ash_wretch.tscn")
@@ -14,22 +17,27 @@ const EmberWretchScene := preload("res://scenes/monsters/ember_wretch.tscn")
 const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 const FireballSpell := preload("res://resources/spells/fireball.tres")
 const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
-
-## Horizontal spacing between the three type previews.
-const GALLERY_SPACING := 3.5
+const WorkspacePlayerDummyScript := preload(
+	"res://scripts/monsters/workspace_player_dummy.gd"
+)
 
 @export_group("Monster")
-## Which gallery monster tools (pose / abilities / fireball) target.
+## Which type scene SpawnRoot instantiates at the origin.
 @export_enum("Wretch", "Ash Wretch", "Ember Wretch")
 var monster_type: int = MONSTER_PICK_WRETCH:
 	set(value):
+		var changed := monster_type != value
 		monster_type = value
-		if is_inside_tree():
+		if not is_inside_tree():
+			return
+		if changed:
+			_respawn_monster_from_scene()
+		else:
 			_focus_selected_monster()
 
-@export_tool_button("Reload All Monsters", "Callable")
+@export_tool_button("Reload Monster", "Callable")
 var reload_monster_action := reload_selected_monster
-@export_tool_button("Ensure Gallery", "Callable")
+@export_tool_button("Ensure Monster", "Callable")
 var ensure_monster_action := ensure_one_monster
 @export_tool_button("Clear Monster + Corpses", "Callable")
 var clear_monsters_action := clear_monsters_and_corpses
@@ -43,14 +51,33 @@ var set_chase_pose_action := set_chase_pose
 @export_range(0.25, 10.0, 0.25) var preview_death_fade_sec: float = 2.0
 @export var show_combat_ranges: bool = true
 
+@export_group("Dummy")
+@export_tool_button("Spawn Player Dummy", "Callable")
+var spawn_dummy_action := spawn_player_dummy
+@export_tool_button("Clear Dummy", "Callable")
+var clear_dummy_action := clear_player_dummy
+
 @export_group("Abilities")
-## Filled from the active type scene (Right / Left hand).
-@export var ability_1_name: String = "—"
-@export var ability_2_name: String = "—"
+@export var ability_1_name: String = NONE_LABEL
+@export var ability_2_name: String = NONE_LABEL
+@export var ability_3_name: String = NONE_LABEL
+@export var ability_4_name: String = NONE_LABEL
+@export var ability_5_name: String = NONE_LABEL
+@export var ability_6_name: String = NONE_LABEL
 @export_tool_button("Preview Ability 1", "Callable")
 var preview_ability_1_action := preview_ability_1
 @export_tool_button("Preview Ability 2", "Callable")
 var preview_ability_2_action := preview_ability_2
+@export_tool_button("Preview Ability 3", "Callable")
+var preview_ability_3_action := preview_ability_3
+@export_tool_button("Preview Ability 4", "Callable")
+var preview_ability_4_action := preview_ability_4
+@export_tool_button("Preview Ability 5", "Callable")
+var preview_ability_5_action := preview_ability_5
+@export_tool_button("Preview Ability 6", "Callable")
+var preview_ability_6_action := preview_ability_6
+@export_tool_button("Preview Combo", "Callable")
+var preview_combo_action := preview_combo
 
 @export_group("Fireball")
 @export_tool_button("Cast Fireball", "Callable")
@@ -58,6 +85,7 @@ var cast_fireball_action := cast_fireball_at_monster
 @export_range(0.0, 1.5, 0.05) var tip_forward_nudge: float = 0.08
 
 var _spawn_root: Node3D
+var _dummy_root: Node3D
 
 
 func get_monster_scene(pick: int = -1) -> PackedScene:
@@ -74,17 +102,17 @@ func get_monster_scene(pick: int = -1) -> PackedScene:
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_cache_spawn_root()
+	_cache_dummy_root()
 	_ensure_bucket("FireballPreview")
 	_ensure_bucket("AbilityPreview")
-	## Always respawn so we never keep a stale baked override from an old scene save.
 	_respawn_monster_from_scene()
-	_aim_wand_at_monster()
+	_aim_wand_at_target()
 	set_process(true)
 	set_process_unhandled_input(true)
 
 
 func _process(_delta: float) -> void:
-	_aim_wand_at_monster()
+	_aim_wand_at_target()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -108,7 +136,7 @@ func ensure_one_monster() -> void:
 	_cache_spawn_root()
 	if _spawn_root == null:
 		return
-	if _gallery_is_complete():
+	if _living_monster() != null:
 		_focus_selected_monster()
 		return
 	_respawn_monster_from_scene()
@@ -119,8 +147,8 @@ func clear_monsters_and_corpses() -> void:
 	_clear_spawn_root_immediate()
 	_clear_bucket("FireballPreview")
 	_clear_bucket("AbilityPreview")
-	ability_1_name = "—"
-	ability_2_name = "—"
+	_reset_ability_labels()
+	_notify_hud()
 
 
 func set_patrol_pose() -> void:
@@ -137,6 +165,44 @@ func set_chase_pose() -> void:
 		monster.call("set_lookdev_pose", MonsterAIScript.LookdevPose.CHASE, true)
 
 
+func spawn_player_dummy() -> void:
+	ensure_one_monster()
+	_cache_dummy_root()
+	if _dummy_root == null:
+		return
+	_free_dummy_children()
+	var dummy: CharacterBody3D = WorkspacePlayerDummyScript.new()
+	dummy.name = "PlayerDummy"
+	dummy.process_mode = Node.PROCESS_MODE_ALWAYS
+	_dummy_root.add_child(dummy)
+	var origin := Vector3.ZERO
+	var forward := Vector3(0.0, 0.0, -1.0)
+	var monster := _living_monster()
+	if monster is Node3D:
+		var body := monster as Node3D
+		origin = body.global_position
+		forward = -body.global_transform.basis.z
+		forward.y = 0.0
+		if forward.length_squared() < 0.0001:
+			forward = Vector3(0.0, 0.0, -1.0)
+		else:
+			forward = forward.normalized()
+	dummy.global_position = origin + forward * DUMMY_DISTANCE
+	_bind_monster_to_dummy(monster)
+	if dummy.has_method("pin_home"):
+		dummy.call("pin_home")
+	_notify_hud()
+
+
+func clear_player_dummy() -> void:
+	_free_dummy_children()
+	var monster := _living_monster()
+	if monster != null and monster.has_method("set_lookdev_aggro"):
+		monster.call("set_lookdev_aggro", null)
+	_enable_lookdev(monster)
+	_notify_hud()
+
+
 func preview_ability_1() -> void:
 	_preview_ability_at(0)
 
@@ -145,18 +211,76 @@ func preview_ability_2() -> void:
 	_preview_ability_at(1)
 
 
+func preview_ability_3() -> void:
+	_preview_ability_at(2)
+
+
+func preview_ability_4() -> void:
+	_preview_ability_at(3)
+
+
+func preview_ability_5() -> void:
+	_preview_ability_at(4)
+
+
+func preview_ability_6() -> void:
+	_preview_ability_at(5)
+
+
+func preview_ability_slot(index: int) -> void:
+	_preview_ability_at(index)
+
+
+func preview_combo() -> void:
+	ensure_one_monster()
+	var monster := _living_monster()
+	if monster == null:
+		push_warning("MonsterWorkspace: no monster for combo")
+		return
+	if _living_dummy() == null:
+		spawn_player_dummy()
+	var dummy := _living_dummy()
+	if dummy == null:
+		push_warning("MonsterWorkspace: combo needs a player dummy")
+		return
+	var caster := monster.get_node_or_null("CasterCombat")
+	if caster == null or not caster.has_method("try_trigger_combo"):
+		push_warning("MonsterWorkspace: no CasterCombat on this type")
+		return
+	if "_combo_lockout_left" in caster:
+		caster.set("_combo_lockout_left", 0.0)
+	caster.call("try_trigger_combo", dummy, 1.0, false)
+
+
+func has_preview_combo() -> bool:
+	var monster := _living_monster()
+	if monster == null:
+		return false
+	return monster.get_node_or_null("CasterCombat") != null
+
+
+func ability_preview_labels() -> PackedStringArray:
+	var out := PackedStringArray()
+	var monster := _living_monster()
+	var abilities := _ordered_preview_abilities(monster)
+	for i in range(ABILITY_SLOT_COUNT):
+		out.append(_format_ability_label(abilities, i))
+	return out
+
+
 func cast_fireball_at_monster() -> void:
 	if not is_inside_tree():
 		return
 	ensure_one_monster()
-	var monster := _living_monster()
-	if monster == null:
+	var target := _fireball_aim_node()
+	if target == null:
 		push_warning("MonsterWorkspace: no living monster to shoot")
 		return
+	var monster := _living_monster()
 	_apply_preview_stats(monster)
 
 	var origin := _wand_cast_origin()
-	var aim_at: Vector3 = (monster as Node3D).global_position + Vector3(0.0, 0.4, 0.0)
+	var aim_at: Vector3 = target.global_position + Vector3(0.0, 0.4, 0.0)
 	var direction := aim_at - origin
 	if direction.length_squared() < 0.0001:
 		direction = Vector3(0.0, 0.0, -1.0)
@@ -182,10 +306,6 @@ func cast_fireball_at_monster() -> void:
 	)
 	if projectile != null:
 		projectile.process_mode = Node.PROCESS_MODE_ALWAYS
-		if lookdev and get_tree() != null:
-			var root := get_tree().edited_scene_root
-			if root != null:
-				projectile.owner = root
 
 
 func _respawn_monster_from_scene() -> void:
@@ -194,17 +314,15 @@ func _respawn_monster_from_scene() -> void:
 		return
 	_clear_spawn_root_immediate()
 	_clear_bucket("AbilityPreview")
-	for pick in [
-		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
-	]:
-		_spawn_gallery_monster(pick)
+	_spawn_selected_monster()
 	_focus_selected_monster()
+	_notify_hud()
 
 
-func _spawn_gallery_monster(pick: int) -> Node:
-	var packed: PackedScene = get_monster_scene(pick)
+func _spawn_selected_monster() -> Node:
+	var packed: PackedScene = get_monster_scene()
 	if packed == null:
-		push_warning("MonsterWorkspace: no scene for pick %s" % pick)
+		push_warning("MonsterWorkspace: no scene for pick %s" % monster_type)
 		return null
 	## Fresh pack so inspector edits to type scenes show up immediately.
 	if packed.resource_path != "":
@@ -212,12 +330,8 @@ func _spawn_gallery_monster(pick: int) -> Node:
 	var monster: Node = packed.instantiate()
 	monster.process_mode = Node.PROCESS_MODE_ALWAYS
 	_spawn_root.add_child(monster)
-	if Engine.is_editor_hint():
-		var edited := get_tree().edited_scene_root if get_tree() != null else null
-		if edited != null:
-			monster.owner = edited
 	if monster is Node3D:
-		(monster as Node3D).position = _gallery_offset(pick)
+		(monster as Node3D).position = Vector3.ZERO
 	_enable_lookdev(monster)
 	if (
 		monster.has_method("apply_summon_appearance")
@@ -232,43 +346,27 @@ func _spawn_gallery_monster(pick: int) -> Node:
 	return monster
 
 
-func _gallery_offset(pick: int) -> Vector3:
-	match pick:
-		MONSTER_PICK_WRETCH:
-			return Vector3(-GALLERY_SPACING, 0.0, 0.0)
-		MONSTER_PICK_EMBER_WRETCH:
-			return Vector3(GALLERY_SPACING, 0.0, 0.0)
-		_:
-			return Vector3.ZERO
-
-
 func _focus_selected_monster() -> void:
 	var monster := _living_monster()
 	if monster == null:
-		ability_1_name = "—"
-		ability_2_name = "—"
+		_reset_ability_labels()
 		return
 	_apply_preview_stats(monster)
 	_enable_lookdev(monster)
 	_refresh_ability_labels(monster)
-
-
-func _gallery_is_complete() -> bool:
-	for pick in [
-		MONSTER_PICK_WRETCH, MONSTER_PICK_ASH_WRETCH, MONSTER_PICK_EMBER_WRETCH
-	]:
-		if _find_gallery_monster(pick) == null:
-			return false
-	return true
+	_bind_monster_to_dummy(monster)
 
 
 func _enable_lookdev(node: Node) -> void:
 	if node == null:
 		return
-	if "lookdev_override" in node:
-		node.set("lookdev_override", true)
 	if "show_combat_ranges" in node:
 		node.set("show_combat_ranges", show_combat_ranges)
+	if _living_dummy() != null:
+		_bind_monster_to_dummy(node)
+		return
+	if "lookdev_override" in node:
+		node.set("lookdev_override", true)
 	if node.has_method("set_lookdev_pose"):
 		var pose = node.get("lookdev_pose")
 		if pose == null:
@@ -276,15 +374,43 @@ func _enable_lookdev(node: Node) -> void:
 		node.call("set_lookdev_pose", pose, true)
 
 
+func _bind_monster_to_dummy(monster: Node) -> void:
+	var dummy := _living_dummy()
+	if dummy == null or monster == null:
+		return
+	if monster is Node3D:
+		var body := monster as Node3D
+		if body.global_position.distance_squared_to(dummy.global_position) > 0.0001:
+			body.look_at(dummy.global_position, Vector3.UP)
+			dummy.look_at(body.global_position, Vector3.UP)
+	if monster.has_method("set_lookdev_aggro"):
+		monster.call("set_lookdev_aggro", dummy)
+	elif "lookdev_override" in monster:
+		monster.set("lookdev_override", false)
+
+
 func _refresh_ability_labels(monster: Node) -> void:
 	var abilities := _ordered_preview_abilities(monster)
 	ability_1_name = _format_ability_label(abilities, 0)
 	ability_2_name = _format_ability_label(abilities, 1)
+	ability_3_name = _format_ability_label(abilities, 2)
+	ability_4_name = _format_ability_label(abilities, 3)
+	ability_5_name = _format_ability_label(abilities, 4)
+	ability_6_name = _format_ability_label(abilities, 5)
+
+
+func _reset_ability_labels() -> void:
+	ability_1_name = NONE_LABEL
+	ability_2_name = NONE_LABEL
+	ability_3_name = NONE_LABEL
+	ability_4_name = NONE_LABEL
+	ability_5_name = NONE_LABEL
+	ability_6_name = NONE_LABEL
 
 
 func _format_ability_label(abilities: Array, index: int) -> String:
 	if index < 0 or index >= abilities.size():
-		return "—(none)—"
+		return NONE_LABEL
 	var ability: Node = abilities[index] as Node
 	var name_s: String = ability.name
 	if "display_name" in ability:
@@ -338,7 +464,6 @@ func _preview_ability_at(index: int) -> void:
 	_refresh_ability_labels(monster)
 	var abilities := _ordered_preview_abilities(monster)
 	if index < 0 or index >= abilities.size():
-		push_warning("MonsterWorkspace: ability index %d missing" % index)
 		return
 	var ability: Node = abilities[index]
 	_clear_bucket("AbilityPreview")
@@ -349,10 +474,6 @@ func _preview_ability_at(index: int) -> void:
 		ability.call("preview_cast")
 	else:
 		push_warning("MonsterWorkspace: %s has no preview_cast" % ability.name)
-
-
-func _monster_matches_selected(node: Node) -> bool:
-	return _monster_matches_pick(node, monster_type)
 
 
 func _monster_matches_pick(node: Node, pick: int) -> bool:
@@ -391,7 +512,7 @@ func _monster_matches_pick(node: Node, pick: int) -> bool:
 	return ok
 
 
-func _find_gallery_monster(pick: int) -> Node:
+func _find_spawned_monster(pick: int) -> Node:
 	_cache_spawn_root()
 	if _spawn_root == null:
 		return null
@@ -409,7 +530,24 @@ func _find_gallery_monster(pick: int) -> Node:
 
 
 func _living_monster() -> Node:
-	return _find_gallery_monster(monster_type)
+	return _find_spawned_monster(monster_type)
+
+
+func _living_dummy() -> Node3D:
+	_cache_dummy_root()
+	if _dummy_root == null:
+		return null
+	for child in _dummy_root.get_children():
+		if child is Node3D and is_instance_valid(child):
+			return child as Node3D
+	return null
+
+
+func _fireball_aim_node() -> Node3D:
+	var dummy := _living_dummy()
+	if dummy != null:
+		return dummy
+	return _living_monster() as Node3D
 
 
 func _apply_preview_stats(node: Node) -> void:
@@ -441,14 +579,13 @@ func _wand_cast_origin() -> Vector3:
 	return wand.global_position
 
 
-func _aim_wand_at_monster() -> void:
+func _aim_wand_at_target() -> void:
 	var wand := _wand()
-	var monster := _living_monster()
-	if wand == null or monster == null:
+	var target := _fireball_aim_node()
+	if wand == null or target == null:
 		return
-	var tip := wand.get_node_or_null("Model/CastOrigin") as Node3D
-	var from: Vector3 = tip.global_position if tip != null else wand.global_position
-	var to: Vector3 = (monster as Node3D).global_position + Vector3(0.0, 0.4, 0.0)
+	var from := wand.global_position
+	var to: Vector3 = target.global_position + Vector3(0.0, 0.4, 0.0)
 	var flat := Vector3(to.x - from.x, to.y - from.y, to.z - from.z)
 	if flat.length_squared() < 0.0001:
 		return
@@ -458,7 +595,13 @@ func _aim_wand_at_monster() -> void:
 
 func _is_playing_lookdev() -> bool:
 	## Editor Play Scene / runtime — not idle edited scene.
-	return not Engine.is_editor_hint() or get_tree() != null and get_tree().edited_scene_root == null
+	return not Engine.is_editor_hint()
+
+
+func _notify_hud() -> void:
+	var hud := get_node_or_null("LookdevHud")
+	if hud != null and hud.has_method("rebuild"):
+		hud.call("rebuild")
 
 
 func _ensure_bucket(bucket_name: String) -> Node3D:
@@ -470,10 +613,6 @@ func _ensure_bucket(bucket_name: String) -> Node3D:
 	bucket.name = bucket_name
 	bucket.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(bucket)
-	if Engine.is_editor_hint() and get_tree() != null:
-		var root := get_tree().edited_scene_root
-		if root != null:
-			bucket.owner = root
 	return bucket
 
 
@@ -494,11 +633,18 @@ func _clear_bucket_children(bucket: Node) -> void:
 func _clear_spawn_root_immediate() -> void:
 	if _spawn_root == null:
 		return
-	var kids := _spawn_root.get_children()
-	for child in kids:
-		_spawn_root.remove_child(child)
-		child.free()
+	_clear_bucket_children(_spawn_root)
 
 
 func _cache_spawn_root() -> void:
 	_spawn_root = get_node_or_null("SpawnRoot") as Node3D
+
+
+func _cache_dummy_root() -> void:
+	_dummy_root = get_node_or_null("DummyRoot") as Node3D
+
+
+func _free_dummy_children() -> void:
+	_cache_dummy_root()
+	if _dummy_root != null:
+		_clear_bucket_children(_dummy_root)

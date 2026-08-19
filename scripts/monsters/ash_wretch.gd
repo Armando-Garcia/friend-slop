@@ -19,10 +19,13 @@ const COMBO_LOCKOUT_SEC := 8.0
 const COMBO_GLOW_META := &"ash_combo_hand_fx"
 const COMBO_EYE_ENERGY := 3.8
 const COMBO_EYE_COLOR := Color(1.0, 1.0, 1.0, 1.0)
+const WALK_PAUSE_MIN_SEC := 1.2
+const WALK_PAUSE_MAX_SEC := 2.4
 
 var _last_aggro_player_pos: Vector3 = Vector3.ZERO
 var _has_last_aggro_player: bool = false
 var _combo_glow_active: bool = false
+var _walk_pause_left: float = 0.0
 
 
 func _ready() -> void:
@@ -38,6 +41,32 @@ func _configure_caster_combo() -> void:
 	if caster.has_method("set"):
 		caster.set("combo_trigger_max_range", COMBO_TRIGGER_RANGE)
 		caster.set("combo_lockout_sec", COMBO_LOCKOUT_SEC)
+
+
+func uses_offensive_spacing() -> bool:
+	## Walk/strafe between ice charges instead of planting as a turret.
+	return true
+
+
+func tick_occasional_chase_walk(delta: float, target: Node3D) -> bool:
+	if _is_combo_active():
+		return false
+	var dash := _get_dash_ability()
+	if dash != null and dash.has_method("is_dashing") and dash.is_dashing():
+		return false
+	if is_chase_moving():
+		return true
+	_walk_pause_left -= delta
+	if _walk_pause_left > 0.0:
+		return false
+	if target == null or not is_instance_valid(target):
+		_walk_pause_left = randf_range(WALK_PAUSE_MIN_SEC, WALK_PAUSE_MAX_SEC)
+		return false
+	var side := 1.0 if randf() < 0.5 else -1.0
+	var duration := randf_range(chase_strafe_min_sec, chase_strafe_max_sec)
+	start_chase_strafe(target, side, duration)
+	_walk_pause_left = randf_range(WALK_PAUSE_MIN_SEC, WALK_PAUSE_MAX_SEC)
+	return true
 
 
 func select_combo_steps(target: Node3D) -> Array:

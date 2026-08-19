@@ -1,3 +1,4 @@
+@tool
 class_name AshIceProjectile
 extends Area3D
 
@@ -32,6 +33,7 @@ static func spawn_toward_point(
 	) as PackedScene
 	var proj: AshIceProjectile = packed.instantiate() as AshIceProjectile
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = origin
 	proj.setup_toward_point(aim_position, caster, side_sign)
 	return proj
@@ -125,6 +127,11 @@ func _build_projectile_body() -> void:
 	smesh.height = 0.07
 	flakes.draw_pass_1 = smesh
 	add_child(flakes)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
 
 
 func _physics_process(delta: float) -> void:

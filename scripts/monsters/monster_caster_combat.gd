@@ -1,3 +1,4 @@
+@tool
 class_name MonsterCasterCombat
 extends Node3D
 

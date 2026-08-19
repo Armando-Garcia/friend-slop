@@ -137,6 +137,7 @@ var _cast_windup_left: float = 0.0
 var _casting_ability: Node = null
 var _cast_prefer_index: int = 0
 var _chase_move: MonsterChaseMove = null
+var _lookdev_aggro: Node3D = null
 
 
 func _ready() -> void:
@@ -183,6 +184,11 @@ func apply_summon_appearance(tint: Color, p_eye_glow_color: Color = DEFAULT_EYE_
 func set_lookdev_pose(pose: MonsterAIScript.LookdevPose, enable_override: bool = true) -> void:
 	lookdev_override = enable_override
 	lookdev_pose = pose
+
+func set_lookdev_aggro(target: Node3D) -> void:
+	_lookdev_aggro = target
+	lookdev_override = lookdev_override and not is_instance_valid(target)
+	set_physics_process(not Engine.is_editor_hint() or is_instance_valid(target))
 
 
 func get_ability_placeholders() -> Array[Node]:
@@ -470,6 +476,8 @@ func _reparent_to_corpse(node: Node, corpse: Node) -> void:
 
 ## Collects candidates (default players + senses) and prefers one. Override to replace.
 func _gather_interest() -> RefCounted:
+	if _lookdev_aggro != null and is_instance_valid(_lookdev_aggro):
+		return MonsterInterestScript.from_target(_lookdev_aggro, 2.0, &"lookdev")
 	var candidates: Array = []
 	_append_default_interest_candidates(candidates)
 	_append_sense_interest_candidates(candidates)
@@ -521,9 +529,8 @@ func _append_sense_interest_candidates(out: Array) -> void:
 func _prefer_interest(candidates: Array) -> RefCounted:
 	return MonsterAIScript.prefer_highest_urgency(candidates)
 
-
 func _physics_process(delta: float) -> void:
-	if Engine.is_editor_hint() or not is_alive:
+	if not is_alive or (Engine.is_editor_hint() and not is_instance_valid(_lookdev_aggro)):
 		return
 	if not is_on_floor():
 		velocity.y -= gravity * delta

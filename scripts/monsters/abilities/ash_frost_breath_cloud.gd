@@ -1,3 +1,4 @@
+@tool
 class_name AshFrostBreathCloud
 extends Area3D
 
@@ -36,6 +37,7 @@ static func spawn(
 	) as PackedScene
 	var cloud: AshFrostBreathCloud = packed.instantiate() as AshFrostBreathCloud
 	parent.add_child(cloud)
+	cloud.process_mode = Node.PROCESS_MODE_ALWAYS
 	cloud.setup(origin, toward, caster)
 	return cloud
 
@@ -79,6 +81,11 @@ func setup(origin: Vector3, toward: Vector3, caster: Node3D = null) -> void:
 	add_child(light)
 
 	set_physics_process(true)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
 
 
 func _physics_process(delta: float) -> void:

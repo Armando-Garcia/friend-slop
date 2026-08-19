@@ -1,3 +1,4 @@
+@tool
 class_name EmberHaloProjectile
 extends Area3D
 
@@ -36,6 +37,7 @@ static func spawn(
 	) as PackedScene
 	var proj: EmberHaloProjectile = packed.instantiate() as EmberHaloProjectile
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = Vector3(origin.x, origin.y, origin.z)
 	proj.setup(toward, caster)
 	return proj
@@ -89,6 +91,11 @@ func setup(toward: Vector3, caster: Node3D = null) -> void:
 	add_child(light)
 
 	set_physics_process(true)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
 
 
 func _physics_process(delta: float) -> void:

@@ -52,6 +52,12 @@ func is_dashing() -> bool:
 	return _dashing
 
 
+func fire_instant(monster: Node3D, target: Node3D) -> void:
+	if monster == null or target == null or not is_instance_valid(target):
+		return
+	try_backdash(monster, target)
+
+
 func try_backdash(monster: Node3D, target: Node3D, side_sign: float = 1.0) -> bool:
 	if _dashing:
 		return true

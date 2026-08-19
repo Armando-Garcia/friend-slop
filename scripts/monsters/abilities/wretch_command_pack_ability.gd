@@ -138,23 +138,6 @@ func _resolve_aim_point(monster: Node3D, target: Node3D) -> Vector3:
 	return monster.global_position + (-monster.global_transform.basis.z * 6.0)
 
 
-func preview_cast() -> void:
-	var monster := _find_monster()
-	start_windup_fx(monster)
-	var tree := get_tree()
-	if tree == null:
-		return
-	await tree.create_timer(windup_sec).timeout
-	if not is_inside_tree():
-		return
-	if monster != null and is_instance_valid(monster):
-		var aim := monster.global_position + (-monster.global_transform.basis.z * 8.0)
-		set_pending_aim(aim)
-		_fire_cast(monster, null)
-		clear_pending_aim()
-	stop_windup_fx()
-
-
 func _resolve_ritual(monster: Node3D) -> Node:
 	if monster == null:
 		return null

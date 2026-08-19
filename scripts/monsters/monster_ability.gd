@@ -147,22 +147,44 @@ func fire_instant(monster: Node3D, target: Node3D) -> void:
 
 
 func preview_cast() -> void:
+	reset_cooldown()
+	reset_for_combo()
 	var monster := _find_monster()
 	start_windup_fx(monster)
 	var tree := get_tree()
 	if tree == null:
+		stop_windup_fx()
 		return
 	await tree.create_timer(windup_sec).timeout
 	if not is_inside_tree():
 		return
-	if monster != null and is_instance_valid(monster):
-		var aim := monster.global_position + (-monster.global_transform.basis.z * 6.0)
-		var dummy := Node3D.new()
-		dummy.global_position = aim
-		monster.get_parent().add_child(dummy)
-		_fire_cast(monster, dummy)
-		dummy.queue_free()
+	if monster == null or not is_instance_valid(monster):
+		stop_windup_fx()
+		return
+	var target := resolve_preview_target(monster)
+	var ephemeral: Node3D = null
+	if target == null:
+		ephemeral = _spawn_ephemeral_preview_target(monster)
+		target = ephemeral
+	reset_cooldown()
+	fire_instant(monster, target)
+	if ephemeral != null and is_instance_valid(ephemeral):
+		ephemeral.queue_free()
 	stop_windup_fx()
+
+
+func resolve_preview_target(_monster: Node3D) -> Node3D:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	for node in tree.get_nodes_in_group("player"):
+		if not (node is Node3D) or not is_instance_valid(node):
+			continue
+		var alive = node.get("is_alive")
+		if alive != null and not bool(alive):
+			continue
+		return node as Node3D
+	return null
 
 
 func resolve_hand(monster: Node3D) -> Node3D:
@@ -194,6 +216,18 @@ func resolve_cast_origin(monster: Node3D) -> Vector3:
 
 func _fire_cast(_monster: Node3D, _target: Node3D) -> void:
 	pass
+
+
+func _spawn_ephemeral_preview_target(monster: Node3D) -> Node3D:
+	var dummy := Node3D.new()
+	var parent: Node = monster.get_parent()
+	if parent == null:
+		parent = monster
+	parent.add_child(dummy)
+	dummy.global_position = (
+		monster.global_position + (-monster.global_transform.basis.z * 6.0)
+	)
+	return dummy
 
 
 func _find_monster() -> Node3D:

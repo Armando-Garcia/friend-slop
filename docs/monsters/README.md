@@ -15,7 +15,7 @@ Documented **as-is**. Ember uses [ember_wretch.gd](../../scripts/monsters/ember_
 | **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: hold range, occasional weighted strafe; halo→dash→lob combo; `CLOSE_IN` |
 | **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
-Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev gallery: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
+Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev studio: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
 
 | Type | HP | Speed | Chase range | Notes |
 |------|----|-------|-------------|-------|
@@ -23,6 +23,14 @@ Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn
 | Ash | 55 | 2.8 | 11 | Grey tint |
 | Ember | 45 | 3.24 | 14 | Orange/red tint |
 | Rat | 10 | 4.4 | 10 | Leashed to host |
+
+### Lookdev workspace
+
+[monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn) is a **single-type studio**, not a three-monster gallery. Changing `monster_type` clears `SpawnRoot` and instantiates only that type at the origin.
+
+- **Inspector:** spawn/clear a stationary player dummy, preview every `Abilities/` child, Preview Combo on casters, fireball, patrol/chase pose.
+- **F6 Play Scene:** the same actions are on the `LookdevHud` overlay (type dropdown, dummy, abilities, combo, fireball, reload). Dummy is in the `player` group so the monster aggros; `lookdev_override` turns off so chase eyes and caster combat run live.
+- Ability preview aims at the dummy (full windup, no lookdev cooldown) and does not free it. Combo calls `CasterCombat.try_trigger_combo(dummy, 1.0, false)`.
 
 ---
 
@@ -310,6 +318,10 @@ Any host with a `SummonHost` child gets pack wipe on death. Bound summons also d
 | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) |
 | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) |
 | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) |
+| [scenes/monsters/monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn) |
+| [scripts/monsters/monster_workspace.gd](../../scripts/monsters/monster_workspace.gd) |
+| [scripts/monsters/workspace_player_dummy.gd](../../scripts/monsters/workspace_player_dummy.gd) |
+| [scripts/monsters/workspace_lookdev_hud.gd](../../scripts/monsters/workspace_lookdev_hud.gd) |
 
 ### AI / senses
 

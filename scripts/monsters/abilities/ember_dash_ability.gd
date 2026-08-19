@@ -102,6 +102,13 @@ func is_dashing() -> bool:
 
 
 func fire_instant(monster: Node3D, target: Node3D) -> void:
+	if monster == null or target == null or not is_instance_valid(target):
+		return
+	if not can_cast():
+		return
+	if has_meta("lookdev_preview_parent"):
+		start_dash(monster, target)
+		return
 	if not can_dash(monster, target):
 		return
 	start_dash(monster, target)

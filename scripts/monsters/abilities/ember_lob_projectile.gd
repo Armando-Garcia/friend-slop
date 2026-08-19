@@ -1,3 +1,4 @@
+@tool
 class_name EmberLobProjectile
 extends Area3D
 
@@ -31,6 +32,7 @@ static func spawn(
 	) as PackedScene
 	var proj: EmberLobProjectile = packed.instantiate() as EmberLobProjectile
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = origin
 	proj.setup(target, caster)
 	return proj
@@ -95,6 +97,11 @@ func setup(target: Node3D, caster: Node3D = null) -> void:
 	var aim := target.global_position if target != null else global_position + Vector3.FORWARD
 	_velocity = EmberLobFlightScript.initial_lob_velocity(global_position, aim)
 	set_physics_process(true)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
 
 
 func _physics_process(delta: float) -> void:
