@@ -58,10 +58,11 @@ text = "Press [Tab] to hide"
 
 [node name="TabBar" type="TabBar" parent="MarginContainer/VBox"]
 layout_mode = 2
-tab_count = 2
+tab_count = 3
 tab_0/title = "Inventory"
-tab_1/title = "Guide"
-current_tab = 1
+tab_1/title = "Spells"
+tab_2/title = "Guide"
+current_tab = 2
 
 [node name="InventoryPage" type="VBoxContainer" parent="MarginContainer/VBox"]
 visible = false
@@ -80,6 +81,24 @@ layout_mode = 2
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
 columns = 5
+
+[node name="SpellsPage" type="VBoxContainer" parent="MarginContainer/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SpellsHint" type="Label" parent="MarginContainer/VBox/SpellsPage"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.7, 0.84, 1)
+theme_override_font_sizes/font_size = 13
+text = "Drag spells to swap slots. After a voice confirm, press RMB / MMB / E to assign."
+autowrap_mode = 3
+
+[node name="SpellsGrid" type="GridContainer" parent="MarginContainer/VBox/SpellsPage"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 3
 
 [node name="GuidePage" type="VBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2

@@ -238,7 +238,10 @@ func _wire_spell_system(player: CharacterBody3D) -> void:
 
 	loadout.configure(spell_registry.get_all_spells())
 	_apply_role_starting_spells(loadout)
-	game_hud.configure(loadout, casting_session)
+	var spell_hotbar := player.get_node_or_null("%SpellHotbar")
+	if spell_hotbar == null:
+		spell_hotbar = player.get_node_or_null("SpellHotbar")
+	game_hud.configure(loadout, casting_session, spell_hotbar)
 	var inventory := player.get_node_or_null("%PlayerInventory")
 	if inventory == null:
 		inventory = player.get_node_or_null("PlayerInventory")

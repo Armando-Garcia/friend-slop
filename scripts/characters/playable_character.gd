@@ -90,6 +90,7 @@ var _broom_active_visual := false
 
 @onready var camera_pivot: Node3D = %CameraPivot
 @onready var spell_loadout: Node = %CharacterSpellLoadout
+@onready var spell_hotbar: Node = %SpellHotbar
 @onready var casting_session: SpellCastingSession = %SpellCastingSession
 @onready var effect_applier: Node = %SpellEffectApplier
 @onready var _view_camera: Camera3D = %FirstPersonCamera
@@ -428,8 +429,6 @@ func _on_cast_listen_level_changed(level: float) -> void:
 
 
 func _on_wand_spell_selected(spell: SpellDefinition) -> void:
-	_armed_spell = spell
-	_refill_mana()
 	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
 		_game_hud.call("reveal_cast_spell", spell)
 	if _wand != null and _wand.has_method("play_spell_recognition"):
@@ -437,6 +436,17 @@ func _on_wand_spell_selected(spell: SpellDefinition) -> void:
 	_lower_wand(false)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
+
+
+func _arm_slotted_spell(spell: SpellDefinition) -> void:
+	_cancel_spell_fire_charge(true)
+	_armed_spell = spell
+	if spell == null:
+		_sync_mana_hud()
+		return
+	_refill_mana()
+	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
+		_game_hud.call("reveal_cast_spell", spell)
 
 
 func _on_wand_cast_succeeded(
@@ -578,6 +588,7 @@ func _can_fire_armed_spell() -> bool:
 	one.append(_armed_spell)
 	return not _filter_free_cast_candidates(one).is_empty()
 
+
 func _try_begin_spell_fire() -> bool:
 	if _spell_fire_charging or _spell_fire_releasing:
 		return false
@@ -664,6 +675,8 @@ func _deplete_mana() -> void:
 	_mana = 0.0
 	_cancel_spell_fire_charge(true)
 	_armed_spell = null
+	if spell_hotbar != null and spell_hotbar.has_method("clear_selection"):
+		spell_hotbar.call("clear_selection")
 	if _game_hud != null:
 		if _game_hud.has_method("hide_mana"):
 			_game_hud.call("hide_mana")
@@ -771,7 +784,12 @@ func _find_delivery_objective() -> DeliveryObjective:
 func _update_interaction_prompt() -> void:
 	if _game_hud == null or not _game_hud.has_method("set_interaction_prompt"):
 		return
-	_game_hud.set_interaction_prompt(_resolve_interaction_prompt())
+	var text := _resolve_interaction_prompt()
+	if spell_hotbar != null and spell_hotbar.has_method("assignment_prompt"):
+		var slot_prompt := str(spell_hotbar.call("assignment_prompt"))
+		if not slot_prompt.is_empty():
+			text = slot_prompt
+	_game_hud.set_interaction_prompt(text)
 
 
 func _resolve_interaction_prompt() -> String:
@@ -812,18 +830,7 @@ func _resolve_interaction_prompt() -> String:
 			prompt = interactable.get_prompt()
 	if prompt.is_empty() and flight != null and flight.has_method("get_prompt"):
 		prompt = str(flight.call("get_prompt"))
-	if prompt.is_empty():
-		prompt = _default_cast_prompt()
 	return prompt
-
-
-func _default_cast_prompt() -> String:
-	var flight := _get_broom_flight()
-	if flight != null and flight.has_method("get_prompt"):
-		var broom_prompt := str(flight.call("get_prompt"))
-		if not broom_prompt.is_empty():
-			return broom_prompt
-	return ""
 
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:

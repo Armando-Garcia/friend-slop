@@ -1,12 +1,13 @@
 class_name GameHud
 extends CanvasLayer
 
-## In-game HUD: casting overlay, hotbar, Tab player menu (Inventory / Guide),
-## and the standalone spellbook overlay (B).
+## In-game HUD: casting overlay, inventory hotbar, 3-slot spell hotbar,
+## Tab player menu (Inventory / Spells / Guide), and the spellbook overlay (B).
 
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
 const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory.gd")
+const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
 const SpellbookPanelScene := preload("res://scenes/ui/book/spell/spell_book.tscn")
 
 var _loadout: Node
@@ -21,6 +22,9 @@ var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
 var _hotbar_row: HBoxContainer
 var _hotbar_labels: Array[Label] = []
+var _spell_hotbar: Node
+var _spell_hotbar_cells: Array[PanelContainer] = []
+var _spell_hotbar_labels: Array[Label] = []
 var _mana_root: Control
 var _mana_fill: ColorRect
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
@@ -53,6 +57,7 @@ func _ready() -> void:
 	_setup_spellbook_panel()
 	_setup_active_strip()
 	_setup_hotbar()
+	_setup_spell_hotbar()
 	_setup_mana_bar()
 	_update_aim_cursor_visibility()
 
@@ -89,6 +94,8 @@ func _open_player_menu() -> void:
 	player_menu.visible = true
 	if _inventory != null and player_menu.has_method("configure_inventory"):
 		player_menu.configure_inventory(_inventory)
+	if _spell_hotbar != null and player_menu.has_method("configure_spell_hotbar"):
+		player_menu.configure_spell_hotbar(_spell_hotbar)
 	if player_menu.has_method("reset_to_main"):
 		player_menu.reset_to_main()
 	_refresh_player_menu_content()
@@ -140,7 +147,11 @@ func configure_objective(objective: DeliveryObjective) -> void:
 	_refresh_objective_lines(objective)
 
 
-func configure(loadout: Node, casting_session: Node = null) -> void:
+func configure(
+	loadout: Node,
+	casting_session: Node = null,
+	spell_hotbar: Node = null
+) -> void:
 	_loadout = loadout
 	if _loadout != null and _loadout.has_signal("spell_learned"):
 		_loadout.spell_learned.connect(_on_spell_learned)
@@ -152,6 +163,7 @@ func configure(loadout: Node, casting_session: Node = null) -> void:
 		casting_session.listen_coaching_changed.connect(_update_listen_coaching)
 	if casting_session != null and casting_session.has_signal("tome_retry_tick"):
 		casting_session.tome_retry_tick.connect(update_tome_coaching_countdown)
+	_bind_spell_hotbar(spell_hotbar)
 
 
 func configure_inventory(inventory: Node) -> void:
@@ -167,6 +179,28 @@ func configure_inventory(inventory: Node) -> void:
 	if player_menu != null and player_menu.has_method("configure_inventory"):
 		player_menu.configure_inventory(_inventory)
 	_refresh_hotbar()
+
+
+func _bind_spell_hotbar(hotbar: Node) -> void:
+	var resolved := hotbar
+	if resolved == null and _loadout != null:
+		var player := _loadout.get_parent()
+		if player != null:
+			resolved = player.get_node_or_null("%SpellHotbar")
+			if resolved == null:
+				resolved = player.get_node_or_null("SpellHotbar")
+	if (
+		_spell_hotbar != null
+		and _spell_hotbar.has_signal("slots_changed")
+		and _spell_hotbar.slots_changed.is_connected(_refresh_spell_hotbar)
+	):
+		_spell_hotbar.slots_changed.disconnect(_refresh_spell_hotbar)
+	_spell_hotbar = resolved
+	if _spell_hotbar != null and _spell_hotbar.has_signal("slots_changed"):
+		_spell_hotbar.slots_changed.connect(_refresh_spell_hotbar)
+	if player_menu != null and player_menu.has_method("configure_spell_hotbar"):
+		player_menu.configure_spell_hotbar(_spell_hotbar)
+	_refresh_spell_hotbar()
 
 
 func set_interaction_prompt(text: String) -> void:
@@ -282,14 +316,14 @@ func hide_mana() -> void:
 
 
 func _setup_mana_bar() -> void:
-	## Between spell-word band and hotbar (hotbar top ≈ -96 from bottom).
+	## Above the spell hotbar (spell bar top ≈ -184 from bottom).
 	var anchor := MarginContainer.new()
 	anchor.name = "ManaBarMargin"
 	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	anchor.offset_left = -160.0
-	anchor.offset_top = -128.0
+	anchor.offset_top = -208.0
 	anchor.offset_right = 160.0
-	anchor.offset_bottom = -108.0
+	anchor.offset_bottom = -188.0
 	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	anchor.visible = false
@@ -364,6 +398,86 @@ func _setup_hotbar() -> void:
 		_hotbar_row.add_child(cell)
 		_hotbar_labels.append(label)
 	_refresh_hotbar()
+
+
+func _setup_spell_hotbar() -> void:
+	var anchor := MarginContainer.new()
+	anchor.name = "SpellHotbarMargin"
+	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	anchor.offset_left = -200.0
+	anchor.offset_top = -184.0
+	anchor.offset_right = 200.0
+	anchor.offset_bottom = -104.0
+	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(anchor)
+
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.add_child(row)
+
+	_spell_hotbar_cells.clear()
+	_spell_hotbar_labels.clear()
+	for i in SpellHotbarScript.SLOT_COUNT:
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = Vector2(120, 72)
+		var label := Label.new()
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
+		cell.add_child(label)
+		row.add_child(cell)
+		_spell_hotbar_cells.append(cell)
+		_spell_hotbar_labels.append(label)
+	_refresh_spell_hotbar()
+
+
+func _refresh_spell_hotbar() -> void:
+	if _spell_hotbar_labels.is_empty():
+		return
+	var pending := (
+		_spell_hotbar != null
+		and _spell_hotbar.has_method("has_pending")
+		and bool(_spell_hotbar.call("has_pending"))
+	)
+	var selected := -1
+	if _spell_hotbar != null and _spell_hotbar.has_method("get_selected_index"):
+		selected = int(_spell_hotbar.call("get_selected_index"))
+	for i in _spell_hotbar_labels.size():
+		var action := SpellHotbarScript.SLOT_ACTIONS[i]
+		var key := InputPromptScript.action_label(action, "?")
+		var spell_id := ""
+		if _spell_hotbar != null and _spell_hotbar.has_method("get_slot"):
+			spell_id = str(_spell_hotbar.call("get_slot", i))
+		var spell_name := ""
+		if _spell_hotbar != null and _spell_hotbar.has_method("display_name"):
+			spell_name = str(_spell_hotbar.call("display_name", spell_id))
+		elif not spell_id.is_empty():
+			spell_name = spell_id.capitalize()
+		if spell_name.is_empty():
+			_spell_hotbar_labels[i].text = "%s\n—" % key
+		else:
+			_spell_hotbar_labels[i].text = "%s\n%s" % [key, spell_name]
+		_apply_spell_slot_style(_spell_hotbar_cells[i], pending, i == selected)
+
+
+func _apply_spell_slot_style(cell: PanelContainer, pending: bool, selected: bool) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.06, 0.16, 0.88)
+	style.set_corner_radius_all(8)
+	if pending:
+		style.set_border_width_all(2)
+		style.border_color = Color(0.95, 0.78, 0.35, 0.95)
+	elif selected:
+		style.set_border_width_all(2)
+		style.border_color = Color(0.78, 0.55, 1.0, 0.95)
+	else:
+		style.set_border_width_all(1)
+		style.border_color = Color(0.72, 0.55, 0.95, 0.45)
+	cell.add_theme_stylebox_override("panel", style)
 
 
 func _refresh_hotbar() -> void:

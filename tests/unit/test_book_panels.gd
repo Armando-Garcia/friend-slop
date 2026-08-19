@@ -216,13 +216,15 @@ func _test_player_menu_has_no_spellbook_tab(tree: SceneTree) -> int:
 	tree.root.add_child(menu)
 	var tabs: TabBar = menu.get_node("MarginContainer/VBox/TabBar")
 	var bad := (
-		tabs.tab_count != 2
+		tabs.tab_count != 3
+		or tabs.get_tab_title(1) != "Spells"
 		or menu.get_node_or_null("MarginContainer/VBox/CodexPage") != null
+		or menu.get_node_or_null("MarginContainer/VBox/SpellsPage") == null
 	)
 	tree.root.remove_child(menu)
 	menu.queue_free()
 	if bad:
-		push_error("Expected player menu to drop the Spellbook tab")
+		push_error("Expected player menu to have Inventory / Spells / Guide tabs")
 		return 1
 	return 0
 

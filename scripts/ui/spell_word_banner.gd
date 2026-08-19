@@ -12,8 +12,8 @@ const DEFAULT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const OUTLINE_COLOR := Color(0.0, 0.0, 0.0, 0.9)
 ## Place text 40% of the way from screen-center aim toward the hotbar mid.
 const AIM_TO_HOTBAR_T := 0.40
-## Matches GameHud HotbarMargin mid (~offset_top -96 … offset_bottom -16).
-const HOTBAR_MID_FROM_BOTTOM_PX := 56.0
+## Matches GameHud SpellHotbarMargin mid (~offset_top -184 … offset_bottom -104).
+const HOTBAR_MID_FROM_BOTTOM_PX := 144.0
 const BAND_HALF_HEIGHT_PX := 44.0
 
 var _full_text: String = ""
