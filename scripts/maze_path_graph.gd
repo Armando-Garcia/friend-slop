@@ -472,8 +472,16 @@ static func _patrol_goal_junctions(
 		if not segment_touches_rect(graph, sid, home, size):
 			continue
 		var seg: Dictionary = segments[sid]
-		goals[int(seg["a_j"])] = true
-		goals[int(seg["b_j"])] = true
+		var a_j := int(seg["a_j"])
+		var b_j := int(seg["b_j"])
+		if a_j >= 0 and a_j < junctions.size():
+			var a_pos: Vector3 = junctions[a_j]["pos"]
+			if point_in_patrol_rect(a_pos, home, size):
+				goals[a_j] = true
+		if b_j >= 0 and b_j < junctions.size():
+			var b_pos: Vector3 = junctions[b_j]["pos"]
+			if point_in_patrol_rect(b_pos, home, size):
+				goals[b_j] = true
 	return goals
 
 

@@ -26,13 +26,20 @@ func run() -> int:
 	return failures
 
 
+func _free_setup(setup: Dictionary) -> void:
+	if setup.has("body") and setup["body"] != null:
+		setup["body"].free()
+	if setup.has("holder") and setup["holder"] != null:
+		setup["holder"].free()
+
+
 func _test_begin_uses_spawn_home_and_radius_square() -> int:
 	var setup := _begin_at_maze_start()
 	if setup.is_empty():
 		return 1
 	var patrol: RefCounted = setup["patrol"]
 	var spawn: Vector3 = setup["spawn"]
-	setup["body"].free()
+	_free_setup(setup)
 	var home: Vector3 = patrol.get("home")
 	var size: Vector2 = patrol.get("size")
 	if Vector3(home.x - spawn.x, 0.0, home.z - spawn.z).length() > 0.05:
@@ -50,7 +57,7 @@ func _test_begin_snaps_onto_maze_centerline() -> int:
 		return 1
 	var graph: Dictionary = setup["graph"]
 	var patrol: RefCounted = setup["patrol"]
-	setup["body"].free()
+	_free_setup(setup)
 	var sid: int = int(patrol.get("segment_id"))
 	var segments: Array = graph.get("segments", [])
 	if sid < 0 or sid >= segments.size():
@@ -77,23 +84,28 @@ func _test_follow_stays_on_centerline() -> int:
 	var sid: int = int(patrol.get("segment_id"))
 	var segments: Array = setup["graph"]["segments"]
 	if sid < 0 or sid >= segments.size():
-		body.free()
+		_free_setup(setup)
 		push_error("Need a corridor before testing centerline follow")
 		return 1
 	var seg: Dictionary = segments[sid]
 	var along := Vector3(seg["b"].x - seg["a"].x, 0.0, seg["b"].z - seg["a"].z)
 	if along.length_squared() < 0.0001:
-		body.free()
+		_free_setup(setup)
 		push_error("Corridor segment was degenerate")
 		return 1
 	along = along.normalized()
 	var perp := Vector3(-along.z, 0.0, along.x)
-	body.global_position += perp * 0.3
+	var mid := Vector3(
+		(seg["a"].x + seg["b"].x) * 0.5,
+		body.global_position.y,
+		(seg["a"].z + seg["b"].z) * 0.5
+	)
+	body.global_position = mid + perp * 0.2
 	body.velocity = Vector3.ZERO
 	var vel: Vector3 = patrol.call("follow_velocity", body, 2.4)
 	var on: Vector3 = _on_segment(body.global_position, seg["a"], seg["b"])
 	var off := Vector3(body.global_position.x - on.x, 0.0, body.global_position.z - on.z)
-	body.free()
+	_free_setup(setup)
 	if off.length() > 0.05:
 		push_error("Follow should snap onto the corridor centerline, off=%s" % off.length())
 		return 1
@@ -114,7 +126,7 @@ func _test_tick_keeps_walking_viable_lines() -> int:
 	patrol.call("tick", body, setup["rng"])
 	var sid: int = int(patrol.get("segment_id"))
 	var viable: PackedInt32Array = patrol.get("viable")
-	body.free()
+	_free_setup(setup)
 	if sid < 0 or sid >= graph["segments"].size():
 		push_error("Tick at a junction must stay on the maze graph, sid=%s" % sid)
 		return 1
@@ -131,7 +143,7 @@ func _test_clearing_resnap_returns_toward_spawn() -> int:
 	var graph: Dictionary = setup["graph"]
 	var clearing := _clearing_center(graph)
 	if clearing == Vector3.ZERO:
-		setup["body"].free()
+		_free_setup(setup)
 		push_error("Expected a clearing so return-to-spawn can be tested")
 		return 1
 	var body: CharacterBody3D = setup["body"]
@@ -140,7 +152,7 @@ func _test_clearing_resnap_returns_toward_spawn() -> int:
 	patrol.call("tick", body, setup["rng"])
 	var sid: int = int(patrol.get("segment_id"))
 	var preferred: PackedInt32Array = patrol.get("preferred")
-	body.free()
+	_free_setup(setup)
 	if sid < 0 or sid >= graph["segments"].size():
 		push_error("From a clearing, patrol should resnap onto a path")
 		return 1
@@ -173,16 +185,16 @@ func _test_outside_rect_follows_homeward_return() -> int:
 			far_d = d
 			far = pos
 	if far == Vector3.ZERO:
-		body.free()
+		_free_setup(setup)
 		push_error("Expected a junction outside the 16m patrol square")
 		return 1
 	far.y = body.global_position.y
 	body.global_position = far
-	patrol.call("tick", body, setup["rng"])
+	patrol.call("begin", body, setup["rng"], PATROL_RADIUS)
 	var sid: int = int(patrol.get("segment_id"))
 	var preferred: PackedInt32Array = patrol.get("preferred")
 	var toward_b: bool = bool(patrol.get("toward_b"))
-	body.free()
+	_free_setup(setup)
 	if not _ids_has(preferred, sid):
 		push_error("Outside the patrol square should walk a red return line, sid=%s" % sid)
 		return 1
@@ -208,7 +220,11 @@ func _begin_at_maze_start() -> Dictionary:
 		return {}
 	var spawn := MazeGeometryScript.grid_to_world(1, 1, MAZE_W, MAZE_H, CELL)
 	spawn.y = 0.05
+	var holder := Node3D.new()
+	var tree := Engine.get_main_loop() as SceneTree
+	tree.root.add_child(holder)
 	var body := CharacterBody3D.new()
+	holder.add_child(body)
 	body.global_position = spawn
 	body.set_meta("maze_path_graph", graph)
 	var rng := RandomNumberGenerator.new()
@@ -219,6 +235,7 @@ func _begin_at_maze_start() -> Dictionary:
 		"graph": graph,
 		"spawn": spawn,
 		"body": body,
+		"holder": holder,
 		"patrol": patrol,
 		"rng": rng,
 	}

@@ -16,7 +16,10 @@ const FLOOR_THICKNESS := 0.2
 static func maze_offset(maze_width: int, maze_height: int, cell_size: float) -> Vector3:
 	var grid_w := maze_width * 2 + 1
 	var grid_h := maze_height * 2 + 1
-	return Vector3(grid_w * cell_size * 0.5, 0.0, grid_h * cell_size * 0.5)
+	## Center the middle wall-grid cell at world origin (not the grid bbox center).
+	var half_x := (grid_w - 1) * cell_size * 0.5
+	var half_z := (grid_h - 1) * cell_size * 0.5
+	return Vector3(half_x, 0.0, half_z)
 
 
 static func grid_to_world(
