@@ -69,6 +69,25 @@ func tick_occasional_chase_walk(delta: float, target: Node3D) -> bool:
 	return true
 
 
+func pick_charge_ability(target: Node3D) -> Node:
+	## Ice is the primary rotation spell; ward when ice is cooling down or out of band.
+	var ice := get_node_or_null("Abilities/IceBolt")
+	if ice != null and _ability_ready_for_charge(ice, target):
+		return ice
+	var ward := get_node_or_null("Abilities/AshWard")
+	if ward != null and _ability_ready_for_charge(ward, target):
+		return ward
+	return null
+
+
+func _ability_ready_for_charge(ability: Node, target: Node3D) -> bool:
+	if not bool(ability.call("can_cast")):
+		return false
+	if ability.has_method("is_ready_to_cast"):
+		return bool(ability.call("is_ready_to_cast", self, target))
+	return bool(ability.call("is_target_in_range", self, target))
+
+
 func select_combo_steps(target: Node3D) -> Array:
 	var dist := 0.0
 	if target != null and is_instance_valid(target):

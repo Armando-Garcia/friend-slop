@@ -18,7 +18,6 @@ func _ready() -> void:
 		ability_id = "ash_ward"
 	if display_name == "Ability":
 		display_name = "Ash Ward"
-	participates_in_cast_rotation = false
 	telegraph_color = Color(0.4, 0.7, 1.0, 1.0)
 	cooldown_sec = 7.0
 	min_cast_range = 0.0

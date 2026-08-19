@@ -465,7 +465,11 @@ func _is_standing_still() -> bool:
 	return vel.length_squared() <= STANDSTILL_SPEED_EPS * STANDSTILL_SPEED_EPS
 
 
-func _pick_charge_ability(_target: Node3D) -> Node:
+func _pick_charge_ability(target: Node3D) -> Node:
+	if _monster.has_method("pick_charge_ability"):
+		var custom: Variant = _monster.call("pick_charge_ability", target)
+		if custom is Node and is_instance_valid(custom as Node):
+			return custom as Node
 	var abilities := _get_chargeable_abilities()
 	if abilities.is_empty():
 		return null

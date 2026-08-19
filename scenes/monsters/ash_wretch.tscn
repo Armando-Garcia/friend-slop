@@ -135,7 +135,6 @@ hand_side = 1
 requires_chase_target = true
 min_cast_range = 0.0
 max_cast_range = 20.0
-participates_in_cast_rotation = false
 
 [node name="FrostBreath" type="Node3D" parent="Abilities" index="2"]
 script = ExtResource("6_frost")
