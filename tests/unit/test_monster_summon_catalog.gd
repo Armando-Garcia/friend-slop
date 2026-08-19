@@ -42,6 +42,7 @@ func _test_eye_glow_colors_by_id() -> int:
 		"wretch": Color(0.25, 1.0, 0.35, 1.0),
 		"ash_wretch": Color(0.55, 0.55, 0.58, 1.0),
 		"ember_wretch": Color(1.0, 0.12, 0.08, 1.0),
+		"charger": Color(0.95, 0.08, 0.05, 1.0),
 	}
 	for id in expected:
 		if not by_id.has(id):
@@ -60,6 +61,7 @@ func _test_type_scene_paths_by_id() -> int:
 		"wretch": "res://scenes/monsters/wretch.tscn",
 		"ash_wretch": "res://scenes/monsters/ash_wretch.tscn",
 		"ember_wretch": "res://scenes/monsters/ember_wretch.tscn",
+		"charger": "res://scenes/monsters/charger.tscn",
 	}
 	for entry in CatalogScript.entries():
 		var id := str(entry.get("id", ""))

@@ -18,12 +18,14 @@ const TargetedObjectControlScript := preload("res://scripts/spells/targeted_obje
 const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+@export var is_alive: bool = true
 
 var broom_active := false:
 	set(value):
@@ -244,11 +246,17 @@ func _is_player_menu_open() -> bool:
 
 func _wand_controls_blocked() -> bool:
 	return (
-		_is_spellbook_open()
+		is_stunned()
+		or _is_spellbook_open()
 		or _is_player_menu_open()
 		or _is_monster_book_busy()
 		or get_tree().paused
 	)
+
+
+func is_stunned() -> bool:
+	var stun := get_node_or_null("Stun")
+	return stun != null and stun.has_method("is_stunned") and bool(stun.call("is_stunned"))
 
 
 func _confirm_fake_wall_placement(spell: SpellDefinition, params: Dictionary) -> void:
@@ -367,7 +375,7 @@ func _aim_fireball_origin() -> Vector3:
 
 
 func _input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if event.is_action_pressed("ui_cancel") and _wand_raised and not _wand_controls_blocked():
 		_lower_wand(true)
@@ -375,7 +383,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		head.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
@@ -524,7 +532,7 @@ func stop_casting_for_relic_carry() -> void:
 
 
 func _try_toggle_wand_raise() -> bool:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return false
 	if _wand_controls_blocked():
 		return false
@@ -567,7 +575,7 @@ func _lower_wand(cancel_listen: bool) -> void:
 
 func _can_fire_armed_spell() -> bool:
 	if not (
-		is_multiplayer_authority()
+		_uses_local_view()
 		and not _wand_controls_blocked()
 		and not _wand_raised
 		and not is_carrying_relic()
@@ -688,7 +696,7 @@ func _sync_mana_hud() -> void:
 		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
 
 func _tick_mana_drain(delta: float) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if _armed_spell == null or _mana <= 0.0:
 		return
@@ -933,7 +941,7 @@ func _sync_body_yaw_to_head() -> void:
 
 func _physics_process(delta: float) -> void:
 	_sync_body_yaw_to_head()
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		_refresh_broom_visual()
 		return
 	_tick_mana_drain(delta)
@@ -941,6 +949,15 @@ func _physics_process(delta: float) -> void:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
+	if is_stunned():
+		var stun := get_node("Stun")
+		stun.call("tick_physics", self, delta, gravity)
+		SlideSurfaceScript.prepare(self)
+		move_and_slide()
+		stun.call("after_slide", self)
+		_separate_from_players()
+		_update_interaction_prompt()
+		return
 
 	var flight := _get_broom_flight()
 	if flight != null and flight.has_method("is_active") and bool(flight.call("is_active")):
@@ -951,23 +968,9 @@ func _physics_process(delta: float) -> void:
 		_update_interaction_prompt()
 		return
 
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = JUMP_VELOCITY
-
-	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := (head.transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-
-	var speed := (SPRINT_SPEED if Input.is_action_pressed("sprint") else WALK_SPEED)
-	speed *= _speed_boost_multiplier
-	if direction:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
-	else:
-		velocity.x = move_toward(velocity.x, 0.0, speed)
-		velocity.z = move_toward(velocity.z, 0.0, speed)
+	SlideSurfaceScript.apply_ground_move(
+		self, head, gravity, delta, _speed_boost_multiplier
+	)
 	_apply_knockback_bleed(delta)
 
 	move_and_slide()

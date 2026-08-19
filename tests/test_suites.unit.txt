@@ -1,5 +1,6 @@
 res://tests/unit/test_maze_carver.gd
 res://tests/unit/test_maze_wall_mesh.gd
+res://tests/unit/test_slide_surface.gd
 res://tests/unit/test_maze_passage_query.gd
 res://tests/unit/test_discoverable_spawn_plan.gd
 res://tests/unit/test_voice_spell_validator.gd
@@ -8,6 +9,15 @@ res://tests/unit/test_floating_follow_path.gd
 res://tests/unit/test_world_ground.gd
 res://tests/unit/test_hovering_orb_motion.gd
 res://tests/unit/test_monster_ai.gd
+res://tests/unit/test_monster_patrol.gd
+res://tests/unit/test_maze_path_graph.gd
+res://tests/unit/test_charger_launch.gd
+res://tests/unit/test_charger_charge.gd
+res://tests/unit/test_charger_charge_target.gd
+res://tests/unit/test_monster_sense_gizmos.gd
+res://tests/unit/test_monster_sense.gd
+res://tests/unit/test_stun_stars.gd
+res://tests/unit/test_force_field.gd
 res://tests/unit/test_summon.gd
 res://tests/unit/test_ash_ice_flight.gd
 res://tests/unit/test_monster_summon_catalog.gd
@@ -32,6 +42,7 @@ res://tests/unit/test_delivery_objective_state.gd
 res://tests/unit/test_delivery_objective_audio.gd
 res://tests/unit/test_delivery_objective_sync.gd
 res://tests/unit/test_display_resolution_presets.gd
+res://tests/unit/test_settings_display.gd
 res://tests/unit/test_flare_flight.gd
 res://tests/unit/test_ui_scale.gd
 res://tests/unit/test_moon.gd

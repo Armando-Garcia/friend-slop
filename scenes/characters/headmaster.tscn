@@ -8,11 +8,13 @@ radius = 0.27441406
 height = 0.8107129
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+resource_local_to_scene = true
 albedo_color = Color(0.55, 0.2, 0.7, 1)
 metallic = 0.05
 roughness = 0.62
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_head"]
+resource_local_to_scene = true
 albedo_color = Color(0.62, 0.28, 0.78, 1)
 metallic = 0.05
 roughness = 0.62

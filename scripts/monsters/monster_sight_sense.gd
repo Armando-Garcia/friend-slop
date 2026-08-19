@@ -1,3 +1,4 @@
+@tool
 class_name MonsterSightSense
 extends MonsterSense
 
@@ -7,15 +8,19 @@ const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.
 ## Default player capsule width used when sizing a narrow vision cone.
 const DEFAULT_PLAYER_WIDTH_M := 0.55
 
+## Max distance (m) a player can be seen. Walls block this; hearing does not.
 @export var sight_range: float = 10.0
+## If on, a ray from eye_height must be clear. LOS gizmo is red when blocked.
 @export var require_line_of_sight: bool = true
+## Ray origin height (m) above the monster origin. Green sphere on the gizmo.
 @export var eye_height: float = 0.55
+## How strongly this sense pulls AI vs hearing. Higher wins interest ties.
 @export var sight_urgency: float = 1.4
-## When true, only players inside a forward cone are seen.
+## If on, only players inside the forward wedge are seen (not a full disc).
 @export var use_vision_cone: bool = false
-## Full horizontal width of the cone at sight_range (meters).
-@export_range(0.05, 5.0, 0.01) var cone_width_at_max_range: float = DEFAULT_PLAYER_WIDTH_M
-## When true, sight is disabled unless the monster is in ALERT or CHASE.
+## Wedge width (m) at sight_range. Charger uses a wide value; Wretch is player-thin.
+@export_range(0.05, 40.0, 0.01) var cone_width_at_max_range: float = DEFAULT_PLAYER_WIDTH_M
+## If on, this sense is ignored until the monster is already ALERT or CHASE.
 @export var only_when_alert_or_chase: bool = false
 
 
@@ -68,9 +73,12 @@ func _in_vision_cone(monster: CharacterBody3D, flat_to_player: Vector3) -> bool:
 		return true
 	forward = forward.normalized()
 	var dir := flat_to_player.normalized()
-	var half_width := maxf(cone_width_at_max_range, 0.05) * 0.5
-	var half_angle := atan(half_width / maxf(sight_range, 0.01))
-	return forward.angle_to(dir) <= half_angle
+	return forward.angle_to(dir) <= cone_half_angle(sight_range, cone_width_at_max_range)
+
+
+static func cone_half_angle(range_m: float, width_at_max_m: float) -> float:
+	var half_width := maxf(width_at_max_m, 0.05) * 0.5
+	return atan(half_width / maxf(range_m, 0.01))
 
 
 func _has_line_of_sight(monster: CharacterBody3D, target: Node3D) -> bool:
@@ -82,8 +90,27 @@ func _has_line_of_sight(monster: CharacterBody3D, target: Node3D) -> bool:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
-	query.exclude = [monster.get_rid()]
+	query.collision_mask = 1
+	var exclude: Array = [monster.get_rid()]
 	if target is CollisionObject3D:
-		query.exclude.append((target as CollisionObject3D).get_rid())
+		exclude.append((target as CollisionObject3D).get_rid())
+	query.exclude = exclude
 	var hit := world.direct_space_state.intersect_ray(query)
 	return hit.is_empty()
+
+
+static func occlude_distance(
+	world: World3D, from: Vector3, to: Vector3, exclude: Array
+) -> float:
+	## Distance along from→to until a world blocker, or the full span if clear.
+	if world == null or world.direct_space_state == null:
+		return from.distance_to(to)
+	var query := PhysicsRayQueryParameters3D.create(from, to)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+	query.collision_mask = 1
+	query.exclude = exclude
+	var hit := world.direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return from.distance_to(to)
+	return from.distance_to(hit.position)

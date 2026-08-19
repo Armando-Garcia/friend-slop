@@ -9,25 +9,25 @@
 [ext_resource type="Resource" uid="uid://cyg7o8wvlijw5" path="res://resources/discoverables/default_run_config.tres" id="5_run_cfg"]
 [ext_resource type="Script" uid="uid://dwdwxw8dalcmm" path="res://scripts/spells/spell_definition.gd" id="6_eb6dy"]
 [ext_resource type="Script" uid="uid://bkvka4fuy7rl2" path="res://scripts/spells/spell_registry.gd" id="6_registry"]
-[ext_resource type="Resource" path="res://resources/spells/show_me.tres" id="7_show_me"]
-[ext_resource type="Resource" path="res://resources/spells/haste.tres" id="8_haste"]
+[ext_resource type="Resource" uid="uid://dpu5p57msg8yx" path="res://resources/spells/show_me.tres" id="7_show_me"]
+[ext_resource type="Resource" uid="uid://678bsder6qrs" path="res://resources/spells/haste.tres" id="8_haste"]
 [ext_resource type="Script" uid="uid://bfnrfxnwjg02y" path="res://scripts/ui/aim_cursor.gd" id="9_aim"]
 [ext_resource type="Script" uid="uid://crdov1cq8kly5" path="res://scripts/ui/game_hud.gd" id="9_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/player_menu.tscn" id="9_player_menu"]
-[ext_resource type="Script" path="res://scripts/ui/spell_word_banner.gd" id="9_spell_word"]
+[ext_resource type="Script" uid="uid://c3khbmmmkw14b" path="res://scripts/ui/spell_word_banner.gd" id="9_spell_word"]
 [ext_resource type="Script" uid="uid://dnyy0kwsw60ow" path="res://scripts/objectives/delivery_objective.gd" id="10_objective"]
 [ext_resource type="Script" uid="uid://yf2yi73fbs6o" path="res://scripts/spells/voice_spell_validator.gd" id="10_validator"]
 [ext_resource type="Script" uid="uid://cgo2lkhlxtcky" path="res://scripts/spells/spell_validation_runner.gd" id="11_runner"]
 [ext_resource type="PackedScene" uid="uid://cpausemenu001" path="res://scenes/ui/pause_menu.tscn" id="14_pause"]
-[ext_resource type="Resource" path="res://resources/spells/fireball.tres" id="15_fireball"]
-[ext_resource type="Resource" path="res://resources/spells/headmaster/fake_wall.tres" id="24_fake_wall"]
-[ext_resource type="Resource" path="res://resources/spells/light.tres" id="25_light"]
-[ext_resource type="Resource" path="res://resources/spells/light_ball.tres" id="26_light_ball"]
-[ext_resource type="Resource" path="res://resources/spells/target.tres" id="27_target"]
+[ext_resource type="Resource" uid="uid://dud80ue7p23rt" path="res://resources/spells/fireball.tres" id="15_fireball"]
+[ext_resource type="Resource" uid="uid://djvkxthosghuf" path="res://resources/spells/headmaster/fake_wall.tres" id="24_fake_wall"]
+[ext_resource type="Resource" uid="uid://dqc3frk775rdr" path="res://resources/spells/light.tres" id="25_light"]
+[ext_resource type="Resource" uid="uid://yhkf2aamt6r7" path="res://resources/spells/light_ball.tres" id="26_light_ball"]
+[ext_resource type="Resource" uid="uid://dex1n2eif1prk" path="res://resources/spells/target.tres" id="27_target"]
 [ext_resource type="Script" uid="uid://cjpjlfd2a3wsx" path="res://scripts/player_spawn_slot.gd" id="28_spawn_slot"]
-[ext_resource type="Resource" path="res://resources/spells/pull.tres" id="29_pull"]
-[ext_resource type="Resource" path="res://resources/spells/follow.tres" id="30_follow"]
-[ext_resource type="Resource" path="res://resources/spells/dispell.tres" id="31_dispell"]
+[ext_resource type="Resource" uid="uid://cnbmfykshgjy" path="res://resources/spells/pull.tres" id="29_pull"]
+[ext_resource type="Resource" uid="uid://b2tj23aicq5ks" path="res://resources/spells/follow.tres" id="30_follow"]
+[ext_resource type="Resource" uid="uid://dm0b3twvh1yuv" path="res://resources/spells/dispell.tres" id="31_dispell"]
 [ext_resource type="Resource" uid="uid://bsynwwje1gvsy" path="res://resources/spells/headmaster/clone.tres" id="32_clone"]
 [ext_resource type="Resource" uid="uid://c300xtr2mgchs" path="res://resources/spells/flare.tres" id="33_flare"]
 [ext_resource type="Resource" uid="uid://uuo4bgv3b66" path="res://resources/spells/stop.tres" id="34_stop"]
@@ -156,7 +156,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.92, 0.88, 1, 1)
 theme_override_font_sizes/font_size = 18
 
-[node name="SpellWordBanner" type="Control" parent="GameHUD"]
+[node name="SpellWordBanner" type="Control" parent="GameHUD" unique_id=2124345854]
+z_index = 64
 layout_mode = 3
 anchors_preset = 8
 anchor_left = 0.5
@@ -170,10 +171,9 @@ offset_bottom = 224.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-z_index = 64
 script = ExtResource("9_spell_word")
 
-[node name="SpellWordLabel" type="Label" parent="GameHUD/SpellWordBanner"]
+[node name="SpellWordLabel" type="Label" parent="GameHUD/SpellWordBanner" unique_id=83925261]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -186,7 +186,6 @@ theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 68
 horizontal_alignment = 1
 vertical_alignment = 1
-mouse_filter = 2
 
 [node name="CastingPanel" type="PanelContainer" parent="GameHUD" unique_id=1360674168]
 anchors_preset = 7

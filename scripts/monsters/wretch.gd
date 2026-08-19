@@ -29,7 +29,7 @@ func _ready() -> void:
 	super._ready()
 	_ritual = get_node_or_null("Ritual")
 	## Sight/hearing + summons own aggro — do not use long proximity chase_range.
-	chase_range = mini(chase_range, 3.0)
+	chase_range = minf(chase_range, 3.0)
 	_sync_lookdev_ritual()
 
 

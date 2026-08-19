@@ -21,6 +21,8 @@ func run() -> int:
 	test_clearings_respect_separation()
 	test_spire_clearing_opens_center()
 	test_count_open_neighbors()
+	test_open_box_is_hollow_with_solid_border()
+	test_open_box_cover_marks_center()
 	return failures
 
 
@@ -234,6 +236,31 @@ func test_count_open_neighbors() -> void:
 		0,
 		"out-of-bounds positions should report zero neighbors"
 	)
+
+
+func test_open_box_is_hollow_with_solid_border() -> void:
+	var grid: Array = MazeCarverScript.generate_open_box(5, 5, false)
+	_assert_true(
+		MazeCarverScript.outer_boundary_is_solid(grid),
+		"open box should keep a solid outer wall ring"
+	)
+	var size: Vector2i = MazeCarverScript.grid_size_for(5, 5)
+	_assert_eq(int(grid[1][1]), 0, "open box interior corner should be carved")
+	_assert_eq(
+		int(grid[size.x - 2][size.y - 2]),
+		0,
+		"open box far interior should be carved"
+	)
+
+
+func test_open_box_cover_marks_center() -> void:
+	var open_grid: Array = MazeCarverScript.generate_open_box(5, 5, false)
+	var cover_grid: Array = MazeCarverScript.generate_open_box(5, 5, true)
+	var size: Vector2i = MazeCarverScript.grid_size_for(5, 5)
+	var cx := int(size.x / 2)
+	var cy := int(size.y / 2)
+	_assert_eq(int(open_grid[cx][cy]), 0, "hollow box center should be open")
+	_assert_eq(int(cover_grid[cx][cy]), 1, "cover box center should be a wall")
 
 
 func test_carve_iterative_does_not_use_recursion() -> void:

@@ -26,8 +26,8 @@ func setup(inv: Node, index: int) -> void:
 func refresh() -> void:
 	var item_id := _item_id()
 	var label := slot_index + 1
-	var name := _display_name(item_id)
-	text = "%d\n—" % label if name.is_empty() else "%d\n%s" % [label, name]
+	var item_name := _display_name(item_id)
+	text = "%d\n—" % label if item_name.is_empty() else "%d\n%s" % [label, item_name]
 	var style := StyleBoxFlat.new()
 	style.bg_color = (
 		_SLOT_HOTBAR if slot_index < PlayerInventoryScript.HOTBAR_COUNT else _SLOT_NORMAL

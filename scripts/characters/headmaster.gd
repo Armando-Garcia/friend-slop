@@ -19,7 +19,7 @@ func _apply_character_color(color: Color) -> void:
 		color.b * 0.45 + 0.12
 	)
 	super._apply_character_color(headmaster_tint)
-	var body_mat := _body_mesh.material_override as StandardMaterial3D
+	var body_mat := _authored_material(_body_mesh)
 	if body_mat != null:
 		body_mat.roughness = 0.85
 		body_mat.metallic = 0.12

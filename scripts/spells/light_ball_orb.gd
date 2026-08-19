@@ -350,7 +350,11 @@ func _update_beam(from_pos: Vector3, to_pos: Vector3) -> void:
 	_beam.visible = true
 	_beam.global_position = from_pos.lerp(to_pos, 0.5)
 	_beam.scale = Vector3(1.0, length, 1.0)
-	_beam.basis = Basis.looking_at(delta.normalized(), Vector3.UP)
+	var dir := delta.normalized()
+	var up := Vector3.UP
+	if absf(dir.dot(up)) > 0.95:
+		up = Vector3.RIGHT
+	_beam.basis = Basis.looking_at(dir, up)
 	_beam.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
 
 

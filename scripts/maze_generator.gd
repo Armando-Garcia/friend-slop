@@ -13,7 +13,9 @@ signal maze_ready(
 signal exit_reached(player: Node3D)
 
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
-const MazeWallMeshScript := preload("res://scripts/maze_wall_mesh.gd")
+const MazeGeometryScript := preload("res://scripts/maze_geometry.gd")
+const MazePathGraphScript := preload("res://scripts/maze_path_graph.gd")
+const MazePathsScript := preload("res://scripts/maze_paths.gd")
 const PlayerSpawnLayoutScript := preload("res://scripts/player_spawn_layout.gd")
 
 const SPAWN_ZONE_PREVIEW_NAME := "SpawnZonePreview"
@@ -76,6 +78,12 @@ const WALL_COLLISION_PREVIEW_COLOR := Color(0.1, 0.95, 1.0, 0.32)
 		show_wall_collision_shapes = value
 		if is_inside_tree():
 			_sync_wall_collision_preview()
+## Corridor centerlines, junctions, clearings, return-to-patrol paths. Lookdev.
+@export var show_pathing: bool = false:
+	set(value):
+		show_pathing = value
+		if is_inside_tree():
+			_apply_show_pathing()
 
 var _wall_grid: Array = []
 var _exit_triggered: bool = false
@@ -145,6 +153,8 @@ func generate_maze(seed_value: int = -1) -> void:
 	})
 	_build_floor()
 	_build_walls()
+	_build_keep_in()
+	_build_maze_paths()
 
 	var spawn := _cell_to_world(0, 0)
 	spawn.y = 0.5
@@ -153,7 +163,7 @@ func generate_maze(seed_value: int = -1) -> void:
 	_exit_world_pos = exit
 
 	_build_exit_marker(exit)
-	if Engine.is_editor_hint():
+	if _wants_spawn_zone_preview():
 		_build_spawn_zone_preview()
 	maze_ready.emit(spawn, exit, Vector2i(0, 0), Vector2i(maze_width - 1, maze_height - 1))
 
@@ -199,6 +209,14 @@ func world_position_to_maze_cell(world_position: Vector3) -> Vector2i:
 	var cell_x := clampi(int(floor(float(gx) / 2.0)), 0, maze_width - 1)
 	var cell_y := clampi(int(floor(float(gy) / 2.0)), 0, maze_height - 1)
 	return Vector2i(cell_x, cell_y)
+
+
+func _wants_spawn_zone_preview() -> bool:
+	## Lookdev workspace draws only the selected monster/player pads.
+	if not Engine.is_editor_hint():
+		return false
+	var parent := get_parent()
+	return parent == null or not ("monster_spawn" in parent)
 
 
 func rebuild_spawn_zone_preview_from_slots(slots: Array) -> void:
@@ -264,8 +282,7 @@ func _clear_maze() -> void:
 
 
 func _grid_to_world(gx: int, gy: int) -> Vector3:
-	var offset := _maze_offset()
-	return Vector3(gx * cell_size - offset.x, 0.0, gy * cell_size - offset.z)
+	return MazeGeometryScript.grid_to_world(gx, gy, maze_width, maze_height, cell_size)
 
 
 func _cell_to_world(cell_x: int, cell_y: int) -> Vector3:
@@ -273,82 +290,40 @@ func _cell_to_world(cell_x: int, cell_y: int) -> Vector3:
 
 
 func _maze_offset() -> Vector3:
-	var grid_w := maze_width * 2 + 1
-	var grid_h := maze_height * 2 + 1
-	return Vector3(grid_w * cell_size * 0.5, 0.0, grid_h * cell_size * 0.5)
+	return MazeGeometryScript.maze_offset(maze_width, maze_height, cell_size)
 
 
 func _build_floor() -> void:
-	var grid_w := maze_width * 2 + 1
-	var grid_h := maze_height * 2 + 1
-	var floor_size := Vector3(grid_w * cell_size, 0.2, grid_h * cell_size)
-
-	var body := StaticBody3D.new()
-	body.name = "Floor"
-
-	var mesh_instance := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = floor_size
-	mesh_instance.mesh = box
-	mesh_instance.position.y = -0.1
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.18, 0.15, 0.22)
-	material.roughness = 0.85
-	mesh_instance.material_override = material
-	mesh_instance.layers = WorldVisualLayersScript.WORLD
-	# Floor only receives shadows; casting causes moiré streaks on the top surface.
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = floor_size
-	collision.shape = shape
-	collision.position.y = -0.1
-
-	body.add_child(mesh_instance)
-	body.add_child(collision)
-	add_child(body)
+	MazeGeometryScript.add_floor(self, maze_width, maze_height, cell_size)
 
 
 func _build_walls() -> void:
-	var wall_size := Vector3(cell_size, wall_height, cell_size)
-	var cell_to_world_fn := func(gx: int, gy: int) -> Vector3:
-		return _grid_to_world(gx, gy)
-	var mesh := MazeWallMeshScript.build(_wall_grid, wall_size, cell_to_world_fn)
-
-	var body := StaticBody3D.new()
-	body.name = "Walls"
-
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = mesh
-
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.52, 0.46, 0.58)
-	material.roughness = 0.7
-	mesh_instance.material_override = material
-	mesh_instance.layers = WorldVisualLayersScript.WORLD
-	mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	body.add_child(mesh_instance)
-
-	# Box colliders (not trimesh) so CharacterBody3D wall contacts stay stable.
-	var shared_shape := BoxShape3D.new()
-	shared_shape.size = wall_size
-	var half_height := wall_height * 0.5
-	for gx in _wall_grid.size():
-		for gy in _wall_grid[gx].size():
-			if _wall_grid[gx][gy] != 1:
-				continue
-			var collision := CollisionShape3D.new()
-			collision.shape = shared_shape
-			collision.debug_color = WALL_COLLISION_PREVIEW_COLOR
-			var center: Vector3 = _grid_to_world(gx, gy)
-			center.y = half_height
-			collision.position = center
-			body.add_child(collision)
-
-	add_child(body)
+	MazeGeometryScript.add_walls(
+		self, _wall_grid, maze_width, maze_height, cell_size, wall_height
+	)
 	_sync_wall_collision_preview()
+
+
+func _build_keep_in() -> void:
+	MazeGeometryScript.add_keep_in(self, maze_width, maze_height, cell_size)
+
+
+func _build_maze_paths() -> void:
+	var paths: Node = MazePathsScript.new()
+	paths.name = "MazePaths"
+	add_child(paths)
+	if paths.has_method("set_graph"):
+		paths.call(
+			"set_graph",
+			MazePathGraphScript.build(_wall_grid, maze_width, maze_height, cell_size)
+		)
+	paths.set("show_pathing", show_pathing)
+
+
+func _apply_show_pathing() -> void:
+	var paths := get_node_or_null("MazePaths")
+	if paths != null:
+		paths.set("show_pathing", show_pathing)
 
 
 func _sync_wall_collision_preview() -> void:

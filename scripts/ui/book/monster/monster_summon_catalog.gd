@@ -8,6 +8,7 @@ const PAGE_SCENES: Array[PackedScene] = [
 	preload("res://scenes/ui/book/monster/pages/wretch.tscn"),
 	preload("res://scenes/ui/book/monster/pages/ash_wretch.tscn"),
 	preload("res://scenes/ui/book/monster/pages/ember_wretch.tscn"),
+	preload("res://scenes/ui/book/monster/pages/charger.tscn"),
 ]
 
 

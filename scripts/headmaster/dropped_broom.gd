@@ -180,18 +180,18 @@ func _snap_to_maze_floor(pos: Vector3) -> Vector3:
 	var match_root := GameWorldScript.find_match_root(tree)
 	if match_root != null:
 		maze = match_root.get_node_or_null("MazeGenerator")
-	var snapped := pos
+	var floor_pos := pos
 	if maze != null and maze.has_method("world_to_cell") and maze.has_method("is_grid_open"):
 		var cell: Vector2i = maze.call("world_to_cell", pos)
 		if not bool(maze.call("is_grid_open", cell.x, cell.y)):
 			cell = _nearest_open_grid(maze, cell)
 		if maze.has_method("grid_to_world"):
-			snapped = maze.call("grid_to_world", cell.x, cell.y)
+			floor_pos = maze.call("grid_to_world", cell.x, cell.y)
 	var world_3d := get_world_3d()
-	snapped = WorldGroundScript.with_height_above_ground(
-		world_3d, snapped, LAND_SNAP_HEIGHT, snapped.y
+	floor_pos = WorldGroundScript.with_height_above_ground(
+		world_3d, floor_pos, LAND_SNAP_HEIGHT, floor_pos.y
 	)
-	return snapped
+	return floor_pos
 
 
 func _nearest_open_grid(maze: Node, start: Vector2i) -> Vector2i:
