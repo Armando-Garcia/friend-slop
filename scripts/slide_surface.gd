@@ -13,6 +13,8 @@ const PEAK_DOT := 0.98
 const PEAK_SPEED := 0.35
 const PEAK_NUDGE := 2.4
 
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
+
 
 static func tag(body: CollisionObject3D) -> void:
 	if body == null:
@@ -107,7 +109,8 @@ static func apply_ground_move(
 	gravity: float,
 	delta: float,
 	boost: float,
-	preserve_horizontal: bool = false
+	preserve_horizontal: bool = false,
+	block_crouch_slide: bool = false
 ) -> void:
 	var on_slide := prepare(player)
 	if not player.is_on_floor() or on_slide:
@@ -116,20 +119,24 @@ static func apply_ground_move(
 		Input.is_action_just_pressed("jump")
 		and player.is_on_floor()
 		and not on_slide
+		and not PlayerCrouchScript.is_crouching(player)
 	):
 		player.velocity.y = PlayableCharacter.JUMP_VELOCITY
 	if on_slide or preserve_horizontal:
+		if not block_crouch_slide and PlayerCrouchScript.is_coasting(player):
+			PlayerCrouchScript.apply_coast_physics(player, head, delta, boost)
 		return
 	if not player.is_on_floor():
 		return
 	var direction := camera_relative_move_direction(head)
-	var speed := PlayableCharacter.WALK_SPEED * boost
+	var speed := PlayerCrouchScript.ground_move_speed(player, boost)
 	if direction:
 		player.velocity.x = direction.x * speed
 		player.velocity.z = direction.z * speed
 	else:
-		player.velocity.x = move_toward(player.velocity.x, 0.0, speed)
-		player.velocity.z = move_toward(player.velocity.z, 0.0, speed)
+		var friction_step := PlayerCrouchScript.resolve_move_friction(player) * delta
+		player.velocity.x = move_toward(player.velocity.x, 0.0, friction_step)
+		player.velocity.z = move_toward(player.velocity.z, 0.0, friction_step)
 
 
 static func camera_relative_move_direction(head: Node3D) -> Vector3:

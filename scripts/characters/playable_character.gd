@@ -1,8 +1,10 @@
 class_name PlayableCharacter
 extends Character
 
-const WALK_SPEED := 5.0
-const SPRINT_SPEED := 5.0
+const DEFAULT_WALK_SPEED := 5.0
+const DEFAULT_MOVE_FRICTION := 50.0
+const WALK_SPEED := DEFAULT_WALK_SPEED
+const SPRINT_SPEED := DEFAULT_WALK_SPEED
 const JUMP_VELOCITY := 2.5
 const MOUSE_SENSITIVITY := 0.002
 const INTERACT_RANGE_SQ := 9.0
@@ -20,6 +22,7 @@ const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
 const PlayableCharacterPreviewScript := preload(
 	"res://scripts/characters/playable_character_preview.gd"
 )
@@ -31,11 +34,37 @@ const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @export var is_alive: bool = true
 
+@export_group("Movement")
+## Ground foot speed (WASD on floor). Scaled by spell haste/slow effects.
+@export_range(1.0, 20.0, 0.1, "suffix:m/s") var move_speed: float = DEFAULT_WALK_SPEED
+## Deceleration when grounded with no WASD (m/s²). Not scaled by haste/slow.
+@export_range(0.1, 200.0, 0.5) var move_friction: float = DEFAULT_MOVE_FRICTION
+
 @export_group("Dash")
+## Tuning reference only — not applied by code. Match dash_speed × dash_duration for ~this far.
 @export_range(0.5, 24.0, 0.1, "suffix:m") var dash_distance: float = 3.0
+## Seconds walk input is locked after a dash; velocity stays at dash_speed for this window.
 @export_range(0.05, 1.0, 0.01, "suffix:s") var dash_duration: float = 0.15
+## Seconds before Shift can dash again (still requires a held move direction).
 @export_range(0.5, 30.0, 0.1, "suffix:s") var dash_cooldown_sec: float = 3.0
+## Horizontal speed set instantly on dash (Shift + direction). Works on ground and in air.
 @export_range(1.0, 40.0, 0.5, "suffix:m/s") var dash_speed: float = 20.0
+
+@export_group("Crouch")
+## Max foot speed while holding C on the ground. Also caps steering during a crouch slide.
+@export_range(0.5, 10.0, 0.1, "suffix:m/s") var crouch_speed: float = 2.5
+## Start a crouch slide when horizontal speed exceeds this (m/s). Not scaled by haste.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_threshold: float = 0.5
+## End the slide below this speed, then recovery eases into crouch walk.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_exit_speed: float = 1.0
+## After a dash, crouch within dash duration + this grace still starts a slide above exit speed.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var crouch_slide_dash_grace_sec: float = 0.6
+## After slide ends, blend back to normal crouch movement for this long (or until slow enough).
+@export_range(0.0, 1.5, 0.01, "suffix:s") var crouch_slide_recovery_sec: float = 0.3
+## Slide friction at high speed (0–100 % of move_friction). Lower = longer dash-slide carry.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction_start: float = 12.0
+## Slide friction near exit speed (0–100). Higher = snappier finish before recovery.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction: float = 35.0
 
 var broom_active := false:
 	set(value):
@@ -928,13 +957,17 @@ func _physics_process(delta: float) -> void:
 		return
 
 	PlayerDashScript.tick_and_try(self, head, delta)
+	PlayerCrouchScript.tick(self)
+	var dash_active := PlayerDashScript.is_active(self)
+	var crouch_coasting := PlayerCrouchScript.is_coasting(self)
 	SlideSurfaceScript.apply_ground_move(
 		self,
 		head,
 		gravity,
 		delta,
 		_speed_boost_multiplier,
-		PlayerDashScript.is_active(self)
+		dash_active or crouch_coasting,
+		dash_active
 	)
 	_apply_knockback_bleed(delta)
 

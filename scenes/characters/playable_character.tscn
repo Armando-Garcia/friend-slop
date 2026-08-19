@@ -47,10 +47,19 @@ script = ExtResource("2_playable")
 player_index = 0
 gravity = null
 is_alive = true
+move_speed = 4.5
+move_friction = 50.0
 dash_distance = 3.0
 dash_duration = 0.2
 dash_cooldown_sec = 3.0
-dash_speed = 15.0
+dash_speed = 10.0
+crouch_speed = 2.0
+crouch_slide_threshold = 0.5
+crouch_slide_exit_speed = 1.0
+crouch_slide_dash_grace_sec = 0.6
+crouch_slide_recovery_sec = 0.3
+crouch_slide_friction_start = 12.0
+crouch_slide_friction = 35.0
 
 [node name="Body" parent="." index="1" unique_id=73058391]
 surface_material_override/0 = SubResource("StandardMaterial3D_xep72")

@@ -5,6 +5,7 @@ extends RefCounted
 ## Tunables live on PlayableCharacter; defaults below are fallbacks for tests.
 
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
 
 const DEFAULT_DISTANCE := 3.0
 const DEFAULT_DURATION := 0.15
@@ -80,3 +81,5 @@ static func _try_dash(player: CharacterBody3D, head: Node3D, config: Dictionary)
 		META_ACTIVE_UNTIL, Time.get_ticks_msec() + int(round(duration * 1000.0))
 	)
 	player.set_meta(META_COOLDOWN, dash_cooldown(config))
+	var grace := _export_float(player, "crouch_slide_dash_grace_sec", 0.6)
+	PlayerCrouchScript.mark_dash_slide_grace(player, duration, grace)
