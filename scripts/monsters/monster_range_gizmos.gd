@@ -33,6 +33,19 @@ static func refresh(
 	}
 
 
+static func apply_unshaded(mesh_inst: MeshInstance3D, color: Color) -> void:
+	if mesh_inst == null:
+		return
+	var mat := mesh_inst.material_override as StandardMaterial3D
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mesh_inst.material_override = mat
+	mat.albedo_color = color
+
+
 static func ensure_disc(
 	host: Node3D,
 	existing: MeshInstance3D,
@@ -51,18 +64,15 @@ static func ensure_disc(
 			var edited := host.get_tree().edited_scene_root
 			if edited != null:
 				mesh_inst.owner = edited
-	var cyl := CylinderMesh.new()
+	var cyl := mesh_inst.mesh as CylinderMesh
+	if cyl == null:
+		cyl = CylinderMesh.new()
+		cyl.radial_segments = 48
+		mesh_inst.mesh = cyl
 	cyl.top_radius = maxf(0.05, radius)
 	cyl.bottom_radius = cyl.top_radius
 	cyl.height = disc_height
-	cyl.radial_segments = 48
-	mesh_inst.mesh = cyl
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = color
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mesh_inst.material_override = mat
+	apply_unshaded(mesh_inst, color)
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mesh_inst.position = Vector3(0.0, disc_height * 0.5, 0.0)
 	apply_debug_aabb(mesh_inst)

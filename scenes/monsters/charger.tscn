@@ -27,21 +27,12 @@ height = 0.34
 radius = 0.04
 height = 0.34
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_t1nia"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
 [sub_resource type="SphereMesh" id="SphereMesh_body"]
 radius = 0.34
 height = 0.68
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_flesh"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wnooq"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_t1nia"]
+resource_local_to_scene = true
 albedo_color = Color(0.22, 0.72, 0.28, 1)
 metallic = 0.05
 roughness = 0.62
@@ -52,32 +43,18 @@ bottom_radius = 0.028
 height = 0.36
 radial_segments = 8
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_n7dji"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_gpwkx"]
-albedo_color = Color(0.28239998, 0.74240005, 0.3376, 1)
-metallic = 0.05
-roughness = 0.62
-
 [sub_resource type="SphereMesh" id="SphereMesh_head"]
 radius = 0.22
 height = 0.44
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2dqoy"]
-shading_mode = 0
-albedo_color = Color(0.96, 0.96, 0.94, 1)
 
 [sub_resource type="SphereMesh" id="SphereMesh_eye"]
 radius = 0.042
 height = 0.084
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wynbq"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wnooq"]
+resource_local_to_scene = true
+shading_mode = 0
+albedo_color = Color(0.96, 0.96, 0.94, 1)
 
 [sub_resource type="SphereMesh" id="SphereMesh_snout"]
 radius = 0.13
@@ -94,44 +71,32 @@ albedo_color = Color(0.92, 0.86, 0.7, 1)
 metallic = 0.05
 roughness = 0.42
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_beifr"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
 [sub_resource type="SphereMesh" id="SphereMesh_shoulder"]
 radius = 0.36
 height = 0.72
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ksdrp"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
 
 [sub_resource type="SphereMesh" id="SphereMesh_neck"]
 radius = 0.18
 height = 0.36
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_im73y"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eobh7"]
-albedo_color = Color(0.22, 0.72, 0.28, 1)
-metallic = 0.05
-roughness = 0.62
-
 [node name="Charger" unique_id=473758256 instance=ExtResource("1_monster")]
-editor_description = "Bull-like rammer: lock-on telegraph, locked ram at 230% sprint, wall stun."
+editor_description = "Bull-like rammer: lock-on telegraph, locked ram, wall stun, frantic search."
+transform = Transform3D(0.5010317, 0, 0.8654289, 0, 1, 0, -0.8654289, 0, 0.5010317, 0, 0, 0)
 script = ExtResource("2_charger")
-telegraph_sec = 1.2
+telegraph_sec = 1.3
+lock_on_turn_speed_rad = 2.2
+patrol_turn_speed_rad = 1.4
+search_turn_speed_rad = 2.0
+charge_speed_mult = 3.6
 self_stun_sec = 3.0
-charge_head_plunge_deg = 338.0
+search_sec = 3.2
+charge_head_plunge_deg = 330.0
 charge_head_toss_deg = 60.0
-head_return_speed_rad = 3.0
+head_return_speed_rad = 2.4
 rest_tint = Color(0.22, 0.72, 0.28, 1)
 charge_tint = Color(0.88, 0.12, 0.1, 1)
+knockup_cells = 6
+knockup_over_wall_m = 3.5
 body_tint = Color(0.22, 0.72, 0.28, 1)
 eye_glow_color = Color(0.96, 0.96, 0.94, 1)
 lookdev_override = false
@@ -151,7 +116,7 @@ death_linger_sec = 30.0
 death_fade_sec = 3.0
 chase_style = 0
 keep_away_range = 20.0
-face_turn_speed_rad = 10.0
+face_turn_speed_rad = 4.0
 chase_wait_min_sec = 1.0
 chase_wait_max_sec = 3.0
 chase_strafe_min_sec = 1.2
@@ -172,7 +137,7 @@ shape = SubResource("SphereShape3D_mid")
 
 [node name="NeckCollision" type="CollisionShape3D" parent="." index="2" unique_id=910002002]
 editor_description = "Neck sphere. Direct child of Charger; snapped to Neck."
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.48000002, -0.48)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.48000002, -0.47999996)
 shape = SubResource("SphereShape3D_neck")
 
 [node name="HeadCollision" type="CollisionShape3D" parent="." index="3" unique_id=910002010]
@@ -197,7 +162,7 @@ shape = SubResource("CapsuleShape3D_leg")
 
 [node name="LeftForelegCollision" type="CollisionShape3D" parent="." index="7" unique_id=910002005]
 editor_description = "Left foreleg capsule. Direct child of Charger."
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, 0.18, -0.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21999997, 0.18, -0.19999999)
 shape = SubResource("CapsuleShape3D_leg")
 
 [node name="RightForelegCollision" type="CollisionShape3D" parent="." index="8" unique_id=910002006]
@@ -209,25 +174,22 @@ shape = SubResource("CapsuleShape3D_leg")
 editor_description = "Rear haunch. Larger than the shared shell so the Charger reads as a long animal."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.36, 0.3)
 layers = 2
-material_override = SubResource("StandardMaterial3D_t1nia")
 mesh = SubResource("SphereMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="LeftHindleg" type="MeshInstance3D" parent="Body" index="0" unique_id=482822764]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21, -0.18, 0.08)
 layers = 2
-material_override = SubResource("StandardMaterial3D_wnooq")
 mesh = SubResource("CylinderMesh_leg")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="RightHindleg" type="MeshInstance3D" parent="Body" index="1" unique_id=279618066]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.21, -0.18, 0.08)
 layers = 2
-material_override = SubResource("StandardMaterial3D_n7dji")
 mesh = SubResource("CylinderMesh_leg")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="Head" parent="." index="10" unique_id=1186111743]
 editor_description = "Low, forward head. Horns and snout make the ram read as a bull."
@@ -235,9 +197,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.52, -0.62)
 
 [node name="HeadMesh" parent="Head" index="0" unique_id=1294118041]
 layers = 2
-material_override = SubResource("StandardMaterial3D_gpwkx")
 mesh = SubResource("SphereMesh_head")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="Eyes" parent="Head" index="1" unique_id=910001010]
 editor_description = "Always visible. White at rest; glow red when this Charger has line of sight."
@@ -246,14 +207,14 @@ visible = true
 [node name="LeftEye" parent="Head/Eyes" index="0" unique_id=910001011]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.17, 0.08, -0.1)
 layers = 2
-material_override = SubResource("StandardMaterial3D_2dqoy")
 mesh = SubResource("SphereMesh_eye")
+surface_material_override/0 = SubResource("StandardMaterial3D_wnooq")
 
 [node name="RightEye" parent="Head/Eyes" index="1" unique_id=910001012]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.17, 0.08, -0.1)
 layers = 2
-material_override = SubResource("StandardMaterial3D_2dqoy")
 mesh = SubResource("SphereMesh_eye")
+surface_material_override/0 = SubResource("StandardMaterial3D_wnooq")
 
 [node name="Glow" parent="Head/Eyes" index="2" unique_id=910001013]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, -0.12)
@@ -266,9 +227,8 @@ unique_name_in_owner = true
 editor_description = "Elongated muzzle. Tints with the hide during windup."
 transform = Transform3D(1.05, 0, 0, 0, 0.78, 0, 0, 0, 1.25, 0, -0.05, -0.22)
 layers = 2
-material_override = SubResource("StandardMaterial3D_wynbq")
 mesh = SubResource("SphereMesh_snout")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="LeftHorn" type="MeshInstance3D" parent="Head" index="3" unique_id=1039790584]
 unique_name_in_owner = true
@@ -311,33 +271,29 @@ unique_name_in_owner = true
 editor_description = "Shoulders / barrel front. Makes the silhouette longer than a two-ball monster."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, -0.22)
 layers = 2
-material_override = SubResource("StandardMaterial3D_beifr")
 mesh = SubResource("SphereMesh_shoulder")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="Neck" type="MeshInstance3D" parent="MidBody" index="0" unique_id=962857828]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.08, -0.26)
 layers = 2
-material_override = SubResource("StandardMaterial3D_ksdrp")
 mesh = SubResource("SphereMesh_neck")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="LeftForeleg" type="MeshInstance3D" parent="MidBody" index="1" unique_id=1234420597]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.22, -0.22, 0.02)
 layers = 2
-material_override = SubResource("StandardMaterial3D_im73y")
 mesh = SubResource("CylinderMesh_leg")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="RightForeleg" type="MeshInstance3D" parent="MidBody" index="2" unique_id=2132540167]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.22, -0.22, 0.02)
 layers = 2
-material_override = SubResource("StandardMaterial3D_eobh7")
 mesh = SubResource("CylinderMesh_leg")
-surface_material_override/0 = SubResource("StandardMaterial3D_flesh")
+surface_material_override/0 = SubResource("StandardMaterial3D_t1nia")
 
 [node name="ShieldHold" type="Node3D" parent="." index="13" unique_id=730149115]
 editor_description = "Held ward parents here so the shield stays in front of the snout while charging."

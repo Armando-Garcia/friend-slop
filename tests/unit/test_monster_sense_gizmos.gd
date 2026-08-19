@@ -15,6 +15,7 @@ func run() -> int:
 	failures += _test_debug_aabb_is_small()
 	failures += _test_cone_outline_keeps_full_range()
 	failures += _test_clipped_fill_is_shorter_than_range()
+	failures += _test_ensure_disc_reuses_mesh()
 	return failures
 
 
@@ -149,3 +150,27 @@ func _test_clipped_fill_is_shorter_than_range() -> int:
 			push_error("Expected clipped fill to stay inside occlude radii, got %s" % vertex)
 			return 1
 	return 0
+
+
+func _test_ensure_disc_reuses_mesh() -> int:
+	var host := Node3D.new()
+	var disc: MeshInstance3D = MonsterRangeGizmosScript.ensure_disc(
+		host, null, "Disc", 24.0, Color(1, 1, 1, 0.2), 0.02, false
+	)
+	var mesh := disc.mesh
+	var mat := disc.material_override
+	var again: MeshInstance3D = MonsterRangeGizmosScript.ensure_disc(
+		host, disc, "Disc", 12.0, Color(1, 0, 0, 0.2), 0.02, false
+	)
+	var failed := 0
+	if again != disc:
+		push_error("Expected ensure_disc to keep the same MeshInstance3D")
+		failed = 1
+	elif again.mesh != mesh:
+		push_error("Expected ensure_disc to keep the CylinderMesh")
+		failed = 1
+	elif again.material_override != mat:
+		push_error("Expected ensure_disc to keep the material")
+		failed = 1
+	host.free()
+	return failed

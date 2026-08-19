@@ -1,15 +1,19 @@
 class_name ChargerLaunch
 extends RefCounted
 
-## Pure helpers for Charger ram speed, maze-safe landings, and launch arcs.
+## Pure helpers for Charger ram speed and knockup launch vectors.
+
+const GameWorldScript := preload("res://scripts/game_world.gd")
 
 const CHARGE_SPEED_MULT := 2.3
 const PATROL_SPEED_MULT := 0.8
-const MIN_CELL_DISTANCE := 2
+const DEFAULT_KNOCKUP_CELLS := 6
 const DEFAULT_CELL_SIZE_M := 3.0
-const MIN_FLIGHT_SEC := 0.7
-const MAX_FLIGHT_SEC := 1.35
-const FLIGHT_DIST_REF_M := 12.0
+const DEFAULT_WALL_HEIGHT_M := 3.0
+const DEFAULT_OVER_WALL_M := 3.5
+const YAW_SPREAD_RAD := 0.32
+const SPEED_JITTER := 0.12
+const GROUP_PATHS := &"maze_paths"
 
 
 static func plunge_pitch_rad(plunge_deg: float) -> float:
@@ -22,60 +26,14 @@ static func toss_pitch_rad(toss_deg: float) -> float:
 	return deg_to_rad(toss_deg)
 
 
-static func charge_speed(sprint_speed: float) -> float:
-	return maxf(0.0, sprint_speed) * CHARGE_SPEED_MULT
+static func charge_speed(
+	sprint_speed: float, mult: float = CHARGE_SPEED_MULT
+) -> float:
+	return maxf(0.0, sprint_speed) * maxf(mult, 0.0)
 
 
 static func patrol_speed(walk_speed: float) -> float:
 	return maxf(0.0, walk_speed) * PATROL_SPEED_MULT
-
-
-static func chebyshev(a: Vector2i, b: Vector2i) -> int:
-	return maxi(absi(a.x - b.x), absi(a.y - b.y))
-
-
-static func is_open_cell(wall_grid: Array, cell: Vector2i) -> bool:
-	if wall_grid.is_empty():
-		return false
-	if cell.x < 0 or cell.x >= wall_grid.size():
-		return false
-	var row: Array = wall_grid[cell.x]
-	if cell.y < 0 or cell.y >= row.size():
-		return false
-	return int(row[cell.y]) == 0
-
-
-static func collect_landing_cells(
-	wall_grid: Array, from_cell: Vector2i, min_dist: int = MIN_CELL_DISTANCE
-) -> Array[Vector2i]:
-	var out: Array[Vector2i] = []
-	var need := maxi(min_dist, 1)
-	for gx in wall_grid.size():
-		var row: Array = wall_grid[gx]
-		for gy in row.size():
-			var cell := Vector2i(gx, gy)
-			if not is_open_cell(wall_grid, cell):
-				continue
-			if chebyshev(from_cell, cell) < need:
-				continue
-			out.append(cell)
-	return out
-
-
-static func pick_landing_cell(
-	cells: Array[Vector2i], rng: RandomNumberGenerator, used: Dictionary = {}
-) -> Vector2i:
-	if cells.is_empty():
-		return Vector2i.ZERO
-	var unused: Array[Vector2i] = []
-	for cell in cells:
-		if not used.has(cell):
-			unused.append(cell)
-	var pool: Array[Vector2i] = unused if not unused.is_empty() else cells
-	var idx := 0
-	if rng != null:
-		idx = rng.randi_range(0, pool.size() - 1)
-	return pool[idx]
 
 
 static func gravity_of(node: Object, fallback: float) -> float:
@@ -89,19 +47,42 @@ static func gravity_of(node: Object, fallback: float) -> float:
 	return fallback
 
 
-static func flight_time_for_distance(horiz_m: float) -> float:
-	var t := clampf(horiz_m / FLIGHT_DIST_REF_M, 0.0, 1.0)
-	return lerpf(MIN_FLIGHT_SEC, MAX_FLIGHT_SEC, t)
+static func horiz_speed(cells: int, cell_size: float = DEFAULT_CELL_SIZE_M) -> float:
+	## Steeper arc: hang time is long, so horizontal speed stays modest.
+	return maxf(cell_size, 0.1) * float(maxi(cells, 1)) / 3.5
 
 
-static func launch_velocity(
-	from_pos: Vector3, to_pos: Vector3, gravity: float, flight_sec: float
+static func knockup_velocity(
+	away_dir: Vector3,
+	gravity: float,
+	wall_height: float,
+	over_wall_m: float,
+	horiz_mps: float,
+	rng: RandomNumberGenerator = null
 ) -> Vector3:
-	var t := maxf(flight_sec, 0.05)
-	var vx := (to_pos.x - from_pos.x) / t
-	var vz := (to_pos.z - from_pos.z) / t
-	var vy := (to_pos.y - from_pos.y + 0.5 * gravity * t * t) / t
-	return Vector3(vx, vy, vz)
+	var flat := Vector3(away_dir.x, 0.0, away_dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var yaw := 0.0
+	var speed := maxf(horiz_mps, 1.0)
+	if rng != null:
+		yaw = rng.randf_range(-YAW_SPREAD_RAD, YAW_SPREAD_RAD)
+		speed *= 1.0 + rng.randf_range(-SPEED_JITTER, SPEED_JITTER)
+	if absf(yaw) > 0.0001:
+		flat = flat.rotated(Vector3.UP, yaw)
+	var g := maxf(gravity, 0.05)
+	var peak := maxf(wall_height + maxf(over_wall_m, 0.2), 1.2)
+	var vy := sqrt(2.0 * g * peak)
+	return Vector3(flat.x * speed, vy, flat.z * speed)
+
+
+static func apex_height(from_pos: Vector3, velocity: Vector3, gravity: float) -> float:
+	var g := maxf(gravity, 0.05)
+	if velocity.y <= 0.0:
+		return from_pos.y
+	return from_pos.y + (velocity.y * velocity.y) / (2.0 * g)
 
 
 static func integrate_launch(
@@ -115,52 +96,45 @@ static func integrate_launch(
 	)
 
 
-static func fallback_landing(
-	from_pos: Vector3, away_dir: Vector3, cell_size: float = DEFAULT_CELL_SIZE_M
-) -> Vector3:
-	var flat := Vector3(away_dir.x, 0.0, away_dir.z)
-	if flat.length_squared() < 0.0001:
-		flat = Vector3.FORWARD
-	else:
-		flat = flat.normalized()
-	var dist := maxf(cell_size, 0.1) * float(MIN_CELL_DISTANCE)
-	return from_pos + flat * dist
+static func arc_points(
+	from_pos: Vector3, velocity: Vector3, gravity: float, count: int = 12
+) -> PackedVector3Array:
+	var g := maxf(gravity, 0.05)
+	var flight := 0.8
+	if velocity.y > 0.0:
+		flight = 2.0 * velocity.y / g
+	var n := maxi(count, 2)
+	var pts := PackedVector3Array()
+	for i in n:
+		var t := flight * float(i) / float(n - 1)
+		pts.append(integrate_launch(from_pos, velocity, g, t))
+	return pts
 
 
-static func resolve_landing_world(
-	maze: Node,
-	from_world: Vector3,
-	away_dir: Vector3,
-	rng: RandomNumberGenerator,
-	used_cells: Dictionary = {}
-) -> Vector3:
-	if maze == null or not maze.has_method("get_wall_grid"):
-		return fallback_landing(from_world, away_dir)
-	var wall_grid: Array = maze.call("get_wall_grid")
-	if wall_grid.is_empty():
-		return fallback_landing(from_world, away_dir)
-	var from_cell: Vector2i = maze.call("world_to_cell", from_world)
-	if not is_open_cell(wall_grid, from_cell) and maze.has_method("world_to_cell"):
-		from_cell = _nearest_open_cell(wall_grid, from_cell)
-	var cells := collect_landing_cells(wall_grid, from_cell)
-	if cells.is_empty():
-		return fallback_landing(from_world, away_dir)
-	var cell := pick_landing_cell(cells, rng, used_cells)
-	used_cells[cell] = true
-	var world: Vector3 = maze.call("grid_to_world", cell.x, cell.y)
-	world.y = from_world.y
-	return world
+static func wall_height_from_node(node: Node, fallback: float = DEFAULT_WALL_HEIGHT_M) -> float:
+	var maze := find_maze(node)
+	if maze != null and "wall_height" in maze:
+		return maxf(float(maze.get("wall_height")), 0.5)
+	return fallback
 
 
-static func _nearest_open_cell(wall_grid: Array, start: Vector2i) -> Vector2i:
-	if is_open_cell(wall_grid, start):
-		return start
-	for radius in range(1, 24):
-		for dx in range(-radius, radius + 1):
-			for dy in range(-radius, radius + 1):
-				if maxi(absi(dx), absi(dy)) != radius:
-					continue
-				var cell := Vector2i(start.x + dx, start.y + dy)
-				if is_open_cell(wall_grid, cell):
-					return cell
-	return start
+static func cell_size_from_node(node: Node, fallback: float = DEFAULT_CELL_SIZE_M) -> float:
+	var maze := find_maze(node)
+	if maze != null and "cell_size" in maze:
+		return maxf(float(maze.get("cell_size")), 0.1)
+	return fallback
+
+
+static func find_maze(node: Node) -> Node:
+	if node == null or not node.is_inside_tree():
+		return null
+	var tree := node.get_tree()
+	var paths := tree.get_first_node_in_group(GROUP_PATHS)
+	if paths != null:
+		return paths.get_parent()
+	var match_root := GameWorldScript.find_match_root(tree)
+	if match_root != null:
+		var maze := match_root.get_node_or_null("MazeGenerator")
+		if maze != null:
+			return maze
+	return tree.root.find_child("MazeGenerator", true, false)

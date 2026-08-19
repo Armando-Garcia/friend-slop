@@ -11,6 +11,7 @@ radius = 0.2
 height = 0.4
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+resource_local_to_scene = true
 albedo_color = Color(0.25, 0.65, 0.95, 1)
 metallic = 0.05
 roughness = 0.62
@@ -20,6 +21,7 @@ radius = 0.16
 height = 0.32
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_head"]
+resource_local_to_scene = true
 albedo_color = Color(0.32, 0.7, 0.97, 1)
 metallic = 0.05
 roughness = 0.62
@@ -36,6 +38,7 @@ shape = SubResource("CapsuleShape3D_character")
 [node name="Body" type="MeshInstance3D" parent="." unique_id=73058391]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+layers = 2
 mesh = SubResource("SphereMesh_body")
 surface_material_override/0 = SubResource("StandardMaterial3D_body")
 
@@ -45,5 +48,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.56, 0)
 
 [node name="HeadMesh" type="MeshInstance3D" parent="Head" unique_id=1294118041]
 unique_name_in_owner = true
+layers = 2
 mesh = SubResource("SphereMesh_head")
 surface_material_override/0 = SubResource("StandardMaterial3D_head")

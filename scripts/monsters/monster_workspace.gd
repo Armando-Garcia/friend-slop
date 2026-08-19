@@ -141,17 +141,25 @@ var clear_spawned_action := clear_spawned
 @export var show_combat_ranges: bool = true
 ## Cyan hearing, green sight, yellow light, LOS ray from Senses/.
 @export var show_sense_ranges: bool = true
+## Magenta landing pad + orange range ring + yellow hop arc for Charger knockup.
+@export var show_knockup_preview: bool = true
 
 @export_group("Charger Lookdev")
 ## Last spawned Charger: lock, ward, bow, turn red, then ram if a player is spawned.
 @export_tool_button("Preview Telegraph", "Callable")
 var preview_charger_telegraph_action := preview_charger_telegraph
-## Skip telegraph: locked ram at 230% sprint toward the spawned player (or current facing).
+## Skip telegraph: locked ram toward the spawned player (or current facing).
 @export_tool_button("Preview Charge", "Callable")
 var preview_charger_charge_action := preview_charger_charge
-## Force wall stun, then return to patrol.
+## Force wall stun, then frantic search, then patrol if nobody is in sight.
 @export_tool_button("Preview Wall Stun", "Callable")
 var preview_charger_wall_stun_action := preview_charger_wall_stun
+## Frantic look for players, then wander back onto the patrol path.
+@export_tool_button("Preview Search", "Callable")
+var preview_charger_search_action := preview_charger_search
+## Launch the spawned player along the Charger's knockup arc (see KnockupGizmo).
+@export_tool_button("Preview Knockup", "Callable")
+var preview_charger_knockup_action := preview_charger_knockup
 
 var _spawn_index: int = 0
 var _rebuilding: bool = false
@@ -293,6 +301,22 @@ func preview_charger_wall_stun() -> void:
 	if charger == null or not charger.has_method("begin_wall_stun_now"):
 		return
 	charger.call("begin_wall_stun_now")
+
+
+func preview_charger_search() -> void:
+	var charger := _charger_actor()
+	if charger == null or not charger.has_method("begin_search_now"):
+		return
+	charger.call("begin_search_now")
+
+
+func preview_charger_knockup() -> void:
+	var charger := _charger_actor()
+	var player := _last_spawned_player()
+	if charger == null or player == null:
+		return
+	if charger.has_method("preview_knockup"):
+		charger.call("preview_knockup", player)
 
 
 func _prepare_sandbox_player(player: Node3D, playing: bool) -> void:

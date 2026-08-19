@@ -220,11 +220,12 @@ Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.g
 
 Sight-only ram. No default proximity aggro. Poor hearing (1.8 m); a 24 m facing cone with LOS starts the attack. The same three phases run in `charger.tscn` lookdev, monster workspace, and the match (`ChargerCharge`).
 
-1. **Lock-on / telegraph:** Sight lock. Immediately casts a held ward onto `ShieldHold` (**80** HP = **4** fireballs). Always faces that player. Bows its head and tints green → red. Telegraph ends only when fully red **and** the head bow is finished (~**1.2 s**).
-2. **Charge:** Runs at **230% player sprint**. Direction is locked; it cannot steer. Hitting a player bucks the head up and launches them into a random open maze cell **≥ 2** away. The player is stunned until **1.5 s after landing**. The Charger is **not** stunned by a player hit.
-3. **Wall stun:** The ram ends only on a maze wall (not the held ward, not a player). Ward shatters; Charger is stunned **3 s** with orbiting stars, then returns to patrol.
+1. **Lock-on / telegraph:** Sight lock. Immediately casts a held ward onto `ShieldHold` (**80** HP = **4** fireballs). Always faces that player. Bows its head and tints green → red. Telegraph ends only when fully red **and** the head bow is finished (~**1.2 s**). Turn speed is `lock_on_turn_speed_rad` on [charger.tscn](../../scenes/monsters/charger.tscn).
+2. **Charge:** Runs at `charge_speed_mult` × player sprint (default **3.2×**). Direction is locked; it cannot steer. Hitting a player bucks the head up. The gore hop aims `knockup_cells` away (default **10** cells) and lands on **open floor** over at least one wall — including hops that leave a clearing into the maze. Airtime scales with distance so long hops finish; maze wall collision is ignored while airborne so the arc actually goes over walls. Landing on a maze **wall top** is rejected. Stun lasts until **1.5 s after landing**. The Charger is **not** stunned by a player hit.
+3. **Wall stun:** The ram ends only on a maze wall (not the held ward, not a player). Ward shatters; Charger is stunned **3 s** with orbiting stars.
+4. **Search:** Turns **180°** away from the wall (`search_turn_speed_rad`), then slowly sweeps for `search_sec`. Sight lock starts a new telegraph. If nobody is found, it wanders back onto patrol (`patrol_turn_speed_rad`).
 
-Inspector on [charger.tscn](../../scenes/monsters/charger.tscn): **Preview Telegraph**, **Preview Charge** (pose in place), **Preview Wall Stun**. Monster workspace: the same buttons on the last spawned Charger run the live phases (charge runs toward the spawned player).
+Inspector on [charger.tscn](../../scenes/monsters/charger.tscn): **Preview Telegraph**, **Preview Charge** (pose in place), **Preview Wall Stun**, **Preview Search**, **Preview Knockup**. Charge group knobs: **Lock On Turn Speed Rad**, **Patrol Turn Speed Rad**, **Search Turn Speed Rad**, **Charge Speed Mult**. Knockup: **Knockup Cells**, **Knockup Over Wall M**. Monster workspace: the same phase buttons on the last spawned Charger, plus a **KnockupGizmo** (range ring, arc, labeled landing). **Preview Knockup** launches the spawned player.
 
 | Ability | ID | Effect |
 |---------|----|--------|

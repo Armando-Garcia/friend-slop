@@ -37,19 +37,29 @@ const DEFAULT_EYE_GLOW := Color(0.25, 1.0, 0.35, 1.0)
 @export_group("Appearance")
 @export var body_tint: Color = DEFAULT_TINT:
 	set(value):
+		if body_tint.is_equal_approx(value):
+			return
 		body_tint = value
 		if is_node_ready():
 			_refresh_appearance()
 
 @export var eye_glow_color: Color = DEFAULT_EYE_GLOW:
 	set(value):
+		if eye_glow_color.is_equal_approx(value):
+			return
 		eye_glow_color = value
 		if is_node_ready():
 			_apply_eye_glow_from_health()
 
 @export_group("Gizmos")
 ## Cyan hearing, green sight, yellow light, LOS ray — reads live Senses/ children.
-@export var show_sense_ranges: bool = false
+@export var show_sense_ranges: bool = false:
+	set(value):
+		show_sense_ranges = value
+		if is_inside_tree():
+			var giz := get_node_or_null("SenseGizmos") as MonsterSenseGizmos
+			if giz != null:
+				giz.sync_enabled(value)
 
 @export_group("Combat")
 @export var max_health: float = 10.0
@@ -78,6 +88,7 @@ var forced_hunt_goal: Vector3 = Vector3.ZERO
 var has_forced_hunt_goal: bool = false
 var aggro_mode: int = AggroMode.BOUND
 
+var _body_collision: CollisionShape3D
 var _ai_state: int = MonsterAIScript.State.IDLE
 var _idle_timer: float = 0.0
 var _undetected_sec: float = 0.0
@@ -118,7 +129,7 @@ func bind_to_host(p_host: Node, p_leash_radius: float = 10.0) -> void:
 	leash_radius = maxf(p_leash_radius, 0.5)
 	leash_enabled = true
 	aggro_mode = AggroMode.BOUND
-	patrol_radius = mini(patrol_radius, leash_radius * 0.35)
+	patrol_radius = minf(patrol_radius, leash_radius * 0.35)
 	if host != null and not host.tree_exiting.is_connected(_on_host_exiting):
 		host.tree_exiting.connect(_on_host_exiting)
 
@@ -751,18 +762,13 @@ func _cache_eyes() -> void:
 func _apply_eye_glow_color(color: Color, energy_scale: float = 1.0) -> void:
 	if _eyes_root == null:
 		_cache_eyes()
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = color
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
-	for mesh in _eye_meshes:
-		if mesh == null:
-			continue
-		mesh.material_override = mat
-		mesh.layers = PLAYER_SELF_VISUAL_LAYER
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat: StandardMaterial3D = null
+	if not _eye_meshes.is_empty():
+		mat = _authored_material(_eye_meshes[0])
+	if mat != null:
+		mat.albedo_color = color
+		mat.emission = color
+		mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
 	if _eye_light != null:
 		_eye_light.light_color = color
 		_eye_light.light_energy = EYE_LIGHT_ENERGY * energy_scale

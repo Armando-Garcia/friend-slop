@@ -310,8 +310,8 @@ func _chase_mid_transform() -> Transform3D:
 
 func _chase_head_transform() -> Transform3D:
 	## Tall stack + pitch so local −Z (eyes/mouth) aim at the sky.
-	var basis := Basis.from_euler(Vector3(deg_to_rad(look_up_pitch_deg), 0.0, 0.0))
-	return Transform3D(basis, Vector3(0.0, 1.22, 0.02))
+	var look_basis := Basis.from_euler(Vector3(deg_to_rad(look_up_pitch_deg), 0.0, 0.0))
+	return Transform3D(look_basis, Vector3(0.0, 1.22, 0.02))
 
 
 func _chase_body_transform() -> Transform3D:

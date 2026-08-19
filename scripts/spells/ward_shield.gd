@@ -26,22 +26,34 @@ const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 @export_group("Dome shape")
 @export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = 1.35:
 	set(value):
-		radius = maxf(value, 0.05)
+		var next := maxf(value, 0.05)
+		if is_equal_approx(radius, next):
+			return
+		radius = next
 		_rebuild_geometry()
 
 @export_range(0.1, 0.9, 0.01) var surface_fraction: float = 0.333:
 	set(value):
-		surface_fraction = clampf(value, 0.05, 0.95)
+		var next := clampf(value, 0.05, 0.95)
+		if is_equal_approx(surface_fraction, next):
+			return
+		surface_fraction = next
 		_rebuild_geometry()
 
 @export_range(2, 32, 1) var ring_count: int = 10:
 	set(value):
-		ring_count = maxi(value, 2)
+		var next := maxi(value, 2)
+		if ring_count == next:
+			return
+		ring_count = next
 		_rebuild_geometry()
 
 @export_range(3, 64, 1) var segment_count: int = 28:
 	set(value):
-		segment_count = maxi(value, 3)
+		var next := maxi(value, 3)
+		if segment_count == next:
+			return
+		segment_count = next
 		_rebuild_geometry()
 
 var _body: StaticBody3D
@@ -107,7 +119,8 @@ func shatter() -> void:
 
 func _ready() -> void:
 	_cache_nodes()
-	_rebuild_geometry()
+	if not _has_baked_geometry():
+		_rebuild_geometry()
 	add_to_group(GROUP)
 	if _body != null:
 		_body.add_to_group(GROUP)
@@ -124,6 +137,14 @@ func _cache_nodes() -> void:
 	_body = get_node_or_null("Body") as StaticBody3D
 	if _body != null:
 		_collision_shape = _body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+
+
+func _has_baked_geometry() -> bool:
+	if _mesh_instance == null or _collision_shape == null:
+		_cache_nodes()
+	if _mesh_instance == null or _mesh_instance.mesh == null:
+		return false
+	return _collision_shape != null and _collision_shape.shape != null
 
 
 func _rebuild_geometry() -> void:
@@ -265,7 +286,11 @@ func _update_beam(from_pos: Vector3, to_pos: Vector3) -> void:
 	_beam.visible = true
 	_beam.global_position = from_pos.lerp(to_pos, 0.5)
 	_beam.scale = Vector3(1.0, length, 1.0)
-	_beam.basis = Basis.looking_at(delta.normalized(), Vector3.UP)
+	var dir := delta.normalized()
+	var up := Vector3.UP
+	if absf(dir.dot(up)) > 0.95:
+		up = Vector3.RIGHT
+	_beam.basis = Basis.looking_at(dir, up)
 	_beam.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
 
 

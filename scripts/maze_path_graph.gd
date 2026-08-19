@@ -198,11 +198,11 @@ static func spawn_at_pad(graph: Dictionary, pad: int) -> Vector3:
 			clearing.y = 0.05
 			return clearing
 	var anchor := _pad_anchor(graph, pad)
-	var snapped := closest_path_point(graph, anchor)
-	if snapped == Vector3.ZERO:
+	var path_pos := closest_path_point(graph, anchor)
+	if path_pos == Vector3.ZERO:
 		return Vector3(anchor.x, 0.05, anchor.z)
-	snapped.y = 0.05
-	return snapped
+	path_pos.y = 0.05
+	return path_pos
 
 
 static func closest_path_point(graph: Dictionary, world_pos: Vector3) -> Vector3:
@@ -594,8 +594,8 @@ static func _pad_anchor(graph: Dictionary, pad: int) -> Vector3:
 			cx = maze_w - 1
 			cy = maze_h - 1
 		PAD_CENTER, PAD_CLEARING:
-			cx = int(maze_w / 2)
-			cy = int(maze_h / 2)
+			cx = int(maze_w / 2.0)
+			cy = int(maze_h / 2.0)
 		_:
 			cx = 0
 			cy = 0

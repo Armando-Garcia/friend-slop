@@ -15,6 +15,7 @@ func run() -> int:
 	failures += _test_builder_makes_mesh()
 	failures += _test_integrity_tint_goes_red()
 	failures += _test_charger_ward_hp_is_four_fireballs()
+	failures += _test_baked_scene_keeps_mesh_when_radius_unchanged()
 	return failures
 
 
@@ -72,5 +73,34 @@ func _test_charger_ward_hp_is_four_fireballs() -> int:
 	var want := FireballProjectileScript.DEFAULT_HIT_DAMAGE * 4.0
 	if not is_equal_approx(hp, want):
 		push_error("Expected charger ward HP %s (4 fireballs), got %s" % [want, hp])
+		return 1
+	return 0
+
+
+func _test_baked_scene_keeps_mesh_when_radius_unchanged() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		push_error("Expected SceneTree to instantiate the baked ward")
+		return 1
+	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
+	if packed == null:
+		push_error("Expected scenes/spells/ward.tscn")
+		return 1
+	var ward: Node3D = packed.instantiate() as Node3D
+	tree.root.add_child(ward)
+	var dome := ward.get_node_or_null("Dome") as MeshInstance3D
+	var baked: Mesh = null if dome == null else dome.mesh
+	var same_radius := float(ward.get("radius"))
+	ward.set("radius", same_radius)
+	var kept := dome != null and dome.mesh != null and dome.mesh == baked
+	ward.set("radius", same_radius + 0.25)
+	var rebuilt := dome != null and dome.mesh != null and dome.mesh != baked
+	tree.root.remove_child(ward)
+	ward.queue_free()
+	if not kept:
+		push_error("Expected an unchanged radius to keep the baked ward mesh")
+		return 1
+	if not rebuilt:
+		push_error("Expected a radius change to rebuild the ward mesh")
 		return 1
 	return 0

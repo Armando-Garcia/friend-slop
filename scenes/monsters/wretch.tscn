@@ -14,6 +14,7 @@ radius = 0.2
 height = 0.4
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mid"]
+resource_local_to_scene = true
 albedo_color = Color(0.72, 0.28, 0.22, 1)
 metallic = 0.05
 roughness = 0.62
@@ -27,6 +28,7 @@ radius = 0.06
 height = 0.12
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hand"]
+resource_local_to_scene = true
 albedo_color = Color(0.72, 0.28, 0.22, 1)
 metallic = 0.05
 roughness = 0.62

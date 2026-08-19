@@ -109,19 +109,35 @@ func _apply_label_style() -> void:
 func _apply_serif_font() -> void:
 	if _label == null:
 		return
-	if not ResourceLoader.exists(SERIF_FONT_PATH):
+	## FileAccess reads the source .otf; ResourceLoader.load() follows the
+	## missing .godot/imported remap and yields an empty FreeType face.
+	if not FileAccess.file_exists(SERIF_FONT_PATH):
+		return
+	var font_bytes := FileAccess.get_file_as_bytes(SERIF_FONT_PATH)
+	if not _is_loadable_font_bytes(font_bytes):
+		push_warning("SpellWordBanner: serif font is missing or invalid; using default")
 		return
 	var loaded := FontFile.new()
 	var err := loaded.load_dynamic_font(SERIF_FONT_PATH)
 	if err != OK:
 		push_warning("SpellWordBanner: failed to load serif font (%s)" % err)
 		return
-	## Reject broken loads that would replace the default font with blank glyphs.
-	if loaded.get_height(FONT_SIZE) < 1.0:
-		push_warning("SpellWordBanner: serif font loaded with zero height; using default")
+	## Never call get_height / FreeType on an empty face — that ERRORs first.
+	if loaded.data.is_empty():
+		push_warning("SpellWordBanner: serif font has no data; using default")
 		return
 	_serif_font = loaded
 	_label.add_theme_font_override("font", _serif_font)
+
+
+func _is_loadable_font_bytes(bytes: PackedByteArray) -> bool:
+	if bytes.size() < 4:
+		return false
+	## TrueType sfnt version 1.0
+	if bytes[0] == 0x00 and bytes[1] == 0x01 and bytes[2] == 0x00 and bytes[3] == 0x00:
+		return true
+	var tag := bytes.slice(0, 4).get_string_from_ascii()
+	return tag == "OTTO" or tag == "true" or tag == "wOFF" or tag == "wOF2"
 
 
 func _bring_to_front() -> void:

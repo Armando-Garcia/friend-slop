@@ -33,15 +33,19 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 @export_group("Appearance")
 @export var body_tint: Color = DEFAULT_TINT:
 	set(value):
+		if body_tint.is_equal_approx(value):
+			return
 		body_tint = value
 		if is_inside_tree():
 			_refresh_appearance()
 
 @export var eye_glow_color: Color = DEFAULT_EYE_GLOW:
 	set(value):
+		if eye_glow_color.is_equal_approx(value):
+			return
 		eye_glow_color = value
 		if is_inside_tree():
-			_refresh_appearance()
+			_apply_eye_glow_from_health()
 
 @export_group("Lookdev")
 ## When true, lookdev_pose drives eyes instead of live AI (workspace / editor preview).
@@ -67,7 +71,13 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 			_refresh_range_gizmos()
 
 ## Cyan hearing, green sight, yellow light, LOS ray — reads live Senses/ children.
-@export var show_sense_ranges: bool = false
+@export var show_sense_ranges: bool = false:
+	set(value):
+		show_sense_ranges = value
+		if is_inside_tree():
+			var giz := get_node_or_null("SenseGizmos") as MonsterSenseGizmos
+			if giz != null:
+				giz.sync_enabled(value)
 
 @export_group("Combat")
 @export var max_health: float = 60.0
@@ -113,6 +123,7 @@ const EYE_DEAD_ENERGY_SCALE := 0.28
 var current_health: float = 60.0
 var is_alive: bool = true
 
+var _body_collision: CollisionShape3D
 var _ai_state: int = MonsterAIScript.State.IDLE
 var _idle_timer: float = 0.0
 var _undetected_sec: float = 0.0
@@ -337,17 +348,10 @@ func _tint_optional_hands() -> void:
 
 
 func _tint_mesh_instance(mesh_inst: MeshInstance3D, color: Color) -> void:
-	if mesh_inst == null:
+	var mat := _authored_material(mesh_inst)
+	if mat == null:
 		return
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	mat.albedo_color = color
-	mat.roughness = 0.62
-	mat.metallic = 0.05
-	mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
-	mesh_inst.material_override = mat
-	mesh_inst.layers = WorldVisualLayersScript.PLAYER_SELF
-	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
 func _ensure_mesh_refs() -> void:
@@ -379,18 +383,13 @@ func _cache_eyes() -> void:
 func _apply_eye_glow_color(color: Color, energy_scale: float = 1.0) -> void:
 	if _eyes_root == null:
 		_cache_eyes()
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = color
-	mat.emission_enabled = true
-	mat.emission = color
-	mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
-	for mesh in _eye_meshes:
-		if mesh == null:
-			continue
-		mesh.material_override = mat
-		mesh.layers = PLAYER_SELF_VISUAL_LAYER
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var mat: StandardMaterial3D = null
+	if not _eye_meshes.is_empty():
+		mat = _authored_material(_eye_meshes[0])
+	if mat != null:
+		mat.albedo_color = color
+		mat.emission = color
+		mat.emission_energy_multiplier = EYE_EMISSION_ENERGY * energy_scale
 	if _eye_light != null:
 		_eye_light.light_color = color
 		_eye_light.light_energy = EYE_LIGHT_ENERGY * energy_scale
@@ -840,19 +839,19 @@ func _move_keep_away(target: Node3D) -> void:
 func _try_start_cast(target: Node3D) -> bool:
 	if is_chase_retreating():
 		return false
-	var ready := _pick_ready_ability(target)
-	if ready == null:
+	var ready_ability := _pick_ready_ability(target)
+	if ready_ability == null:
 		return false
-	_begin_ability_windup(ready)
+	_begin_ability_windup(ready_ability)
 	_tick_cast_windup(0.0, target)
 	return true
 
 
 ## Keep cast spacing and fire when in band. Returns true when chase is handled.
 func _tick_ranged_cast_chase(target: Node3D) -> bool:
-	var ready := _pick_ready_ability(target)
-	if ready != null:
-		_begin_ability_windup(ready)
+	var ready_ability := _pick_ready_ability(target)
+	if ready_ability != null:
+		_begin_ability_windup(ready_ability)
 		_tick_cast_windup(0.0, target)
 		return true
 

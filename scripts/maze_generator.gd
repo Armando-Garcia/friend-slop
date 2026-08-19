@@ -153,6 +153,7 @@ func generate_maze(seed_value: int = -1) -> void:
 	})
 	_build_floor()
 	_build_walls()
+	_build_keep_in()
 	_build_maze_paths()
 
 	var spawn := _cell_to_world(0, 0)
@@ -301,6 +302,10 @@ func _build_walls() -> void:
 		self, _wall_grid, maze_width, maze_height, cell_size, wall_height
 	)
 	_sync_wall_collision_preview()
+
+
+func _build_keep_in() -> void:
+	MazeGeometryScript.add_keep_in(self, maze_width, maze_height, cell_size)
 
 
 func _build_maze_paths() -> void:

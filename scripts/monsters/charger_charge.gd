@@ -1,10 +1,11 @@
 class_name ChargerCharge
 extends RefCounted
 
-## Lock-on telegraph → locked ram → wall stun. Shared by charger.tscn lookdev,
-## monster workspace, and the match. Pose-only previews never auto-stun.
+## Lock-on telegraph → locked ram → wall stun → frantic search. Shared by
+## charger.tscn lookdev, monster workspace, and the match. Pose-only previews
+## never auto-stun.
 
-enum Phase { IDLE, TELEGRAPH, CHARGE, WALL_STUN }
+enum Phase { IDLE, TELEGRAPH, CHARGE, WALL_STUN, SEARCH }
 
 const CHARGE_SPEED_MULT := 2.3
 const DEFAULT_TELEGRAPH_SEC := 1.2
@@ -12,6 +13,10 @@ const DEFAULT_WALL_STUN_SEC := 3.0
 const WALL_GRACE_SEC := 0.35
 const HEAD_READY_RAD := 0.05
 const WALL_UP_DOT := 0.45
+const SEARCH_YAW_AMP_RAD := 0.55
+const SEARCH_YAW_HZ := 0.28
+const SEARCH_PITCH_AMP_RAD := 0.1
+const SEARCH_ABOUT_FACE_EPS := 0.08
 const WARD_GROUP := &"spell_ward"
 
 
@@ -48,6 +53,11 @@ func begin_wall_stun() -> void:
 	age = 0.0
 
 
+func begin_search() -> void:
+	phase = Phase.SEARCH
+	age = 0.0
+
+
 func tick(delta: float) -> void:
 	age += maxf(delta, 0.0)
 
@@ -66,6 +76,39 @@ func wall_stun_ready(duration_sec: float) -> bool:
 	return age + 0.0001 >= maxf(duration_sec, 0.05)
 
 
+func search_ready(duration_sec: float) -> bool:
+	return age + 0.0001 >= maxf(duration_sec, 0.05)
+
+
+static func heading_from_yaw(yaw_rad: float) -> Vector3:
+	return Vector3(-sin(yaw_rad), 0.0, -cos(yaw_rad))
+
+
+static func about_face_heading(base_yaw: float) -> Vector3:
+	return heading_from_yaw(base_yaw + PI)
+
+
+static func about_face_remaining(current_yaw: float, base_yaw: float) -> float:
+	var want := wrapf(base_yaw + PI, -PI, PI)
+	return absf(wrapf(want - current_yaw, -PI, PI))
+
+
+static func about_face_done(current_yaw: float, base_yaw: float) -> bool:
+	return about_face_remaining(current_yaw, base_yaw) <= SEARCH_ABOUT_FACE_EPS
+
+
+static func search_yaw_offset(age_sec: float, amp_rad: float, hz: float) -> float:
+	## Slow single-sine sweep after the about-face.
+	var t := maxf(age_sec, 0.0)
+	return sin(t * maxf(hz, 0.05) * TAU) * maxf(amp_rad, 0.0)
+
+
+static func search_head_pitch(age_sec: float, amp_rad: float, hz: float) -> float:
+	var t := maxf(age_sec, 0.0)
+	var rate := maxf(hz, 0.05) * TAU * 0.85
+	return sin(t * rate) * maxf(amp_rad, 0.0)
+
+
 func can_read_walls() -> bool:
 	return not pose_only and phase == Phase.CHARGE and age >= WALL_GRACE_SEC
 
@@ -75,8 +118,8 @@ func charge_velocity(speed: float) -> Vector3:
 	return Vector3(locked_dir.x * spd, 0.0, locked_dir.z * spd)
 
 
-static func charge_speed(sprint_speed: float) -> float:
-	return maxf(0.0, sprint_speed) * CHARGE_SPEED_MULT
+static func charge_speed(sprint_speed: float, mult: float = CHARGE_SPEED_MULT) -> float:
+	return maxf(0.0, sprint_speed) * maxf(mult, 0.0)
 
 
 static func is_wall_collider(collider: Object, normal: Vector3) -> bool:

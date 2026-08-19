@@ -18,6 +18,7 @@ const TargetedObjectControlScript := preload("res://scripts/spells/targeted_obje
 const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
@@ -948,13 +949,13 @@ func _physics_process(delta: float) -> void:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
-
 	if is_stunned():
 		var stun := get_node("Stun")
 		stun.call("tick_physics", self, delta, gravity)
+		SlideSurfaceScript.prepare(self)
 		move_and_slide()
-		if not bool(stun.call("is_launching")):
-			_separate_from_players()
+		stun.call("after_slide", self)
+		_separate_from_players()
 		_update_interaction_prompt()
 		return
 
@@ -967,23 +968,9 @@ func _physics_process(delta: float) -> void:
 		_update_interaction_prompt()
 		return
 
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = JUMP_VELOCITY
-
-	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := (head.transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-
-	var speed := (SPRINT_SPEED if Input.is_action_pressed("sprint") else WALK_SPEED)
-	speed *= _speed_boost_multiplier
-	if direction:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
-	else:
-		velocity.x = move_toward(velocity.x, 0.0, speed)
-		velocity.z = move_toward(velocity.z, 0.0, speed)
+	SlideSurfaceScript.apply_ground_move(
+		self, head, gravity, delta, _speed_boost_multiplier
+	)
 	_apply_knockback_bleed(delta)
 
 	move_and_slide()

@@ -4,12 +4,10 @@ extends Monster
 
 ## Sight-cone rammer: lock-on telegraph, then a locked ram, then wall stun.
 
-enum ChargePhase { NONE, TELEGRAPH, CHARGE, WALL_STUN }
+enum ChargePhase { NONE, TELEGRAPH, CHARGE, WALL_STUN, SEARCH }
 
 const ChargerChargeScript := preload("res://scripts/monsters/charger_charge.gd")
 const ChargerLaunchScript := preload("res://scripts/monsters/charger_launch.gd")
-const GameWorldScript := preload("res://scripts/game_world.gd")
-const WorldGroundScript := preload("res://scripts/world_ground.gd")
 const SIGHT_SOURCE := &"sight"
 const RAM_HIT_RANGE := 1.7
 const RAM_WALL_RAY := 1.15
@@ -43,13 +41,29 @@ var preview_telegraph_action := preview_telegraph
 ## Pose only: locked red ram in place. Does not wall-stun. Does not steer.
 @export_tool_button("Preview Charge", "Callable")
 var preview_charge_action := preview_charge_pose
-## Pose only: wall stars, then recover to idle.
+## Pose only: wall stars, then 180° about-face and a slow search sweep.
 @export_tool_button("Preview Wall Stun", "Callable")
 var preview_wall_stun_action := preview_wall_stun
+## Pose only: turn 180°, then slowly look around for players.
+@export_tool_button("Preview Search", "Callable")
+var preview_search_action := preview_search
 ## Seconds locked on the player, bowing and turning red, before the ram.
-@export_range(0.4, 3.0, 0.05) var telegraph_sec: float = 1.2
+@export_range(0.4, 3.0, 0.05, "suffix:s") var telegraph_sec: float = 1.2
+## How fast it turns to face the locked player during telegraph. Lower = slower.
+@export_range(0.2, 12.0, 0.1, "suffix:rad/s")
+var lock_on_turn_speed_rad: float = 2.2
+## How fast it turns while walking the patrol path. Lower = slower.
+@export_range(0.2, 12.0, 0.1, "suffix:rad/s")
+var patrol_turn_speed_rad: float = 1.4
+## How fast it about-faces and sweeps during search. Lower = slower.
+@export_range(0.2, 8.0, 0.1, "suffix:rad/s")
+var search_turn_speed_rad: float = 1.1
+## Ram speed as a multiple of player sprint. Higher = faster.
+@export_range(1.5, 6.0, 0.05, "suffix:x sprint") var charge_speed_mult: float = 3.2
 ## Seconds stunned with orbiting stars after the ram hits a wall.
-@export_range(1.0, 8.0, 0.1) var self_stun_sec: float = 3.0
+@export_range(1.0, 8.0, 0.1, "suffix:s") var self_stun_sec: float = 3.0
+## Seconds of looking after the 180° about-face, before returning to patrol.
+@export_range(0.6, 8.0, 0.1, "suffix:s") var search_sec: float = 3.2
 ## Head tuck before the ram. 360 = level, 330 = 30° down. Finishes as running starts.
 @export_range(330.0, 360.0, 0.5) var charge_head_plunge_deg: float = 338.0
 ## Head toss (degrees up) when a player is gored during the ram.
@@ -60,13 +74,20 @@ var preview_wall_stun_action := preview_wall_stun
 @export var rest_tint: Color = Color(0.22, 0.72, 0.28, 1.0)
 ## Body color at full telegraph and during the ram.
 @export var charge_tint: Color = Color(0.88, 0.12, 0.1, 1.0)
+@export_group("Knockup")
+## Live: launch the nearest sandbox player along the current knockup arc.
+@export_tool_button("Preview Knockup", "Callable")
+var preview_knockup_action := preview_knockup
+## Horizontal throw distance in maze cells (converted to launch speed).
+@export_range(2, 24, 1, "suffix:cells") var knockup_cells: int = 6
+## Extra height above maze walls at the apex so the hop never tunnels.
+@export_range(0.8, 8.0, 0.1, "suffix:m") var knockup_over_wall_m: float = 3.5
 
 var _phase: ChargePhase = ChargePhase.NONE
 var _charge := ChargerChargeScript.new()
 var _charge_target: Node3D = null
 var _held_ward: Node = null
 var _hit_bodies: Dictionary = {}
-var _used_landings: Dictionary = {}
 var _stun_stars: Node = null
 var _los_eye: Color = Color(0.95, 0.08, 0.05, 1.0)
 var _body_lean: Node3D = null
@@ -76,6 +97,14 @@ var _head_pitch: float = 0.0
 var _head_pitch_goal: float = 0.0
 var _head_pitch_speed: float = 3.0
 var _lookdev_launch_stuns: Array[Node] = []
+var _search_base_yaw: float = 0.0
+var _search_about_faced: bool = false
+var _painted_tint: Color = Color(0, 0, 0, 0)
+var _collider_cols: Array[CollisionShape3D] = []
+var _collider_parts: Array[Node3D] = []
+var _snout_col: CollisionShape3D = null
+var _snout_part: Node3D = null
+var _hide_meshes: Array[MeshInstance3D] = []
 
 
 func _ready() -> void:
@@ -88,9 +117,14 @@ func _ready() -> void:
 	if _head_lean != null:
 		_head_rest_pitch = _head_lean.rotation.x
 	_stun_stars = get_node_or_null("Head/StunStars")
+	_cache_hide_meshes()
+	_cache_part_colliders()
 	_set_stun_stars(false)
 	_set_chase_eyes_active(true)
 	_sync_los_eyes()
+	if Engine.is_editor_hint() and _phase == ChargePhase.NONE:
+		_sanitize_rest_pose()
+		_apply_rest_visuals()
 	_sync_part_colliders()
 	if bool(get_meta("lookdev_live_ai", false)):
 		set_process(true)
@@ -139,12 +173,34 @@ func preview_charge_pose() -> void:
 
 
 func preview_wall_stun() -> void:
-	## Inspector pose: wall stars, then recover to idle.
+	## Inspector pose: wall stars, then 180° about-face and a slow search.
 	if not is_inside_tree() or not is_alive:
 		return
 	_charge.pose_only = true
 	set_process(true)
 	_begin_wall_stun()
+
+
+func preview_search() -> void:
+	## Inspector pose: turn 180°, then slowly look around. Loops until another preview.
+	if not is_inside_tree() or not is_alive:
+		return
+	_charge.pose_only = true
+	set_process(true)
+	_begin_search()
+
+
+func preview_knockup(player: Node3D = null) -> void:
+	## Launch a playable along the knockup arc from current facing.
+	if not is_inside_tree() or not is_alive:
+		return
+	var victim := player
+	if not is_playable_charge_target(victim):
+		victim = _find_sandbox_player()
+	if not is_playable_charge_target(victim):
+		return
+	_charge.locked_dir = _locked_forward()
+	_launch_player(victim as Node3D)
 
 
 func preview_charge(target: Node3D) -> void:
@@ -200,6 +256,24 @@ func begin_wall_stun_now() -> void:
 	_begin_wall_stun()
 
 
+func begin_search_now() -> void:
+	if not is_inside_tree() or not is_alive:
+		return
+	lookdev_override = false
+	_charge.pose_only = false
+	_arm_charge_ticks(false)
+	_begin_search()
+
+
+func _notification(what: int) -> void:
+	if not Engine.is_editor_hint():
+		return
+	if what == NOTIFICATION_EDITOR_PRE_SAVE:
+		_apply_rest_visuals()
+	elif what == NOTIFICATION_EDITOR_POST_SAVE:
+		_reapply_charge_visuals()
+
+
 func _arm_charge_ticks(pose_only: bool) -> void:
 	if pose_only or _sandbox_charge_tick():
 		set_process(true)
@@ -232,6 +306,7 @@ func _validate_property(property: Dictionary) -> void:
 		"chase_retreat_min_sec",
 		"chase_retreat_max_sec",
 		"chase_optimal_eps",
+		"face_turn_speed_rad",
 	])
 	if hidden.has(property.name):
 		property.usage = (
@@ -243,6 +318,12 @@ func _validate_property(property: Dictionary) -> void:
 
 func _uses_continuous_chase_move_timer() -> bool:
 	return false
+
+
+func _face_horizontal(desired_vel: Vector3) -> void:
+	_face_horizontal_at_speed(
+		desired_vel, get_physics_process_delta_time(), patrol_turn_speed_rad
+	)
 
 
 func _physics_process(delta: float) -> void:
@@ -287,7 +368,11 @@ func _tick_locked_phase(delta: float) -> void:
 			_tick_charging(delta)
 		ChargePhase.WALL_STUN:
 			_tick_wall_stun(delta)
-	_tick_head_pitch(delta)
+		ChargePhase.SEARCH:
+			_tick_search(delta)
+	if _phase != ChargePhase.SEARCH:
+		_tick_head_pitch(delta)
+	_sync_part_colliders()
 	if _charge.pose_only:
 		return
 	if _sandbox_charge_tick():
@@ -311,7 +396,7 @@ func _tick_telegraph(delta: float) -> void:
 		if not _target_is_valid():
 			_reset_to_idle()
 			return
-		_face_horizontal_at_speed(_flat_to_target(), delta, face_turn_speed_rad)
+		_face_horizontal_at_speed(_flat_to_target(), delta, lock_on_turn_speed_rad)
 	var t := _charge.telegraph_progress(telegraph_sec)
 	_apply_charge_tint(t)
 	_set_body_lean(t * 0.28)
@@ -327,7 +412,6 @@ func _begin_charging() -> void:
 	_phase = ChargePhase.CHARGE
 	_charge.begin_charge(_locked_forward())
 	_hit_bodies.clear()
-	_used_landings.clear()
 	_apply_charge_tint(1.0)
 	_set_body_lean(0.32)
 	var plunge := ChargerLaunchScript.plunge_pitch_rad(charge_head_plunge_deg)
@@ -347,11 +431,13 @@ func _tick_charging(delta: float) -> void:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		return
-	var speed := ChargerChargeScript.charge_speed(PlayableCharacter.SPRINT_SPEED)
+	var speed := ChargerChargeScript.charge_speed(
+		PlayableCharacter.SPRINT_SPEED, charge_speed_mult
+	)
 	var ram := _charge.charge_velocity(speed)
 	velocity.x = ram.x
 	velocity.z = ram.z
-	_face_horizontal_at_speed(_charge.locked_dir, delta, face_turn_speed_rad * 4.0)
+	_face_horizontal_at_speed(_charge.locked_dir, delta, lock_on_turn_speed_rad * 4.0)
 
 
 func _begin_wall_stun() -> void:
@@ -371,7 +457,90 @@ func _tick_wall_stun(delta: float) -> void:
 	velocity.z = 0.0
 	_charge.tick(delta)
 	if _charge.wall_stun_ready(self_stun_sec):
-		_reset_to_idle()
+		_begin_search()
+
+
+func _begin_search() -> void:
+	_shatter_ward()
+	_set_stun_stars(false)
+	_apply_charge_tint(0.0)
+	_set_body_lean(0.0)
+	_phase = ChargePhase.SEARCH
+	_charge.begin_search()
+	_search_base_yaw = rotation.y
+	_search_about_faced = false
+	_charge_target = null
+	_interest = null
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_set_chase_eyes_active(true)
+
+
+func _tick_search(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	if not _search_about_faced:
+		_tick_search_about_face(delta)
+		return
+	_charge.tick(delta)
+	var yaw_off := ChargerChargeScript.search_yaw_offset(
+		_charge.age,
+		ChargerChargeScript.SEARCH_YAW_AMP_RAD,
+		ChargerChargeScript.SEARCH_YAW_HZ
+	)
+	var sweep := ChargerChargeScript.heading_from_yaw(_search_base_yaw + yaw_off)
+	_face_horizontal_at_speed(sweep, delta, search_turn_speed_rad)
+	_head_pitch = ChargerChargeScript.search_head_pitch(
+		_charge.age,
+		ChargerChargeScript.SEARCH_PITCH_AMP_RAD,
+		ChargerChargeScript.SEARCH_YAW_HZ
+	)
+	_apply_head_pitch()
+	if _charge.pose_only:
+		return
+	if _try_search_lock():
+		return
+	if _charge.search_ready(search_sec):
+		_finish_search_to_patrol()
+
+
+func _tick_search_about_face(delta: float) -> void:
+	var back := ChargerChargeScript.about_face_heading(_search_base_yaw)
+	_face_horizontal_at_speed(back, delta, search_turn_speed_rad)
+	_head_pitch = 0.0
+	_apply_head_pitch()
+	if not ChargerChargeScript.about_face_done(rotation.y, _search_base_yaw):
+		return
+	_search_about_faced = true
+	_search_base_yaw = rotation.y
+	_charge.age = 0.0
+
+
+func _try_search_lock() -> bool:
+	_interest = _gather_interest()
+	if _interest_source() != SIGHT_SOURCE:
+		return false
+	var target := _interest.get("target") as Node3D
+	if not is_playable_charge_target(target):
+		return false
+	begin_lock_on(target, false)
+	return true
+
+
+func _finish_search_to_patrol() -> void:
+	_shatter_ward()
+	_set_stun_stars(false)
+	_apply_charge_tint(0.0)
+	_set_body_lean(0.0)
+	_head_pitch = 0.0
+	_head_pitch_goal = 0.0
+	_apply_head_pitch()
+	_sync_part_colliders()
+	_phase = ChargePhase.NONE
+	_charge.reset()
+	_charge_target = null
+	_hit_bodies.clear()
+	_begin_patrol()
 
 
 func _reset_to_idle() -> void:
@@ -382,6 +551,7 @@ func _reset_to_idle() -> void:
 	_head_pitch = 0.0
 	_head_pitch_goal = 0.0
 	_apply_head_pitch()
+	_sync_part_colliders()
 	_phase = ChargePhase.NONE
 	_charge.reset()
 	_charge_target = null
@@ -493,33 +663,36 @@ func _begin_player_gore_pose() -> void:
 
 
 func _launch_player(player: Node3D) -> void:
-	var maze := _find_maze()
 	var away := _charge.locked_dir
-	var landing := ChargerLaunchScript.resolve_landing_world(
-		maze, player.global_position, away, _rng, _used_landings
+	if away.length_squared() < 0.0001:
+		away = _locked_forward()
+	var wall_h := ChargerLaunchScript.wall_height_from_node(self)
+	var cell_size := ChargerLaunchScript.cell_size_from_node(self)
+	var vel := ChargerLaunchScript.knockup_velocity(
+		away,
+		gravity,
+		wall_h,
+		knockup_over_wall_m,
+		ChargerLaunchScript.horiz_speed(knockup_cells, cell_size),
+		_rng
 	)
-	if maze != null and player.is_inside_tree():
-		var world_3d := player.get_world_3d()
-		landing = WorldGroundScript.with_height_above_ground(
-			world_3d, landing, 0.0, player.global_position.y
-		)
-	_apply_player_hit(player, landing)
+	_apply_player_hit(player, vel)
 
 
-func _apply_player_hit(player: Node, landing: Vector3) -> void:
+func _apply_player_hit(player: Node, launch_vel: Vector3) -> void:
 	var stun := player.get_node_or_null("Stun")
 	if stun == null:
 		return
-	var g := ChargerLaunchScript.gravity_of(player, gravity)
+	var g := gravity
 	if not GameState.is_multiplayer or player.is_multiplayer_authority():
 		if stun.has_method("begin_charger_hit"):
-			stun.call("begin_charger_hit", landing, g)
+			stun.call("begin_charger_hit", launch_vel, g)
 		if Engine.is_editor_hint() and not _lookdev_launch_stuns.has(stun):
 			_lookdev_launch_stuns.append(stun)
 		return
 	var peer := int(player.get_multiplayer_authority())
 	if peer > 0 and stun.has_method("rpc_begin_charger_hit"):
-		stun.rpc_id(peer, "rpc_begin_charger_hit", landing)
+		stun.rpc_id(peer, "rpc_begin_charger_hit", launch_vel)
 
 
 func _tick_lookdev_launches(delta: float) -> void:
@@ -530,27 +703,23 @@ func _tick_lookdev_launches(delta: float) -> void:
 			_lookdev_launch_stuns.remove_at(i)
 		elif stun.has_method("is_stunned") and not bool(stun.call("is_stunned")):
 			_lookdev_launch_stuns.remove_at(i)
-		elif stun.has_method("tick_lookdev"):
-			var host := stun.get_parent()
-			stun.call("tick_lookdev", delta, ChargerLaunchScript.gravity_of(host, gravity))
+		elif stun.has_method("tick_physics"):
+			var body := stun.get_parent()
+			stun.call("tick_physics", body, delta, gravity)
+			if body is CharacterBody3D:
+				(body as CharacterBody3D).move_and_slide()
+			if stun.has_method("after_slide"):
+				stun.call("after_slide", body)
 		i -= 1
 
 
-func _find_maze() -> Node:
+func _find_sandbox_player() -> Node3D:
 	if not is_inside_tree():
 		return null
-	var match_root := GameWorldScript.find_match_root(get_tree())
-	if match_root != null:
-		var maze := match_root.get_node_or_null("MazeGenerator")
-		if maze != null:
-			return maze
-	var node: Node = self
-	while node != null:
-		var maze := node.get_node_or_null("MazeGenerator")
-		if maze != null:
-			return maze
-		node = node.get_parent()
-	return get_tree().root.find_child("MazeGenerator", true, false)
+	for node in get_tree().get_nodes_in_group("player"):
+		if is_playable_charge_target(node) and node is Node3D:
+			return node as Node3D
+	return null
 
 
 func _interest_source() -> StringName:
@@ -628,7 +797,15 @@ func _tint_optional_body_parts() -> void:
 
 
 func _apply_charge_tint(t: float) -> void:
-	body_tint = rest_tint.lerp(charge_tint, clampf(t, 0.0, 1.0))
+	var next := rest_tint.lerp(charge_tint, clampf(t, 0.0, 1.0))
+	if _painted_tint.is_equal_approx(next):
+		return
+	_painted_tint = next
+	_paint_hide(next)
+	if Engine.is_editor_hint():
+		return
+	if is_equal_approx(t, 0.0) or is_equal_approx(t, 1.0):
+		body_tint = next
 
 
 func _set_chase_eyes_active(_active: bool) -> void:
@@ -660,6 +837,40 @@ func _has_los_lock() -> bool:
 func _set_body_lean(pitch: float) -> void:
 	if _body_lean != null:
 		_body_lean.rotation.x = pitch * 0.4
+
+
+func _sanitize_rest_pose() -> void:
+	## Editor saves can bake windup into Head/Body. Rest is an untilted hide.
+	if _head_lean != null and absf(_head_lean.rotation.x) > deg_to_rad(25.0):
+		_head_lean.rotation.x = 0.0
+		_head_rest_pitch = 0.0
+	if _body_lean != null and absf(_body_lean.rotation.x) > 0.2:
+		_body_lean.rotation.x = 0.0
+
+
+func _apply_rest_visuals() -> void:
+	_set_body_lean(0.0)
+	_head_pitch = 0.0
+	_head_pitch_goal = 0.0
+	_apply_head_pitch()
+	_apply_charge_tint(0.0)
+	_sync_part_colliders()
+
+
+func _reapply_charge_visuals() -> void:
+	if _phase == ChargePhase.NONE:
+		return
+	if _phase == ChargePhase.TELEGRAPH:
+		var t := _charge.telegraph_progress(telegraph_sec)
+		_apply_charge_tint(t)
+		_set_body_lean(t * 0.28)
+	elif _phase == ChargePhase.CHARGE:
+		_apply_charge_tint(1.0)
+		_set_body_lean(0.32)
+	else:
+		_apply_charge_tint(0.0)
+		_set_body_lean(0.0)
+	_apply_head_pitch()
 	_sync_part_colliders()
 
 
@@ -669,6 +880,8 @@ func _set_head_pitch_goal(offset_rad: float, speed_rad: float) -> void:
 
 
 func _tick_head_pitch(delta: float) -> void:
+	if is_equal_approx(_head_pitch, _head_pitch_goal):
+		return
 	_head_pitch = move_toward(_head_pitch, _head_pitch_goal, _head_pitch_speed * delta)
 	_apply_head_pitch()
 
@@ -676,11 +889,26 @@ func _tick_head_pitch(delta: float) -> void:
 func _apply_head_pitch() -> void:
 	if _head_lean != null:
 		_head_lean.rotation.x = _head_rest_pitch + _head_pitch
-	_sync_part_colliders()
 
 
-func _sync_part_colliders() -> void:
-	# CollisionShape3D must stay direct children of Charger. Snap them to meshes.
+func _cache_hide_meshes() -> void:
+	_hide_meshes.clear()
+	for path in PackedStringArray(["%Body", "%HeadMesh", "%MidBody"]) + _FLESH_PARTS:
+		var mesh := get_node_or_null(path) as MeshInstance3D
+		if mesh != null:
+			_hide_meshes.append(mesh)
+
+
+func _paint_hide(color: Color) -> void:
+	if _hide_meshes.is_empty():
+		_cache_hide_meshes()
+	for mesh in _hide_meshes:
+		_tint_mesh_instance(mesh, color)
+
+
+func _cache_part_colliders() -> void:
+	_collider_cols.clear()
+	_collider_parts.clear()
 	for spec in _SPHERE_COLLIDER_PARTS:
 		var bits := spec.split("|")
 		if bits.size() != 2:
@@ -689,14 +917,27 @@ func _sync_part_colliders() -> void:
 		var part := get_node_or_null(bits[1]) as Node3D
 		if col == null or part == null:
 			continue
-		col.global_position = part.global_position
-		col.global_basis = part.global_transform.basis.orthonormalized()
-	var snout_col := get_node_or_null("SnoutCollision") as CollisionShape3D
-	var snout := get_node_or_null("%Snout") as Node3D
-	if snout_col == null or snout == null or _head_lean == null:
+		_collider_cols.append(col)
+		_collider_parts.append(part)
+	_snout_col = get_node_or_null("SnoutCollision") as CollisionShape3D
+	_snout_part = get_node_or_null("%Snout") as Node3D
+
+
+func _sync_part_colliders() -> void:
+	# CollisionShape3D must stay direct children of Charger. Snap them to meshes.
+	if _collider_cols.is_empty():
+		_cache_part_colliders()
+	for i in _collider_cols.size():
+		var col := _collider_cols[i]
+		var part := _collider_parts[i]
+		var xf := part.global_transform
+		xf.basis = xf.basis.orthonormalized()
+		col.global_transform = xf
+	if _snout_col == null or _snout_part == null or _head_lean == null:
 		return
-	snout_col.global_position = snout.global_position
-	snout_col.global_basis = _head_lean.global_transform.basis * _SNOUT_CAPSULE_BASIS
+	var snout_xf := _snout_part.global_transform
+	snout_xf.basis = _head_lean.global_transform.basis * _SNOUT_CAPSULE_BASIS
+	_snout_col.global_transform = snout_xf
 
 
 func _set_stun_stars(on: bool) -> void:

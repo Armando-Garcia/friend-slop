@@ -34,14 +34,32 @@ var _signature: String = ""
 
 
 func _enter_tree() -> void:
-	set_process(true)
+	set_process(_want_visible())
+
+
+func _ready() -> void:
+	set_process(_want_visible())
+	if not _want_visible():
+		hide_gizmos()
+
+
+func hide_gizmos() -> void:
+	if _signature != "":
+		_clear()
+		_signature = ""
+	set_process(false)
+
+
+func sync_enabled(on: bool) -> void:
+	if on:
+		set_process(true)
+	else:
+		hide_gizmos()
 
 
 func _process(_delta: float) -> void:
 	if not _want_visible():
-		if _signature != "":
-			_clear()
-			_signature = ""
+		hide_gizmos()
 		return
 	_rebuild_static_if_needed()
 	_update_sight_fill()
@@ -106,6 +124,28 @@ static func build_clipped_fan_mesh(
 		_add_tri(st, origin, a, b, normal)
 	st.generate_normals()
 	return st.commit()
+
+
+static func write_clipped_fan(
+	im: ImmediateMesh, dirs: PackedVector3Array, radii: PackedFloat32Array
+) -> void:
+	im.clear_surfaces()
+	var n := mini(dirs.size(), radii.size())
+	if n < 2:
+		return
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var origin := Vector3.ZERO
+	var normal := Vector3.UP
+	for i in range(1, n):
+		var a := dirs[i - 1] * maxf(radii[i - 1], 0.02)
+		var b := dirs[i] * maxf(radii[i], 0.02)
+		im.surface_set_normal(normal)
+		im.surface_add_vertex(origin)
+		im.surface_set_normal(normal)
+		im.surface_add_vertex(a)
+		im.surface_set_normal(normal)
+		im.surface_add_vertex(b)
+	im.surface_end()
 
 
 static func build_vision_cone_mesh(sight_range: float, half_angle: float) -> ArrayMesh:
@@ -240,14 +280,16 @@ func _rebuild_sight(sight: Node) -> void:
 		_sight_outline.mesh = build_cone_outline_mesh(sight_range, half)
 	else:
 		_sight_outline.mesh = build_circle_outline_mesh(sight_range)
-	_sight_outline.material_override = _unshaded(SIGHT_OUTLINE)
+	MonsterRangeGizmosScript.apply_unshaded(_sight_outline, SIGHT_OUTLINE)
 	_sight_outline.position = Vector3(0.0, 0.045, 0.0)
 	_eye_mesh = _ensure_mesh(_eye_mesh, "EyeMarker")
-	var sphere := SphereMesh.new()
+	var sphere := _eye_mesh.mesh as SphereMesh
+	if sphere == null:
+		sphere = SphereMesh.new()
+		_eye_mesh.mesh = sphere
 	sphere.radius = EYE_MARKER_RADIUS
 	sphere.height = EYE_MARKER_RADIUS * 2.0
-	_eye_mesh.mesh = sphere
-	_eye_mesh.material_override = _unshaded(Color(0.45, 1.0, 0.55, 0.85))
+	MonsterRangeGizmosScript.apply_unshaded(_eye_mesh, Color(0.45, 1.0, 0.55, 0.85))
 	_eye_mesh.position = Vector3(0.0, _sense_float(sight, "eye_height"), 0.0)
 
 
@@ -304,13 +346,17 @@ func _update_sight_fill() -> void:
 			radii[i] = sight_range
 			continue
 		world_dir = world_dir.normalized()
-		var to_global := from_global + world_dir * sight_range
+		var ray_end := from_global + world_dir * sight_range
 		radii[i] = MonsterSightSenseScript.occlude_distance(
-			world, from_global, to_global, exclude
+			world, from_global, ray_end, exclude
 		)
 	_sight_fill = _ensure_mesh(_sight_fill, "SightFill")
-	_sight_fill.mesh = build_clipped_fan_mesh(dirs, radii)
-	_sight_fill.material_override = _unshaded(SIGHT_FILL)
+	var im := _sight_fill.mesh as ImmediateMesh
+	if im == null:
+		im = ImmediateMesh.new()
+		_sight_fill.mesh = im
+	MonsterRangeGizmosScript.apply_unshaded(_sight_fill, SIGHT_FILL)
+	write_clipped_fan(im, dirs, radii)
 	_sight_fill.position = Vector3(0.0, 0.04, 0.0)
 
 
@@ -338,9 +384,9 @@ func _update_los() -> void:
 	var los_end := from_local + Vector3(0.0, 0.0, -sight_range)
 	var kind: int = LosKind.FACING
 	if player != null:
-		var to_global := player.global_position + Vector3(0.0, eye_h, 0.0)
-		los_end = self.to_local(to_global)
-		kind = _classify_player_los(sight, to_global)
+		var player_global := player.global_position + Vector3(0.0, eye_h, 0.0)
+		los_end = self.to_local(player_global)
+		kind = _classify_player_los(sight, player_global)
 		if kind != LosKind.UNSEEN:
 			var hit_at := _ray_hit_point(from_local, los_end)
 			kind = LosKind.CLEAR
@@ -350,9 +396,9 @@ func _update_los() -> void:
 	_place_los(from_local, los_end, los_line_color(kind))
 
 
-func _classify_player_los(sight: Node, to_global: Vector3) -> int:
+func _classify_player_los(sight: Node, target_global: Vector3) -> int:
 	var origin := global_position
-	var flat := Vector3(to_global.x - origin.x, 0.0, to_global.z - origin.z)
+	var flat := Vector3(target_global.x - origin.x, 0.0, target_global.z - origin.z)
 	var sight_range := _sense_float(sight, "sight_range")
 	if flat.length() > sight_range:
 		return LosKind.UNSEEN
@@ -409,13 +455,15 @@ func _place_los(from_pt: Vector3, to_pt: Vector3, color: Color) -> void:
 		return
 	_los_mesh = _ensure_mesh(_los_mesh, "LosRay")
 	_los_mesh.visible = true
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = LOS_RADIUS
-	cyl.bottom_radius = LOS_RADIUS
+	var cyl := _los_mesh.mesh as CylinderMesh
+	if cyl == null:
+		cyl = CylinderMesh.new()
+		cyl.top_radius = LOS_RADIUS
+		cyl.bottom_radius = LOS_RADIUS
+		cyl.radial_segments = 8
+		_los_mesh.mesh = cyl
 	cyl.height = length
-	cyl.radial_segments = 8
-	_los_mesh.mesh = cyl
-	_los_mesh.material_override = _unshaded(color)
+	MonsterRangeGizmosScript.apply_unshaded(_los_mesh, color)
 	_los_mesh.transform = segment_transform(from_pt, to_pt)
 
 
@@ -428,15 +476,6 @@ func _ensure_mesh(existing: MeshInstance3D, node_name: String) -> MeshInstance3D
 	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	MonsterRangeGizmosScript.apply_debug_aabb(mesh_inst)
 	return mesh_inst
-
-
-func _unshaded(color: Color) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = color
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return mat
 
 
 func _find_light_sense() -> Node:

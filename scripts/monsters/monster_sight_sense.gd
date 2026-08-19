@@ -76,9 +76,9 @@ func _in_vision_cone(monster: CharacterBody3D, flat_to_player: Vector3) -> bool:
 	return forward.angle_to(dir) <= cone_half_angle(sight_range, cone_width_at_max_range)
 
 
-static func cone_half_angle(sight_range: float, cone_width_at_max_range: float) -> float:
-	var half_width := maxf(cone_width_at_max_range, 0.05) * 0.5
-	return atan(half_width / maxf(sight_range, 0.01))
+static func cone_half_angle(range_m: float, width_at_max_m: float) -> float:
+	var half_width := maxf(width_at_max_m, 0.05) * 0.5
+	return atan(half_width / maxf(range_m, 0.01))
 
 
 func _has_line_of_sight(monster: CharacterBody3D, target: Node3D) -> bool:

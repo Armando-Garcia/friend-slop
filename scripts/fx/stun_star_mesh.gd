@@ -1,8 +1,8 @@
 class_name StunStarMesh
 extends RefCounted
 
-## Flat 5-point star in the XY plane (faces +Z). Billboard it so it reads as a
-## star from every camera instead of a triangle prism.
+## Bake helper for assets/fx/stun_star.res. Gameplay uses the baked mesh
+## on StunStars scene children; do not call this from character runtime.
 
 const POINT_COUNT := 5
 const INNER_RATIO := 0.38

@@ -108,10 +108,10 @@ func _instance_spell_preview(scene: PackedScene) -> Node3D:
 		node.set("preview_loop", true)
 	if node is Node3D:
 		return node as Node3D
-	var wrap := Node3D.new()
-	wrap.name = "PreviewWrap"
-	wrap.add_child(node)
-	return wrap
+	var preview_wrap := Node3D.new()
+	preview_wrap.name = "PreviewWrap"
+	preview_wrap.add_child(node)
+	return preview_wrap
 
 
 func _freeze_preview_motion(root: Node) -> void:

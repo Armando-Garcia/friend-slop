@@ -15,6 +15,7 @@ func run() -> int:
 	failures += _test_script_extends_playable()
 	failures += _test_resolve_walks_to_playable_parent()
 	failures += _test_stun_begins_without_ready()
+	failures += _test_stun_hop_applies_gravity_without_moving()
 	return failures
 
 
@@ -87,13 +88,42 @@ func _test_stun_begins_without_ready() -> int:
 	var body := CharacterBody3D.new()
 	var stun: Node = StunScript.new()
 	body.add_child(stun)
-	stun.call("begin_charger_hit", body.global_position + Vector3(6.0, 0.0, 0.0), 18.0)
+	stun.call("begin_charger_hit", Vector3(6.0, 8.0, 0.0), 18.0)
 	if not bool(stun.call("is_stunned")):
 		push_error("Expected charger hit to stun even before Stun._ready")
 		body.free()
 		return 1
 	if body.velocity.length() < 0.1:
 		push_error("Expected launch velocity on the player body")
+		body.free()
+		return 1
+	body.free()
+	return 0
+
+
+func _test_stun_hop_applies_gravity_without_moving() -> int:
+	var body := CharacterBody3D.new()
+	var stun: Node = StunScript.new()
+	body.add_child(stun)
+	stun.call("begin_charger_hit", Vector3(6.0, 8.0, 0.0), 18.0)
+	var start := body.global_position
+	var vy0 := body.velocity.y
+	stun.call("tick_physics", body, 1.0 / 60.0, 18.0)
+	if body.global_position.distance_to(start) > 0.0001:
+		push_error("Stun tick should not move the body; move_and_slide owns that")
+		body.free()
+		return 1
+	if body.velocity.y >= vy0:
+		push_error("Expected gravity to reduce launch vy, got %s" % body.velocity.y)
+		body.free()
+		return 1
+	if not bool(stun.call("is_launching")):
+		push_error("Expected to still be launching after takeoff")
+		body.free()
+		return 1
+	stun.call("after_slide", body)
+	if not bool(stun.call("is_launching")):
+		push_error("Min airtime should keep the hop going on the first frame")
 		body.free()
 		return 1
 	body.free()
