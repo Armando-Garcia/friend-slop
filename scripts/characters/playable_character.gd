@@ -1,7 +1,7 @@
 class_name PlayableCharacter
 extends Character
 
-const WALK_SPEED := 3.0
+const WALK_SPEED := 5.0
 const SPRINT_SPEED := 5.0
 const JUMP_VELOCITY := 2.5
 const MOUSE_SENSITIVITY := 0.002

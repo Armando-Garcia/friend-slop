@@ -124,10 +124,7 @@ static func apply_ground_move(
 	)
 	var local := Vector3(input_dir.x, 0.0, input_dir.y)
 	var direction := (head.transform.basis * local).normalized()
-	var speed := PlayableCharacter.WALK_SPEED
-	if Input.is_action_pressed("sprint"):
-		speed = PlayableCharacter.SPRINT_SPEED
-	speed *= boost
+	var speed := PlayableCharacter.WALK_SPEED * boost
 	if direction:
 		player.velocity.x = direction.x * speed
 		player.velocity.z = direction.z * speed
