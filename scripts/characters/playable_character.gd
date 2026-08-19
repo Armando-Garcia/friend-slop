@@ -19,6 +19,7 @@ const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_pla
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
+const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
@@ -968,6 +969,7 @@ func _physics_process(delta: float) -> void:
 		_update_interaction_prompt()
 		return
 
+	PlayerDashScript.tick_and_try(self, head, delta)
 	SlideSurfaceScript.apply_ground_move(
 		self, head, gravity, delta, _speed_boost_multiplier
 	)

@@ -12,7 +12,7 @@ const CODEX_EMPTY_LIST_LABEL := "(No spells known yet)"
 static func control_hints_text() -> String:
 	return (
 		"Move — WASD\n"
-		+ "Sprint — Shift · Jump — Space · Crouch — C\n"
+		+ "Dash — Shift · Jump — Space · Crouch — C\n"
 		+ "Interact — F\n"
 		+ "Cast — Q raise wand & speak to select · hold LMB tip up · release to fire\n"
 		+ "Spellbook — [2] or B · Guide — Tab\n"

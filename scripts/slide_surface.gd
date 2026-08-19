@@ -119,11 +119,7 @@ static func apply_ground_move(
 		player.velocity.y = PlayableCharacter.JUMP_VELOCITY
 	if on_slide:
 		return
-	var input_dir := Input.get_vector(
-		"move_left", "move_right", "move_forward", "move_back"
-	)
-	var local := Vector3(input_dir.x, 0.0, input_dir.y)
-	var direction := (head.transform.basis * local).normalized()
+	var direction := camera_relative_move_direction(head)
 	var speed := PlayableCharacter.WALK_SPEED * boost
 	if direction:
 		player.velocity.x = direction.x * speed
@@ -131,3 +127,13 @@ static func apply_ground_move(
 	else:
 		player.velocity.x = move_toward(player.velocity.x, 0.0, speed)
 		player.velocity.z = move_toward(player.velocity.z, 0.0, speed)
+
+
+static func camera_relative_move_direction(head: Node3D) -> Vector3:
+	var input_dir := Input.get_vector(
+		"move_left", "move_right", "move_forward", "move_back"
+	)
+	if input_dir.length_squared() < 0.0001:
+		return Vector3.ZERO
+	var local := Vector3(input_dir.x, 0.0, input_dir.y)
+	return (head.transform.basis * local).normalized()
