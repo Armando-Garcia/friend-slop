@@ -46,7 +46,10 @@ func _test_slide_friction_ramp() -> int:
 	var player := PlayableCharacterScript.new()
 	player.move_friction = 50.0
 	var config := {}
-	var fast := PlayerCrouchScript.slide_friction_decel(player, config, 8.0)
+	var ramp_high := maxf(
+		PlayerCrouchScript.slide_threshold(config), PlayerCrouchScript.slide_exit_speed(config)
+	) + 8.0
+	var fast := PlayerCrouchScript.slide_friction_decel(player, config, ramp_high + 1.0)
 	var slow := PlayerCrouchScript.slide_friction_decel(player, config, 1.2)
 	player.free()
 	if fast >= slow:

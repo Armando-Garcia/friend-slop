@@ -190,6 +190,7 @@ func _test_outside_rect_follows_homeward_return() -> int:
 		return 1
 	far.y = body.global_position.y
 	body.global_position = far
+	patrol.call("set_home", home)
 	patrol.call("begin", body, setup["rng"], PATROL_RADIUS)
 	var sid: int = int(patrol.get("segment_id"))
 	var preferred: PackedInt32Array = patrol.get("preferred")
