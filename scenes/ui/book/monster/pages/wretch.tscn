@@ -9,7 +9,7 @@ script = ExtResource("2_page")
 summon_entry = ExtResource("3_entry")
 
 [node name="TitleLabel" parent="Margin/VBox" index="0"]
-text = "Wretch"
+text = "Rat Queen"
 
 [node name="SubtitleLabel" parent="Margin/VBox" index="1"]
 text = "Summon"

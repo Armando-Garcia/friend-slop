@@ -3,7 +3,7 @@ extends CanvasLayer
 
 ## F6 play HUD for MonsterWorkspace: type, dummy, abilities, combo, fireball.
 
-const TYPE_LABELS := ["Wretch", "Ash Wretch", "Ember Wretch"]
+const TYPE_LABELS := ["Rat Queen", "Ice Caster", "Ember Caster"]
 
 var _rebuilding: bool = false
 var _type_option: OptionButton

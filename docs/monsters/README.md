@@ -1,8 +1,8 @@
 # Monster structure
 
-Developer map of how combat monsters are wired today: class hierarchy, scene ownership, AI, abilities, and Wretch summons.
+Developer map of how combat monsters are wired today: class hierarchy, scene ownership, AI, abilities, and Rat Queen summons.
 
-Documented **as-is**. Ember uses [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd). Ash uses [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd). Summons use their own `Character` → `Summon` base (not `Monster`).
+Documented **as-is**. Ember Caster uses [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd). Ice Caster uses [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd). Summons use their own `Character` → `Summon` base (not `Monster`).
 
 ---
 
@@ -10,19 +10,19 @@ Documented **as-is**. Ember uses [ember_wretch.gd](../../scripts/monsters/ember_
 
 | Type | Scene | Script | Kit / behavior |
 |------|-------|--------|----------------|
-| **Wretch** | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) | [wretch.gd](../../scripts/monsters/wretch.gd) | Summon Rats + Command Pack; `KEEP_AWAY` @ 20 m; Sight + Hearing |
-| **Ash Wretch** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd) | Caster combat: charge/hold/throw; ward-block combo; `CLOSE_IN` |
-| **Ember Wretch** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: hold range, occasional weighted strafe; halo→dash→lob combo; `CLOSE_IN` |
-| **Wretch Rat** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
+| **Rat Queen** | [scenes/monsters/wretch.tscn](../../scenes/monsters/wretch.tscn) | [wretch.gd](../../scripts/monsters/wretch.gd) | Summon Rats + Command Pack; `KEEP_AWAY` @ 20 m; Sight + Hearing |
+| **Ice Caster** | [scenes/monsters/ash_wretch.tscn](../../scenes/monsters/ash_wretch.tscn) | [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd) | Caster combat: charge/hold/throw; ward-block combo; `CLOSE_IN` |
+| **Ember Caster** | [scenes/monsters/ember_wretch.tscn](../../scenes/monsters/ember_wretch.tscn) | [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd) | Caster combat: hold range, occasional weighted strafe; halo→dash→lob combo; `CLOSE_IN` |
+| **Queen's Rat Summon** | [scenes/monsters/wretch_rat.tscn](../../scenes/monsters/wretch_rat.tscn) | [wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode on contact; Sight only; no `Abilities/` |
 
 Shared shells: [scenes/monsters/monster.tscn](../../scenes/monsters/monster.tscn), [scenes/summons/summon.tscn](../../scenes/summons/summon.tscn). Lookdev studio: [monster_workspace.tscn](../../scenes/monsters/monster_workspace.tscn).
 
 | Type | HP | Speed | Chase range | Notes |
 |------|----|-------|-------------|-------|
-| Wretch | 50 | 3.2 | 2.5 | No default proximity aggro; senses + rat relay |
-| Ash | 55 | 2.8 | 11 | Grey tint |
-| Ember | 45 | 3.24 | 14 | Orange/red tint |
-| Rat | 10 | 4.4 | 10 | Leashed to host |
+| Rat Queen | 50 | 3.2 | 2.5 | No default proximity aggro; senses + rat relay |
+| Ice Caster | 55 | 2.8 | 11 | Grey tint |
+| Ember Caster | 45 | 3.24 | 14 | Orange/red tint |
+| Queen's Rat Summon | 10 | 4.4 | 10 | Leashed to Rat Queen |
 
 ### Lookdev workspace
 
@@ -41,19 +41,19 @@ flowchart TB
   CharacterBody3D --> Character
   Character --> Monster
   Character --> Summon
-  Monster --> Wretch
-  Summon --> WretchRat
-  Monster --> AshWretch["Ash Wretch (ash_wretch.gd)"]
-  Monster --> EmberWretch["Ember Wretch (ember_wretch.gd)"]
+  Monster --> Wretch["Rat Queen (wretch.gd)"]
+  Summon --> WretchRat["Queen's Rat Summon (wretch_rat)"]
+  Monster --> AshWretch["Ice Caster (ash_wretch.gd)"]
+  Monster --> EmberWretch["Ember Caster (ember_wretch.gd)"]
 ```
 
 | Class | File | Role |
 |-------|------|------|
 | `Character` | [scripts/characters/character.gd](../../scripts/characters/character.gd) | Shared body / locomotion base |
 | `Monster` | [scripts/monsters/monster.gd](../../scripts/monsters/monster.gd) | AI loop, cast windup, chase move, death |
-| `Wretch` | [scripts/monsters/wretch.gd](../../scripts/monsters/wretch.gd) | Packmaster interest + ability pick overrides |
+| `Wretch` | [scripts/monsters/wretch.gd](../../scripts/monsters/wretch.gd) | Rat Queen: interest + ability pick overrides |
 | `Summon` | [scripts/monsters/summon.gd](../../scripts/monsters/summon.gd) | Host bind, leash, aggro modes, sense relay (no cast/kite) |
-| `WretchRat` | [scripts/monsters/wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Explode + fireball-instant-kill |
+| `WretchRat` | [scripts/monsters/wretch_rat.gd](../../scripts/monsters/wretch_rat.gd) | Queen's Rat Summon: explode + fireball-instant-kill |
 
 **RefCounted helpers** (not scene nodes):
 
@@ -79,20 +79,20 @@ Monster (Character + monster.gd)
 └── Senses/          # empty by default; add Sight / Hearing children
 ```
 
-### Casters (Ash / Ember)
+### Casters (Ice Caster / Ember Caster)
 
 ```
-*Wretch (Monster)
+*Caster (Monster)
 ├── Body/Hands/{RightHand, LeftHand}   # %unique for cast FX
 └── Abilities/
 	├── <AbilityA>   # MonsterAbility child
 	└── <AbilityB>
 ```
 
-### Wretch
+### Rat Queen
 
 ```
-Wretch (wretch.gd)
+Wretch (wretch.gd)   # display name: Rat Queen
 ├── MidBody/Hands/{RightHand, LeftHand}
 ├── Senses/{Sight, Hearing}
 ├── SummonHost          # max_summons = 3
@@ -102,10 +102,10 @@ Wretch (wretch.gd)
 	└── CommandPack     # requires_target = false; hearing aim OK
 ```
 
-### Wretch Rat
+### Queen's Rat Summon
 
 ```
-WretchRat (Summon → wretch_rat)
+WretchRat (Summon → wretch_rat)   # display name: Queen's Rat Summon
 ├── Body/ExplodeLight
 └── Senses/Sight
 ```
@@ -135,13 +135,13 @@ Eyes light up in `CHASE` / `ALERT`. Facing uses `face_turn_speed_rad` (default 1
 flowchart LR
   defaultProx["default player proximity"] --> candidates
   senses["Senses append_interest"] --> candidates
-  overrides["Wretch / Summon overrides"] --> candidates
+  overrides["Rat Queen / Summon overrides"] --> candidates
   candidates --> prefer["_prefer_interest"]
   prefer --> interest["MonsterInterest"]
 ```
 
 - **Most monsters:** default proximity inside `chase_range` (`source=&"player"`) plus any sense children.
-- **Wretch:** no default proximity. Uses Sight, Hearing, summon sight relay (`&"summon_sight"`). Remembers last-known player position for lost-contact Command Pack.
+- **Rat Queen:** no default proximity. Uses Sight, Hearing, summon sight relay (`&"summon_sight"`). Remembers last-known player position for lost-contact Command Pack.
 - **Summon / Rat:** forced hunt / investigate override; otherwise senses (rat is sight-only). Relays seen players (`summon_sight` ~2.25) and hearing (`summon_hearing` ~1.85) to the host. Host calm (IDLE/PATROL) runs `begin_recall` — rats return to the host, then spread into leashed search with chase eyes off.
 
 Interest sources in play: `player`, `sight`, `hearing`, `summon_sight`, `summon_hearing`, `last_known`, `forced_hunt`, `forced_investigate`.
@@ -150,9 +150,9 @@ Interest sources in play: `player`, `sight`, `hearing`, `summon_sight`, `summon_
 
 | Who | Behavior |
 |-----|----------|
-| Monster / Ember | Continuous chase-move timer: wait near optimal range → strafe or retreat (face player while strafing). Retreat capped at `0.8 * chase_range`. |
-| Ash | Same wait loop, but too-close “backup” is a **4 m backdash** (4.05× speed, **5** s CD) then a side strafe — not a slow walk-back. On CD, strafe only. |
-| Wretch | Continuous loop **off**. KEEP_AWAY spacing at `keep_away_range`. After lost-contact Command Pack → **ALERT**. |
+| Monster / Ember Caster | Continuous chase-move timer: wait near optimal range → strafe or retreat (face player while strafing). Retreat capped at `0.8 * chase_range`. |
+| Ice Caster | Same wait loop, but too-close “backup” is a **4 m backdash** (4.05× speed, **5** s CD) then a side strafe — not a slow walk-back. On CD, strafe only. |
+| Rat Queen | Continuous loop **off**. KEEP_AWAY spacing at `keep_away_range`. After lost-contact Command Pack → **ALERT**. |
 | Ranged CLOSE_IN | Cast-band hold via `MonsterCombatSpacing` when abilities have `min_cast_range > 0.5`. |
 
 ---
@@ -173,9 +173,9 @@ flowchart LR
 1. While not casting, `_try_start_cast` round-robins ready `Abilities/` children (`can_cast` + range / no-target rules).
 2. Windup stops movement and plays hand / ritual FX.
 3. `begin_cast` starts cooldown and calls `_fire_cast`.
-4. `_on_ability_cast_fired` hook (Wretch uses this for post-Command reposition).
+4. `_on_ability_cast_fired` hook (Rat Queen uses this for post-Command reposition).
 
-**Wretch pick overrides:**
+**Rat Queen pick overrides:**
 
 - **ALERT:** prefer Summon Rats until pack is full.
 - **Lost contact (last known):** charge Command Pack at that point, then enter ALERT.
@@ -183,9 +183,9 @@ flowchart LR
 
 ---
 
-## Caster combat (Ash / Ember)
+## Caster combat (Ice Caster / Ember Caster)
 
-Both wretches use a `CasterCombat` child node ([monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd)) instead of the legacy walk-or-cast loop.
+Both casters use a `CasterCombat` child node ([monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd)) instead of the legacy walk-or-cast loop.
 
 ```mermaid
 stateDiagram-v2
@@ -203,28 +203,28 @@ stateDiagram-v2
 | Rule | Behavior |
 |------|----------|
 | Charge | Only while standing still (not strafing/retreating/dashing) |
-| Hold | Hand FX stays after windup; Ash may **backdash then strafe** while charged (5 s CD); Ember holds range |
+| Hold | Hand FX stays after windup; Ice Caster may **backdash then strafe** while charged (5 s CD); Ember Caster holds range |
 | Release | `release_charge()` when target enters acceptable range |
-| Combo | Fixed ability order; **resets all ability cooldowns** on start and runs each step via combo fire paths (ignores prior casts / range gates); see wretch-specific triggers below or `debug_force_combo` |
+| Combo | Fixed ability order; **resets all ability cooldowns** on start and runs each step via combo fire paths (ignores prior casts / range gates); see caster-specific triggers below or `debug_force_combo` |
 
 Combo patterns ([monster_combo_step.gd](../../scripts/monsters/monster_combo_step.gd)):
 
-- **Ash:** **50%** when Ash ward blocks a player spell (**8** s lockout). Within **5** m: ward → **0.6** s → cloud → **0.3** s → dash away → ice (**two** bursts / **4** bolts). Beyond **5** m: dash in → **0.6** s → cloud → **0.3** s → dash away → ice. Combo start: both hands + eyes at full brightness.
-- **Ember:** halo (charge+throw) → dash (instant) → lob (charge+throw)
+- **Ice Caster:** **50%** when Ash ward blocks a player spell (**8** s lockout). Within **5** m: ward → **0.6** s → cloud → **0.3** s → dash away → ice (**two** bursts / **4** bolts). Beyond **5** m: dash in → **0.6** s → cloud → **0.3** s → dash away → ice. Combo start: both hands + eyes at full brightness.
+- **Ember Caster:** halo (charge+throw) → dash (instant) → lob (charge+throw)
 
-Combo triggers (Ash: **8** s lockout; Ember: **8** m where a range gate applies):
+Combo triggers (Ice Caster: **8** s lockout; Ember Caster: **8** m where a range gate applies):
 
-| Wretch | Trigger | Chance |
+| Caster | Trigger | Chance |
 |--------|---------|--------|
-| Ash | Ash **ward** blocks a player spell | **50%** (any range; **8** s lockout). Sequence depends on distance (**5** m split). |
-| Ember | Player **wards** any Ember spell | **35%** (any range) |
-| Ember | First time dropping below **35%** HP | **100%** (once per life; **8** m range gate) |
+| Ice Caster | Ash **ward** blocks a player spell | **50%** (any range; **8** s lockout). Sequence depends on distance (**5** m split). |
+| Ember Caster | Player **wards** any Ember spell | **35%** (any range) |
+| Ember Caster | First time dropping below **35%** HP | **100%** (once per life; **8** m range gate) |
 
 ---
 
 ## Kits
 
-### Ember Wretch
+### Ember Caster
 
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
@@ -234,7 +234,7 @@ Combo triggers (Ash: **8** s lockout; Ember: **8** m where a range gate applies)
 
 Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_ability.gd), [ember_halo_ability.gd](../../scripts/monsters/abilities/ember_halo_ability.gd), [ember_dash_ability.gd](../../scripts/monsters/abilities/ember_dash_ability.gd), [ember_wretch.gd](../../scripts/monsters/ember_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd). Projectiles under [scenes/monsters/abilities/](../../scenes/monsters/abilities/).
 
-### Ash Wretch
+### Ice Caster
 
 | Ability | ID | CD / windup | Cast band | Effect |
 |---------|----|-------------|-----------|--------|
@@ -245,18 +245,18 @@ Scripts: [ember_lob_ability.gd](../../scripts/monsters/abilities/ember_lob_abili
 
 Scripts: [ash_ice_ability.gd](../../scripts/monsters/abilities/ash_ice_ability.gd), [ash_ward_ability.gd](../../scripts/monsters/abilities/ash_ward_ability.gd), [ash_frost_breath_ability.gd](../../scripts/monsters/abilities/ash_frost_breath_ability.gd), [ash_retreat_dash_ability.gd](../../scripts/monsters/abilities/ash_retreat_dash_ability.gd), [ash_wretch.gd](../../scripts/monsters/ash_wretch.gd), [monster_caster_combat.gd](../../scripts/monsters/monster_caster_combat.gd).
 
-### Wretch (packmaster)
+### Rat Queen (packmaster)
 
 | Ability | ID | CD / windup | Effect |
 |---------|----|-------------|--------|
-| Summon Rats | `summon_rats` | ambient 20 s / chase **2** s via Wretch; windup 0.55 s | Drop orb → spawn rat; max **3** via `SummonHost` |
+| Summon Rats | `summon_rats` | ambient 20 s / chase **2** s via Rat Queen; windup 0.55 s | Drop orb → spawn rat; max **3** via `SummonHost` |
 | Command Pack | `command_pack` | 8 s / 1.0 s | Fired when contact is lost (or hearing aim): linear orb at last-known; then host → **ALERT**. Hit → `command_attack`; miss → `command_investigate` + rat explore. |
 
 KEEP_AWAY is locomotion (`ChaseStyle.KEEP_AWAY` + combat spacing), not an ability node.
 
-### Wretch Rat
+### Queen's Rat Summon
 
-No ability nodes. While `CHASE` and in attack range → charge (~0.34 s) → explode. Splash: player knockback; other monsters **8** damage in ~0.55 m. Player fireball knockback → immediate `die()` (no explode chain). While the host is **ALERT**, rats agitate (short idle, faster scurry) toward the heard sound, still leashed. After a Command Pack land/miss, rats run to the site then explore around it in different directions.
+No ability nodes. While `CHASE` and in attack range → charge (~0.34 s) → explode. Splash: player knockback; other monsters **8** damage in ~0.55 m. Player fireball knockback → immediate `die()` (no explode chain). While the Rat Queen is **ALERT**, summons agitate (short idle, faster scurry) toward the heard sound, still leashed. After a Command Pack land/miss, summons run to the site then explore around it in different directions.
 
 ---
 
@@ -264,12 +264,12 @@ No ability nodes. While `CHASE` and in attack range → charge (~0.34 s) → exp
 
 ```mermaid
 flowchart TB
-  Wretch --> SummonHost
-  SummonRats --> DropOrb --> WretchRat
+  Wretch["Rat Queen"] --> SummonHost
+  SummonRats --> DropOrb --> WretchRat["Queen's Rat Summon"]
   WretchRat --> bind["bind_to_host"]
   bind --> SummonHost
   CommandPack --> Orb --> SummonHost
-  SummonHost -->|"relay summon_sight"| Wretch
+  SummonHost -->|"relay summon_sight"| Wretch["Rat Queen"]
   Wretch -->|die kill_all| SummonHost
 ```
 

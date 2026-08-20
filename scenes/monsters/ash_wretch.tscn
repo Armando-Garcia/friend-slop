@@ -42,7 +42,7 @@ shading_mode = 0
 albedo_color = Color(0.55, 0.55, 0.58, 1)
 
 [node name="AshWretch" unique_id=611691207 instance=ExtResource("1_monster")]
-editor_description = "Ash Wretch. Caster combat: charge spells, backdash+strafe, ward-block combo (close ward / far dash-in)."
+editor_description = "Ice Caster. Caster combat: charge spells, backdash+strafe, ward-block combo (close ward / far dash-in)."
 script = ExtResource("2_ash")
 body_tint = Color(0.42, 0.4, 0.48, 1)
 eye_glow_color = Color(0.55, 0.55, 0.58, 1)

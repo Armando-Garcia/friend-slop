@@ -2,7 +2,7 @@
 class_name Wretch
 extends Monster
 
-## Pack master: weak eyes, moderate ears, shares rat sight, rituals when a player is known.
+## Rat Queen: weak eyes, moderate ears, shares rat sight, rituals when a player is known.
 
 const HEARING_SOURCE := &"hearing"
 const LAST_KNOWN_SOURCE := &"last_known"
@@ -79,7 +79,7 @@ func is_locked_onto_player() -> bool:
 
 
 func _append_default_interest_candidates(_out: Array) -> void:
-	## Wretch uses Sight / Hearing / summon relay only — no wide proximity aggro.
+	## Rat Queen uses Sight / Hearing / summon relay only — no wide proximity aggro.
 	pass
 
 

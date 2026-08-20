@@ -2,7 +2,7 @@
 class_name EmberWretch
 extends Monster
 
-## Ember variant: charge-hold-release caster combat with halo→dash→lob combo.
+## Ember Caster: charge-hold-release caster combat with halo→dash→lob combo.
 
 const MonsterComboStepScript := preload("res://scripts/monsters/monster_combo_step.gd")
 const MonsterComboTriggersScript := preload("res://scripts/monsters/monster_combo_triggers.gd")

@@ -1,7 +1,7 @@
 class_name MonsterComboTriggers
 extends RefCounted
 
-## Shared combo trigger helpers for caster wretches.
+## Shared combo trigger helpers for Ice Caster and Ember Caster.
 
 const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 

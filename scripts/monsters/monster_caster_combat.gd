@@ -2,7 +2,7 @@
 class_name MonsterCasterCombat
 extends Node3D
 
-## Charge-hold-release caster combat + scripted combo patterns for wretch casters.
+## Charge-hold-release caster combat + scripted combo patterns for caster monsters.
 
 enum State { NEUTRAL, CHARGING, CHARGED, RETREATING_CHARGED, COMBO_ACTIVE }
 

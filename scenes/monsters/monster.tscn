@@ -19,7 +19,7 @@ emission = Color(0.2, 0.55, 1, 1)
 emission_energy_multiplier = 4.5
 
 [node name="Monster" unique_id=910001001 instance=ExtResource("1_character")]
-editor_description = "Shared monster shell. Prefer type scenes (wretch / ash_wretch / ember_wretch) for lookdev and summoning."
+editor_description = "Shared monster shell. Prefer type scenes (Rat Queen / Ice Caster / Ember Caster) for lookdev and summoning."
 script = ExtResource("2_monster")
 body_tint = Color(0.72, 0.28, 0.22, 1)
 eye_glow_color = Color(0.2, 0.55, 1, 1)

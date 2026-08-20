@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1")
 id = "ash_wretch"
-display_name = "Ash Wretch"
+display_name = "Ice Caster"
 description = "Pale and patient. The same hunger in cooler flesh."
 monster_scene = ExtResource("2")
 tint = Color(0.42, 0.4, 0.48, 1)

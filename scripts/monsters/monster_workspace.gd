@@ -23,7 +23,7 @@ const WorkspacePlayerDummyScript := preload(
 
 @export_group("Monster")
 ## Which type scene SpawnRoot instantiates at the origin.
-@export_enum("Wretch", "Ash Wretch", "Ember Wretch")
+@export_enum("Rat Queen", "Ice Caster", "Ember Caster")
 var monster_type: int = MONSTER_PICK_WRETCH:
 	set(value):
 		var changed := monster_type != value

@@ -17,7 +17,7 @@ metallic = 0.05
 roughness = 0.62
 
 [node name="EmberWretch" instance=ExtResource("1_monster")]
-editor_description = "Ember Wretch. Caster combat: charge spells, stay in range, halo→dash→lob combo."
+editor_description = "Ember Caster. Caster combat: charge spells, stay in range, halo→dash→lob combo."
 script = ExtResource("2_ember")
 body_tint = Color(0.85, 0.38, 0.12, 1)
 eye_glow_color = Color(1, 0.12, 0.08, 1)

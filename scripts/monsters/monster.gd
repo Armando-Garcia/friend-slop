@@ -306,7 +306,7 @@ func get_health_ratio() -> float:
 
 
 func _apply_eye_glow_from_health() -> void:
-	## Full HP = authored glow; near death = darker / dimmer (Wretch green dims hard).
+	## Full HP = authored glow; near death = darker / dimmer (Rat Queen green dims hard).
 	var t := 1.0 if Engine.is_editor_hint() else get_health_ratio()
 	var dead := Color(
 		eye_glow_color.r * EYE_DEAD_RGB_SCALE.x,
@@ -740,7 +740,7 @@ func _tick_chase_approach(goal: Vector3, target: Node3D) -> void:
 
 
 func _uses_continuous_chase_move_timer() -> bool:
-	## Children (e.g. Wretch) can disable the free 1–3s kite loop.
+	## Children (e.g. Rat Queen) can disable the free 1–3s kite loop.
 	return true
 
 
@@ -962,7 +962,7 @@ func _tick_cast_windup(delta: float, target: Node3D) -> void:
 
 
 func _on_ability_cast_fired(_ability: Node) -> void:
-	## Override in children (e.g. Wretch post-Command-Pack retreat).
+	## Override in children (e.g. Rat Queen post-Command-Pack retreat).
 	pass
 
 

@@ -1,8 +1,8 @@
 class_name WretchRat
 extends "res://scripts/monsters/summon.gd"
 
-## Small sphere minion for the Wretch. Sight-only aggro; explodes on player
-## touch while chasing. Dies with host / fireball.
+## Queen's Rat Summon: small sphere minion for the Rat Queen. Sight-only aggro;
+## explodes on player touch while chasing. Dies with host / fireball.
 
 const GameWorldScript := preload("res://scripts/game_world.gd")
 
@@ -10,7 +10,7 @@ const SPHERE_MESH_RADIUS := 0.12
 const FLASH_SPHERE_ALPHA := 0.6
 const CHARGE_PULSE_HZ := 8.0
 const LIGHT_START_RANGE := 0.15
-## Wretch rats roam farther and hug the outer leash ring.
+## Queen's Rat Summon minions roam farther and hug the outer leash ring.
 const LEASH_RADIUS_MULT := 1.4
 const RAT_PATROL_EDGE_MIN := 0.88
 const RAT_PATROL_EDGE_MAX := 0.99
@@ -73,7 +73,7 @@ func sync_from_host_state(state: int) -> void:
 
 
 func begin_recall() -> void:
-	## Drop investigate / alert scramble and run all the way to the Wretch.
+	## Drop investigate / alert scramble and run all the way to the Rat Queen.
 	_exploring_landing = false
 	_host_alert = false
 	_apply_agitation(false)

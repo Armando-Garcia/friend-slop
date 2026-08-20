@@ -2,7 +2,7 @@
 class_name AshWretch
 extends Monster
 
-## Ash variant: charge-hold-release caster combat with a ward-block combo.
+## Ice Caster: charge-hold-release caster combat with a ward-block combo.
 
 const MonsterComboStepScript := preload("res://scripts/monsters/monster_combo_step.gd")
 const MonsterComboTriggersScript := preload("res://scripts/monsters/monster_combo_triggers.gd")

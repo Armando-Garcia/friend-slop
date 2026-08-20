@@ -1,7 +1,7 @@
 class_name EmberDashTrailSegment
 extends Area3D
 
-## Flat ground burn segment left by Ember Wretch dash. Slow + DPS stub on overlap.
+## Flat ground burn segment left by Ember Caster dash. Slow + DPS stub on overlap.
 
 const SegmentScript := preload("res://scripts/monsters/abilities/ember_dash_trail_segment.gd")
 
