@@ -938,10 +938,11 @@ func _resolve_tip_rest_local() -> Vector3:
 func _success_color_for_spell(spell: SpellDefinition) -> Color:
 	if spell == null:
 		return Color(1.0, 0.95, 0.85)
-	return spell.get_display_color()
+	## Exported color works on editor placeholder resources; methods do not.
+	return spell.color
 
 
 func _success_pulse_color_for_spell(spell: SpellDefinition) -> Color:
 	if spell == null:
 		return Color(1.0, 0.98, 0.92)
-	return spell.get_display_color().lightened(0.2)
+	return spell.color.lightened(0.2)

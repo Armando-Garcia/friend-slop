@@ -5,7 +5,7 @@
 [sub_resource type="SphereShape3D" id="SphereShape3D_hit"]
 radius = 0.1
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_o37tl"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_3x3qd"]
 shading_mode = 0
 albedo_color = Color(1, 0.97, 0.88, 1)
 
@@ -17,7 +17,7 @@ rings = 6
 
 [node name="Flare" type="Area3D" unique_id=136047214]
 process_mode = 3
-editor_description = "Tiny hard thermite sphere + surface OmniLight beacon."
+editor_description = "Select THIS root to tune beacon, flight, and comet sparks. Stays put here — open flare_workspace.tscn to preview launches."
 collision_layer = 0
 monitoring = false
 monitorable = false
@@ -27,27 +27,29 @@ light_range = 480.0
 duration_sec = 25.0
 core_radius = 0.1
 hit_radius = 0.1
-launch_speed = 26.0
+launch_speed = 18.0
+drag = 0.3
+horizontal_drag = 0.4
 flight_gravity = 0.4
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=42705829]
 shape = SubResource("SphereShape3D_hit")
 
 [node name="ThermiteCore" type="MeshInstance3D" parent="." unique_id=626025084]
-editor_description = "Hard opaque point only — no soft glow disc / billboard ring."
+editor_description = "Hard opaque thermite point — size comes from core_radius on the Flare root."
 transform = Transform3D(0.102, 0, 0, 0, 0.102, 0, 0, 0, 0.102, 0, 0, 0)
-material_override = SubResource("StandardMaterial3D_o37tl")
+material_override = SubResource("StandardMaterial3D_3x3qd")
 cast_shadow = 0
 mesh = SubResource("SphereMesh_thermite")
 
 [node name="BeaconLight" type="OmniLight3D" parent="." unique_id=733697361]
-editor_description = "Surface lighting only. Volumetric fog energy 0 avoids a fog sphere."
+editor_description = "Surface lighting only. Volumetric fog energy must stay 0."
 light_color = Color(1, 0.12, 0.06, 1)
 light_energy = 40.0
 light_volumetric_fog_energy = 0.0
 light_specular = 0.4
 light_cull_mask = 3
 shadow_caster_mask = 1
-omni_range = 400.0
+omni_range = 480.0
 omni_attenuation = 1.35
 omni_shadow_mode = 0

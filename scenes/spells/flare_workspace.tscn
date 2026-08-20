@@ -19,8 +19,9 @@ roughness = 0.92
 
 [node name="FlareWorkspace" type="Node3D" unique_id=1058162536]
 process_mode = 3
-editor_description = "Flare look-dev. Authored Flare instance for burn preview; Launch Flare spawns a live rocket."
+editor_description = "Select FlareWorkspace root: Launch Flare for flight + comet trail. Select Flare child to tune stats."
 script = ExtResource("1_workspace")
+launch_pitch_deg = 35.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=140880010]
 environment = SubResource("Environment_studio")
@@ -53,7 +54,3 @@ editor_description = "Runtime launch previews spawn here."
 
 [node name="Flare" parent="." unique_id=406840540 instance=ExtResource("2_flare")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0.2)
-light_peak_energy = 36.0
-light_range = 320.0
-duration_sec = 15.0
-preview_loop = true
