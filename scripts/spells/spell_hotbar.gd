@@ -2,7 +2,7 @@ class_name SpellHotbar
 extends Node
 
 ## Per-player 3-slot spell bar. Voice confirm starts pending assignment;
-## RMB / MMB / E store (and load) a slot. Slots do not expire on a timer.
+## RMB / Q / E store and fire a slot. Middle mouse captures a new spell.
 
 signal slots_changed()
 signal pending_changed()
@@ -88,7 +88,7 @@ func assignment_prompt() -> String:
 	return "Assign %s  %s  %s  %s" % [
 		spell_name,
 		InputPromptScript.bracket("spell_slot_1", "RMB"),
-		InputPromptScript.bracket("spell_slot_2", "MMB"),
+		InputPromptScript.bracket("spell_slot_2", "Q"),
 		InputPromptScript.bracket("spell_slot_3", "E"),
 	]
 
@@ -156,7 +156,7 @@ func assign_pending_to(index: int) -> bool:
 	_selected_index = index
 	pending_changed.emit()
 	slots_changed.emit()
-	_emit_slot_selected(index, spell)
+	slot_selected.emit(index, spell)
 	return true
 
 
@@ -168,21 +168,32 @@ func try_activate_slot(index: int) -> bool:
 		return false
 	_selected_index = index
 	slots_changed.emit()
-	_emit_slot_selected(index, spell)
+	slot_selected.emit(index, spell)
 	return true
 
 
 func _clear_owner_armed() -> void:
 	var player := get_parent()
-	if player != null and player.has_method("_arm_slotted_spell"):
-		player.call("_arm_slotted_spell", null)
+	if player != null and player.has_method("_cancel_slot_cast"):
+		player.call("_cancel_slot_cast")
 
 
-func _emit_slot_selected(index: int, spell: SpellDefinition) -> void:
-	slot_selected.emit(index, spell)
+func _begin_owner_slot_fire(index: int) -> bool:
 	var player := get_parent()
-	if player != null and player.has_method("_arm_slotted_spell"):
-		player.call("_arm_slotted_spell", spell)
+	if player == null or not player.has_method("_try_begin_slot_fire"):
+		return try_activate_slot(index)
+	if not bool(player.call("_try_begin_slot_fire", index)):
+		return false
+	_selected_index = index
+	slots_changed.emit()
+	return true
+
+
+func _release_owner_slot_fire(index: int) -> bool:
+	var player := get_parent()
+	if player == null or not player.has_method("_try_release_slot_fire"):
+		return false
+	return bool(player.call("_try_release_slot_fire", index))
 
 
 func _on_voice_spell_selected(spell: SpellDefinition) -> void:
@@ -192,11 +203,20 @@ func _on_voice_spell_selected(spell: SpellDefinition) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_local_authority():
 		return
+	if event.is_echo():
+		return
 	if _is_input_blocked():
 		return
 	for i in SLOT_COUNT:
 		if event.is_action_pressed(SLOT_ACTIONS[i]):
-			if try_activate_slot(i):
+			if has_pending():
+				if assign_pending_to(i):
+					get_viewport().set_input_as_handled()
+			elif _begin_owner_slot_fire(i):
+				get_viewport().set_input_as_handled()
+			return
+		if event.is_action_released(SLOT_ACTIONS[i]):
+			if _release_owner_slot_fire(i):
 				get_viewport().set_input_as_handled()
 			return
 

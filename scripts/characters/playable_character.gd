@@ -83,6 +83,7 @@ var _wand: PlayerWand
 var _wand_raised := false
 var _spell_fire_charging := false
 var _spell_fire_releasing := false
+var _spell_fire_slot := -1
 var _fake_wall_placement: Node
 var _knockback_vel := Vector3.ZERO
 var _knockback_timer := 0.0
@@ -399,15 +400,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
-	if event.is_action_pressed("spell_fire"):
-		if _try_begin_spell_fire():
-			get_viewport().set_input_as_handled()
-		return
-
-	if event.is_action_released("spell_fire"):
-		if _try_release_spell_fire():
-			get_viewport().set_input_as_handled()
-
 
 func _on_cast_session_state_changed(state: String, _spell: SpellDefinition) -> void:
 	if _wand == null:
@@ -433,20 +425,27 @@ func _on_wand_spell_selected(spell: SpellDefinition) -> void:
 		_game_hud.call("reveal_cast_spell", spell)
 	if _wand != null and _wand.has_method("play_spell_recognition"):
 		await _wand.play_spell_recognition(spell)
+	if not is_instance_valid(self):
+		return
+	## Slot assign already lowered the wand so LMB is free; skip the leftover flourish.
+	if not _wand_raised:
+		return
 	_lower_wand(false)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
 
 
 func _arm_slotted_spell(spell: SpellDefinition) -> void:
-	_cancel_spell_fire_charge(true)
-	_armed_spell = spell
+	## Kept for stun/cancel callers; slots no longer stay loaded on a timer.
 	if spell == null:
-		_sync_mana_hud()
-		return
-	_refill_mana()
-	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
-		_game_hud.call("reveal_cast_spell", spell)
+		_cancel_slot_cast()
+
+
+func _cancel_slot_cast() -> void:
+	_cancel_spell_fire_charge(true)
+	_armed_spell = null
+	_spell_fire_slot = -1
+	_sync_mana_hud()
 
 
 func _on_wand_cast_succeeded(
@@ -571,44 +570,53 @@ func _lower_wand(cancel_listen: bool) -> void:
 		_wand.set_armed(false)
 
 
-func _can_fire_armed_spell() -> bool:
+func _can_fire_slotted_spell(spell: SpellDefinition) -> bool:
 	if not (
 		_uses_local_view()
 		and not _wand_controls_blocked()
 		and not _wand_raised
 		and not is_carrying_relic()
-		and _armed_spell != null
+		and spell != null
 		and _effect_applier != null
 		and (_casting_session == null or not _casting_session.is_tome_teaching())
 	):
 		return false
-	if _mana <= 0.0:
-		return false
 	var one: Array[SpellDefinition] = []
-	one.append(_armed_spell)
+	one.append(spell)
 	return not _filter_free_cast_candidates(one).is_empty()
 
 
-func _try_begin_spell_fire() -> bool:
+func _try_begin_slot_fire(slot_index: int) -> bool:
 	if _spell_fire_charging or _spell_fire_releasing:
 		return false
-	if not _can_fire_armed_spell():
+	if spell_hotbar == null or not spell_hotbar.has_method("get_spell_at"):
 		return false
+	var spell: SpellDefinition = spell_hotbar.call("get_spell_at", slot_index) as SpellDefinition
+	if not _can_fire_slotted_spell(spell):
+		return false
+	if _wand_raised:
+		_lower_wand(false)
+	_armed_spell = spell
+	_spell_fire_slot = slot_index
 	_spell_fire_charging = true
+	_refill_mana()
 	if _wand != null:
 		_wand.begin_cast_charge(_armed_spell)
 	return true
 
-func _try_release_spell_fire() -> bool:
-	if not _spell_fire_charging:
+
+func _try_release_slot_fire(slot_index: int) -> bool:
+	if not _spell_fire_charging or slot_index != _spell_fire_slot:
 		return false
 	_spell_fire_charging = false
 	if _wand == null or not _wand.is_cast_charge_ready():
 		if _wand != null:
 			_wand.cancel_cast_charge()
+		_cancel_slot_cast()
 		return false
-	if not _can_fire_armed_spell():
+	if not _can_fire_slotted_spell(_armed_spell):
 		_wand.fizzle_cast_charge()
+		_cancel_slot_cast()
 		return false
 	_spell_fire_releasing = true
 	_fire_armed_spell()
@@ -632,9 +640,11 @@ func _fire_armed_spell() -> void:
 			await _wand.return_from_cast_charge()
 	if not is_instance_valid(self) or spell == null:
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
-	if _armed_spell != spell or _mana <= 0.0:
+	if _armed_spell != spell:
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
 	if spell.effect_id == "fake_wall":
 		if _begin_fake_wall_placement(spell):
@@ -642,6 +652,7 @@ func _fire_armed_spell() -> void:
 				_wand.play_cast_success(spell, true)
 			_spend_mana(cost)
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
 	var params := SpellEffectSyncScript.build_params(spell, self)
 	var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
@@ -655,6 +666,7 @@ func _fire_armed_spell() -> void:
 		_wand.play_cast_success(spell, true)
 	_spend_mana(cost)
 	_spell_fire_releasing = false
+	_cancel_slot_cast()
 
 
 func _refill_mana() -> void:
@@ -666,46 +678,11 @@ func _spend_mana(amount: float) -> void:
 		_sync_mana_hud()
 		return
 	_mana = maxf(0.0, _mana - amount)
-	if _mana <= 0.001:
-		_deplete_mana()
-	else:
-		_sync_mana_hud()
-
-func _deplete_mana() -> void:
-	_mana = 0.0
-	_cancel_spell_fire_charge(true)
-	_armed_spell = null
-	if spell_hotbar != null and spell_hotbar.has_method("clear_selection"):
-		spell_hotbar.call("clear_selection")
-	if _game_hud != null:
-		if _game_hud.has_method("hide_mana"):
-			_game_hud.call("hide_mana")
-		if _game_hud.has_method("clear_spell_word"):
-			_game_hud.call("clear_spell_word")
+	_sync_mana_hud()
 
 func _sync_mana_hud() -> void:
-	if _game_hud == null:
-		return
-	if _armed_spell == null or _mana <= 0.001:
-		if _game_hud.has_method("hide_mana"):
-			_game_hud.call("hide_mana")
-		return
-	var bar_color := _armed_spell.get_display_color()
-	if _game_hud.has_method("show_mana"):
-		_game_hud.call("show_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
-	elif _game_hud.has_method("set_mana"):
-		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
-
-func _tick_mana_drain(delta: float) -> void:
-	if not _uses_local_view():
-		return
-	if _armed_spell == null or _mana <= 0.0:
-		return
-	_mana = maxf(0.0, _mana - SpellManaScript.drain_rate(_armed_spell) * delta)
-	if _mana <= 0.001:
-		_deplete_mana()
-	else:
-		_sync_mana_hud()
+	if _game_hud != null and _game_hud.has_method("hide_mana"):
+		_game_hud.call("hide_mana")
 
 
 func _try_tome_teaching_interact() -> bool:
@@ -939,7 +916,6 @@ func _physics_process(delta: float) -> void:
 	if not _uses_local_view():
 		_refresh_broom_visual()
 		return
-	_tick_mana_drain(delta)
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:

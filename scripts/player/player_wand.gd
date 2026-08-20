@@ -36,7 +36,7 @@ const FLAME_GLOW_EMISSION := 3.2
 @export var raised_basis_euler_deg: Vector3 = Vector3(28.0, -8.0, -4.0)
 @export_range(0.05, 1.0, 0.01) var raise_tween_sec: float = 0.25
 
-## Tip lift while holding LMB; spell fires on release as the wand returns forward.
+## Tip lift while holding a spell-slot hotkey; spell fires on release as the wand returns forward.
 ## Pitch sign matches E-raise (+X): tip is on local −Z, so +pitch lifts the lit end.
 @export_range(0.05, 0.8, 0.01) var cast_charge_sec: float = 0.14
 ## Flipped-P release: large tip arc left/up, brief pause, then fast drop. Fire awaits all.
@@ -73,7 +73,7 @@ var _tip_base_scale := Vector3.ONE
 var _default_held_transform: Transform3D = Transform3D.IDENTITY
 var _has_default_held := false
 var _idle_transform: Transform3D = Transform3D.IDENTITY
-## Exact pose at LMB press — release always restores the default held pose.
+## Exact pose at slot-key press — release always restores the default held pose.
 var _cast_pre_click_transform: Transform3D = Transform3D.IDENTITY
 ## Stable tip offset in wand space (authored child chain); not from live to_local.
 var _tip_rest_local: Vector3 = Vector3(0.0, 0.0, -0.28)
@@ -281,7 +281,7 @@ func play_cast_success(spell: SpellDefinition = null, keep_armed: bool = false) 
 	_pulse_tip(_success_pulse_color_for_spell(spell), 0.35)
 
 
-## LMB press: ready immediately; hold builds charge power up to spell charge_time.
+## Slot press: ready immediately; hold builds charge power up to spell charge_time.
 func begin_cast_charge(spell: SpellDefinition = null) -> void:
 	if _raised:
 		return

@@ -166,7 +166,7 @@ func _build_spell_slots() -> void:
 		_spell_buttons.append(button)
 	if _spells_hint != null:
 		_spells_hint.text = (
-			"Drag spells to swap slots. After a voice confirm, press RMB / MMB / E to assign."
+			"Drag spells to swap slots. After a voice confirm, press RMB / Q / E to assign."
 		)
 
 

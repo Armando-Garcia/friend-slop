@@ -177,4 +177,7 @@ func _test_assignment_prompt() -> int:
 	if not prompt.contains("RMB") and not prompt.contains("["):
 		push_error("Expected assignment prompt to include slot hotkeys")
 		return 1
+	if not prompt.contains("E") and not prompt.contains("["):
+		push_error("Expected assignment prompt to include the E slot key")
+		return 1
 	return 0

@@ -149,5 +149,5 @@ star_size = 0.06
 
 [node name="SpellHotbar" type="Node" parent="." index="11" unique_id=2020083901]
 unique_name_in_owner = true
-editor_description = "Three persistent spell slots. After a voice confirm, press RMB / MMB / E to assign."
+editor_description = "Three persistent spell slots. After a voice confirm, press RMB / Q / E to assign."
 script = ExtResource("12_hotbar")

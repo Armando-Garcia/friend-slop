@@ -1,11 +1,11 @@
 class_name SpellDefinition
 extends Resource
 
-## Drives LMB cast wand flourish (offensive jab, defensive guard, etc.).
+## Drives slot-cast wand flourish (offensive jab, defensive guard, etc.).
 enum Category { OFFENSIVE, DEFENSIVE, UTILITY, BUFF }
-## CAST charges while LMB held; CHANNEL is instantly ready (mana drain while armed).
+## CAST charges while the slot hotkey is held; CHANNEL is instantly ready.
 enum CastMode { CAST, CHANNEL }
-## Wand flourish used while charging / releasing an armed spell.
+## Wand flourish used while charging / releasing a slotted spell.
 enum WandFxKind { P_SHAPED, SHAKE, LIFT_DEFENSIVE }
 
 const DEFAULT_ONE_WORD_DURATION_MS := 700
@@ -23,7 +23,7 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var color: Color = Color(0.55, 0.28, 0.72, 1.0)
 @export var category: Category = Category.UTILITY
 @export var cast_mode: CastMode = CastMode.CAST
-## LMB hold time before CAST spells are ready (CHANNEL uses 0).
+## Slot hold time before CAST spells are ready (CHANNEL uses 0).
 @export_range(0.0, 10.0, 0.05) var charge_time_sec: float = 1.0
 
 

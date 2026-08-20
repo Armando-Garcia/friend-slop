@@ -10,6 +10,13 @@ const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory
 const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
 const SpellbookPanelScene := preload("res://scenes/ui/book/spell/spell_book.tscn")
 
+## Bottom HUD: spell hotbar (left) + inventory hotbar (right), lifted for 1080p viewport scaling.
+const BOTTOM_HUD_MARGIN_PX := 36.0
+const BOTTOM_HUD_ROW_HEIGHT_PX := 72.0
+const BOTTOM_HUD_BAR_GAP_PX := 16.0
+const INVENTORY_SLOT_SIZE := Vector2(96, 64)
+const SPELL_SLOT_SIZE := Vector2(120, 72)
+
 var _loadout: Node
 var _inventory: Node
 var _selected_spell_id: String = ""
@@ -56,8 +63,7 @@ func _ready() -> void:
 	mic_level_bar.value = 0.0
 	_setup_spellbook_panel()
 	_setup_active_strip()
-	_setup_hotbar()
-	_setup_spell_hotbar()
+	_setup_bottom_hud()
 	_setup_mana_bar()
 	_update_aim_cursor_visibility()
 
@@ -316,14 +322,15 @@ func hide_mana() -> void:
 
 
 func _setup_mana_bar() -> void:
-	## Above the spell hotbar (spell bar top ≈ -184 from bottom).
+	## Thin strip above the combined bottom hotbar row.
+	var bottom := BOTTOM_HUD_MARGIN_PX + BOTTOM_HUD_ROW_HEIGHT_PX + 12.0
 	var anchor := MarginContainer.new()
 	anchor.name = "ManaBarMargin"
 	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	anchor.offset_left = -160.0
-	anchor.offset_top = -208.0
+	anchor.offset_top = -(bottom + 20.0)
 	anchor.offset_right = 160.0
-	anchor.offset_bottom = -188.0
+	anchor.offset_bottom = -bottom
 	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	anchor.visible = false
@@ -360,28 +367,70 @@ func _setup_mana_bar() -> void:
 	set_mana(100.0, 100.0)
 
 
-func _setup_hotbar() -> void:
+func _bottom_hud_half_width() -> float:
+	var spell_w := (
+		SPELL_SLOT_SIZE.x * SpellHotbarScript.SLOT_COUNT
+		+ 10.0 * maxf(float(SpellHotbarScript.SLOT_COUNT - 1), 0.0)
+	)
+	var inv_w := (
+		INVENTORY_SLOT_SIZE.x * PlayerInventoryScript.HOTBAR_COUNT
+		+ 8.0 * maxf(float(PlayerInventoryScript.HOTBAR_COUNT - 1), 0.0)
+	)
+	return (spell_w + BOTTOM_HUD_BAR_GAP_PX + inv_w) * 0.5
+
+
+func _setup_bottom_hud() -> void:
+	var half_w := _bottom_hud_half_width()
+	var bottom := BOTTOM_HUD_MARGIN_PX
+	var top := bottom + BOTTOM_HUD_ROW_HEIGHT_PX
 	var anchor := MarginContainer.new()
-	anchor.name = "HotbarMargin"
+	anchor.name = "BottomHudMargin"
 	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	anchor.offset_left = -220.0
-	anchor.offset_top = -96.0
-	anchor.offset_right = 220.0
-	anchor.offset_bottom = -16.0
+	anchor.offset_left = -half_w
+	anchor.offset_top = -top
+	anchor.offset_right = half_w
+	anchor.offset_bottom = -bottom
 	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(anchor)
 
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_END
+	row.add_theme_constant_override("separation", int(BOTTOM_HUD_BAR_GAP_PX))
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.add_child(row)
+
+	var spell_row := HBoxContainer.new()
+	spell_row.alignment = BoxContainer.ALIGNMENT_END
+	spell_row.add_theme_constant_override("separation", 10)
+	spell_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(spell_row)
+
 	_hotbar_row = HBoxContainer.new()
-	_hotbar_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hotbar_row.alignment = BoxContainer.ALIGNMENT_END
 	_hotbar_row.add_theme_constant_override("separation", 8)
 	_hotbar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.add_child(_hotbar_row)
+	row.add_child(_hotbar_row)
+
+	_spell_hotbar_cells.clear()
+	_spell_hotbar_labels.clear()
+	for i in SpellHotbarScript.SLOT_COUNT:
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = SPELL_SLOT_SIZE
+		var label := Label.new()
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
+		cell.add_child(label)
+		spell_row.add_child(cell)
+		_spell_hotbar_cells.append(cell)
+		_spell_hotbar_labels.append(label)
 
 	_hotbar_labels.clear()
 	for i in PlayerInventoryScript.HOTBAR_COUNT:
 		var cell := PanelContainer.new()
-		cell.custom_minimum_size = Vector2(96, 64)
+		cell.custom_minimum_size = INVENTORY_SLOT_SIZE
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.06, 0.14, 0.82)
 		style.set_border_width_all(1)
@@ -397,42 +446,8 @@ func _setup_hotbar() -> void:
 		cell.add_child(label)
 		_hotbar_row.add_child(cell)
 		_hotbar_labels.append(label)
-	_refresh_hotbar()
-
-
-func _setup_spell_hotbar() -> void:
-	var anchor := MarginContainer.new()
-	anchor.name = "SpellHotbarMargin"
-	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	anchor.offset_left = -200.0
-	anchor.offset_top = -184.0
-	anchor.offset_right = 200.0
-	anchor.offset_bottom = -104.0
-	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(anchor)
-
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 10)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.add_child(row)
-
-	_spell_hotbar_cells.clear()
-	_spell_hotbar_labels.clear()
-	for i in SpellHotbarScript.SLOT_COUNT:
-		var cell := PanelContainer.new()
-		cell.custom_minimum_size = Vector2(120, 72)
-		var label := Label.new()
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 14)
-		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
-		cell.add_child(label)
-		row.add_child(cell)
-		_spell_hotbar_cells.append(cell)
-		_spell_hotbar_labels.append(label)
 	_refresh_spell_hotbar()
+	_refresh_hotbar()
 
 
 func _refresh_spell_hotbar() -> void:
