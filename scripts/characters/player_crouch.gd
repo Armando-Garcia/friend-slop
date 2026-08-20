@@ -44,6 +44,8 @@ static func config_from(player: CharacterBody3D) -> Dictionary:
 
 
 static func _export_float(player: Object, property: StringName, default: float) -> float:
+	if player is PlayableCharacter:
+		return float(player.get(property))
 	var value: Variant = player.get(property)
 	if value == null:
 		return default
@@ -86,9 +88,10 @@ static func slide_friction_decel(
 	player: CharacterBody3D, config: Dictionary, speed: float
 ) -> float:
 	var ground := resolve_move_friction(player)
-	var entry := slide_threshold(config)
 	var exit_sp := slide_exit_speed(config)
-	var span := maxf(entry - exit_sp, 0.01)
+	var entry := slide_threshold(config)
+	var ramp_high := maxf(entry, exit_sp) + 8.0
+	var span := maxf(ramp_high - exit_sp, 0.01)
 	var t := clampf((speed - exit_sp) / span, 0.0, 1.0)
 	var pct := lerpf(slide_friction_end_percent(config), slide_friction_start_percent(config), t)
 	return ground * (pct / 100.0)
@@ -154,9 +157,9 @@ static func horizontal_speed(player: CharacterBody3D) -> float:
 static func should_enter_slide(
 	speed: float, config: Dictionary, dash_grace: bool
 ) -> bool:
-	if speed <= slide_exit_speed(config):
-		return false
-	return speed > slide_threshold(config) or dash_grace
+	if dash_grace and speed > slide_exit_speed(config):
+		return true
+	return speed > slide_threshold(config)
 
 
 static func tick(player: CharacterBody3D) -> void:

@@ -37,6 +37,8 @@ static func config_from(player: CharacterBody3D) -> Dictionary:
 
 
 static func _export_float(player: Object, property: StringName, default: float) -> float:
+	if player is PlayableCharacter:
+		return float(player.get(property))
 	var value: Variant = player.get(property)
 	if value == null:
 		return default

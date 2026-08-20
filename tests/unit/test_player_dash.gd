@@ -1,6 +1,7 @@
 extends RefCounted
 
 const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
+const PlayableCharacterScript := preload("res://scripts/characters/playable_character.gd")
 
 
 func run() -> int:
@@ -34,11 +35,11 @@ func _test_config_speed_overrides_defaults() -> int:
 
 
 func _test_config_from_player_exports() -> int:
-	var player := CharacterBody3D.new()
-	player.set("dash_distance", 4.0)
-	player.set("dash_duration", 0.2)
-	player.set("dash_cooldown_sec", 2.5)
-	player.set("dash_speed", 15.0)
+	var player := PlayableCharacterScript.new()
+	player.dash_distance = 4.0
+	player.dash_duration = 0.2
+	player.dash_cooldown_sec = 2.5
+	player.dash_speed = 15.0
 	var config := PlayerDashScript.config_from(player)
 	player.free()
 	if not is_equal_approx(float(config["distance"]), 4.0):

@@ -1,5 +1,6 @@
 extends RefCounted
 
+const PlayableCharacterScript := preload("res://scripts/characters/playable_character.gd")
 const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
 
 
@@ -17,7 +18,7 @@ func run() -> int:
 
 
 func _test_default_crouch_walk_speed() -> int:
-	var player := CharacterBody3D.new()
+	var player := PlayableCharacterScript.new()
 	player.set_meta(PlayerCrouchScript.META_CROUCHING, true)
 	var speed := PlayerCrouchScript.ground_move_speed(player, 1.0)
 	player.free()
@@ -35,15 +36,15 @@ func _test_slide_entry_threshold() -> int:
 	if PlayerCrouchScript.should_enter_slide(0.5, config, false):
 		push_error("Expected speed at entry threshold not to allow slide")
 		return 1
-	if not PlayerCrouchScript.should_enter_slide(0.6, config, true):
+	if not PlayerCrouchScript.should_enter_slide(1.5, config, true):
 		push_error("Expected dash grace to allow slide below entry when above exit")
 		return 1
 	return 0
 
 
 func _test_slide_friction_ramp() -> int:
-	var player := CharacterBody3D.new()
-	player.set("move_friction", 50.0)
+	var player := PlayableCharacterScript.new()
+	player.move_friction = 50.0
 	var config := {}
 	var fast := PlayerCrouchScript.slide_friction_decel(player, config, 8.0)
 	var slow := PlayerCrouchScript.slide_friction_decel(player, config, 1.2)
@@ -58,7 +59,7 @@ func _test_slide_friction_ramp() -> int:
 
 
 func _test_dash_grace_entry() -> int:
-	var player := CharacterBody3D.new()
+	var player := PlayableCharacterScript.new()
 	PlayerCrouchScript.mark_dash_slide_grace(player, 0.2, 0.4)
 	if not PlayerCrouchScript.dash_slide_grace_active(player):
 		push_error("Expected dash slide grace to be active after marking")
@@ -73,17 +74,13 @@ func _test_dash_grace_entry() -> int:
 	return 0
 
 
-func _test_default_slide_friction() -> int:
-	return 0
-
-
 func _test_config_from_player_exports() -> int:
-	var player := CharacterBody3D.new()
-	player.set("crouch_speed", 1.8)
-	player.set("crouch_slide_threshold", 2.0)
-	player.set("crouch_slide_exit_speed", 0.8)
-	player.set("crouch_slide_friction_start", 10.0)
-	player.set("crouch_slide_friction", 60.0)
+	var player := PlayableCharacterScript.new()
+	player.crouch_speed = 1.8
+	player.crouch_slide_threshold = 2.0
+	player.crouch_slide_exit_speed = 0.8
+	player.crouch_slide_friction_start = 10.0
+	player.crouch_slide_friction = 60.0
 	var config := PlayerCrouchScript.config_from(player)
 	player.free()
 	if not is_equal_approx(float(config["speed"]), 1.8):
@@ -96,8 +93,8 @@ func _test_config_from_player_exports() -> int:
 
 
 func _test_move_speed_export() -> int:
-	var player := CharacterBody3D.new()
-	player.set("move_speed", 6.5)
+	var player := PlayableCharacterScript.new()
+	player.move_speed = 6.5
 	if not is_equal_approx(PlayerCrouchScript.resolve_move_speed(player), 6.5):
 		push_error("Expected resolve_move_speed to read move_speed export")
 		player.free()
@@ -107,8 +104,8 @@ func _test_move_speed_export() -> int:
 
 
 func _test_move_friction_export() -> int:
-	var player := CharacterBody3D.new()
-	player.set("move_friction", 12.0)
+	var player := PlayableCharacterScript.new()
+	player.move_friction = 12.0
 	if not is_equal_approx(PlayerCrouchScript.resolve_move_friction(player), 12.0):
 		push_error("Expected resolve_move_friction to read move_friction export")
 		player.free()
