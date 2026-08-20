@@ -3,6 +3,8 @@ extends Node
 
 ## Root app: exclusive MainMenu / Lobby / Match states + shared VoiceEngine.
 ## Per-state VoiceSession nodes configure how voice works for that player group.
+## Match world (match.tscn) is instantiated under States/Match only when a match
+## starts (or, in the editor, while the Match state is selected for preview).
 ## In the editor, selecting a state (or its children) previews that state's UI/world.
 
 signal state_changed(state: int)
@@ -39,8 +41,8 @@ var _unmapped_peers: Dictionary = {}
 
 
 func _enter_tree() -> void:
-	## Authoring keeps Match/Match in the scene for editor preview. Strip it before
-	## child _ready so play does not boot STT/match systems on the main menu.
+	## Match world is never authored under GameApp. Drop a leftover editor-preview
+	## instance before play so STT/match systems do not boot on the main menu.
 	if Engine.is_editor_hint():
 		return
 	var world := get_node_or_null("States/Match/Match")
@@ -380,7 +382,7 @@ func _set_state_process(node: Node, enabled: bool) -> void:
 func _load_match() -> void:
 	if _match_instance != null and is_instance_valid(_match_instance):
 		return
-	## Drop the editor-authored Match world (if present) so play always starts clean.
+	## Drop a leftover preview/world node so play always starts a fresh instance.
 	var existing := match_state.get_node_or_null("Match")
 	if existing != null:
 		match_state.remove_child(existing)
@@ -493,6 +495,10 @@ func _editor_apply_preview_state(next: AppState) -> void:
 	if lobby_ui != null:
 		lobby_ui.visible = next == AppState.LOBBY
 
+	if next == AppState.MATCH:
+		_editor_ensure_match_preview()
+	else:
+		_editor_teardown_match_preview()
 	_editor_set_match_preview_visible(next == AppState.MATCH)
 	_editor_hide_app_settings()
 
@@ -500,6 +506,24 @@ func _editor_apply_preview_state(next: AppState) -> void:
 		var match_preview := get_node_or_null("States/Match/Match")
 		if match_preview != null and match_preview.has_method("editor_refresh_environment_preview"):
 			match_preview.call_deferred("editor_refresh_environment_preview")
+
+
+func _editor_ensure_match_preview() -> void:
+	## Instantiate match.tscn only while previewing Match. owner stays null so
+	## Godot does not write the world back into game_app.tscn.
+	var parent := get_node_or_null("States/Match")
+	if parent == null or parent.get_node_or_null("Match") != null:
+		return
+	var world: Node = MATCH_SCENE.instantiate()
+	world.name = "Match"
+	parent.add_child(world)
+	world.owner = null
+
+
+func _editor_teardown_match_preview() -> void:
+	var world := get_node_or_null("States/Match/Match")
+	if world != null:
+		world.free()
 
 
 func _editor_set_match_preview_visible(enabled: bool) -> void:
