@@ -14,6 +14,7 @@ func run() -> int:
 	failures += _test_patrol_and_velocity_helpers()
 	failures += _test_proximity_and_prefer_interest()
 	failures += _test_chase_move_helpers()
+	failures += _test_lookdev_live_is_off_outside_editor()
 	return failures
 
 
@@ -276,4 +277,19 @@ func _assert_dash_landing_away() -> int:
 	if landing.z <= from.z:
 		push_error("Expected pick_dash_landing_away to move farther from the player")
 		return 1
+	return 0
+
+
+func _test_lookdev_live_is_off_outside_editor() -> int:
+	var node := Node.new()
+	node.set_meta("lookdev_live_ai", true)
+	if MonsterAIScript.is_lookdev_live(node):
+		push_error("Lookdev live AI should be off outside the editor")
+		node.free()
+		return 1
+	if MonsterAIScript.is_lookdev_live(null):
+		push_error("null must not count as lookdev live")
+		node.free()
+		return 1
+	node.free()
 	return 0

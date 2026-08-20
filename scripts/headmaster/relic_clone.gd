@@ -36,9 +36,9 @@ static func spawn(
 	var decoy = new()
 	decoy.spawn_id = clone_spawn_id
 	parent.add_child(decoy)
-	var snapped := snap_to_ground(decoy.get_world_3d(), world_position)
-	decoy._hover_base = snapped
-	decoy.global_position = snapped
+	var snapped_pos := snap_to_ground(decoy.get_world_3d(), world_position)
+	decoy._hover_base = snapped_pos
+	decoy.global_position = snapped_pos
 	decoy._hovering = true
 	return decoy
 

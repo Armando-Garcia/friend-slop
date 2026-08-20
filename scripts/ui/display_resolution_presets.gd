@@ -36,11 +36,17 @@ static func get_default_monitor_size() -> Vector2i:
 
 static func build_presets(include_size: Vector2i = Vector2i.ZERO) -> Array[Vector2i]:
 	var presets: Array[Vector2i] = []
-	_add_unique_preset(presets, get_default_monitor_size())
-	if include_size.x > 0 and include_size.y > 0:
+	var native := get_default_monitor_size()
+	_add_unique_preset(presets, native)
+	if (
+		include_size.x > 0
+		and include_size.y > 0
+		and is_viable_on_display(include_size, native)
+	):
 		_add_unique_preset(presets, include_size)
 	for size in STANDARD_PRESETS:
-		_add_unique_preset(presets, size)
+		if is_viable_on_display(size, native):
+			_add_unique_preset(presets, size)
 	return _sort_presets_descending(presets)
 
 
@@ -78,11 +84,43 @@ static func find_default_preset_index(include_size: Vector2i = Vector2i.ZERO) ->
 
 static func normalize_size(size: Vector2i) -> Vector2i:
 	# Do not pass `size` as include_size — that would invent a preset for any value.
+	var native := get_default_monitor_size()
 	var presets := build_presets()
 	for preset in presets:
 		if preset == size:
+			if not is_viable_on_display(size, native):
+				return native
 			return size
-	return get_default_monitor_size()
+	return native
+
+
+## True when `size` can be shown on `native` without exceeding the panel.
+static func is_viable_on_display(size: Vector2i, native: Vector2i) -> bool:
+	if size.x < MIN_SIZE.x or size.y < MIN_SIZE.y:
+		return false
+	if native.x <= 0 or native.y <= 0:
+		return true
+	return size.x <= native.x and size.y <= native.y
+
+
+## First-run and migrated saves: keep a fitting size, otherwise use native.
+static func resolve_saved_window_size(saved: Vector2i, native: Vector2i) -> Vector2i:
+	var fallback := native
+	if fallback.x < MIN_SIZE.x or fallback.y < MIN_SIZE.y:
+		fallback = DEFAULT_SIZE
+	if saved.x <= 0 or saved.y <= 0:
+		return fallback
+	## Known presets, not build_presets() — that list is filtered to this display.
+	var matched := saved == fallback
+	for preset in STANDARD_PRESETS:
+		if preset == saved:
+			matched = true
+			break
+	if not matched:
+		return fallback
+	if not is_viable_on_display(saved, fallback):
+		return fallback
+	return saved
 
 
 static func includes_uhd_4k() -> bool:

@@ -50,6 +50,33 @@ static func generate(
 	return grid
 
 
+static func generate_open_box(
+	maze_width: int, maze_height: int, with_cover: bool = false
+) -> Array:
+	## Perimeter walls, fully open interior. Optional center cover for LOS tests.
+	if maze_width < 1 or maze_height < 1:
+		push_error("MazeCarver.generate_open_box: width and height must be >= 1")
+		return []
+	var grid := _create_wall_grid(maze_width, maze_height)
+	var size := grid_size_for(maze_width, maze_height)
+	for x in range(1, size.x - 1):
+		for y in range(1, size.y - 1):
+			grid[x][y] = 0
+	if with_cover:
+		_add_center_cover(grid, size)
+	return grid
+
+
+static func _add_center_cover(grid: Array, size: Vector2i) -> void:
+	var cx := int(size.x / 2.0)
+	var half := mini(2, maxi(int(size.y / 2.0) - 2, 1))
+	var cy := int(size.y / 2.0)
+	for dy in range(-half, half + 1):
+		var gy := cy + dy
+		if gy > 0 and gy < size.y - 1:
+			grid[cx][gy] = 1
+
+
 static func carve_iterative(
 	wall_grid: Array,
 	start_x: int,
@@ -145,7 +172,7 @@ static func spire_radius_cells(size: float) -> int:
 
 
 static func spire_center_maze_cell(maze_width: int, maze_height: int) -> Vector2i:
-	return Vector2i(int(maze_width / 2), int(maze_height / 2))
+	return Vector2i(int(maze_width / 2.0), int(maze_height / 2.0))
 
 
 static func is_maze_cell_in_spire_clearing(
@@ -179,8 +206,8 @@ static func add_clearings(
 
 	var grid_w: int = wall_grid.size()
 	var grid_h: int = wall_grid[0].size()
-	var mid_x := int(maze_width / 2)
-	var mid_y := int(maze_height / 2)
+	var mid_x := int(maze_width / 2.0)
+	var mid_y := int(maze_height / 2.0)
 	var quadrants: Array[Dictionary] = [
 		{"x0": 0, "x1": mid_x, "y0": 0, "y1": mid_y},
 		{"x0": mid_x, "x1": maze_width, "y0": 0, "y1": mid_y},

@@ -11,11 +11,11 @@ var _steam: Object
 func _init() -> void:
 	if Engine.has_singleton("Steam"):
 		_steam = Engine.get_singleton("Steam")
-		available = _steam != null
+	_refresh_available()
 
 
 func send_packet(steam_id: int, data: PackedByteArray, p2p_channel: int) -> void:
-	if not available or data.is_empty() or steam_id == 0:
+	if not _refresh_available() or data.is_empty() or steam_id == 0:
 		return
 	var send_type := _p2p_send_unreliable_no_delay()
 	_steam.call("sendP2PPacket", steam_id, data, send_type, p2p_channel)
@@ -23,7 +23,7 @@ func send_packet(steam_id: int, data: PackedByteArray, p2p_channel: int) -> void
 
 func read_packets(p2p_channel: int, max_packet_size: int = 8192) -> Array[Dictionary]:
 	var packets: Array[Dictionary] = []
-	if not available or not _steam.has_method("readP2PPacket"):
+	if not _refresh_available() or not _steam.has_method("readP2PPacket"):
 		return packets
 	while _steam.has_method("getAvailableP2PPacketSize"):
 		var available_size := int(_steam.call("getAvailableP2PPacketSize", p2p_channel))
@@ -66,6 +66,11 @@ static func pcm_bytes_to_mono_floats(buffer: PackedByteArray) -> PackedFloat32Ar
 		var sample := buffer.decode_s16(offset)
 		out[i] = float(sample) / 32768.0
 	return out
+
+
+func _refresh_available() -> bool:
+	available = _steam != null and SteamService.is_ready()
+	return available
 
 
 func _p2p_send_unreliable_no_delay() -> int:

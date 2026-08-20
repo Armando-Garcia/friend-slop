@@ -79,18 +79,17 @@ func is_running_embedded_in_editor() -> bool:
 func apply_display_settings() -> void:
 	if not is_inside_tree() or DisplayServer.get_name() == "headless":
 		return
-	if Engine.is_embedded_in_editor():
-		return
 	call_deferred("_deferred_apply_display_settings")
 
 
 func _deferred_apply_display_settings() -> void:
-	if Engine.is_embedded_in_editor():
-		return
 	var window := get_tree().root as Window
 	if window == null:
 		return
 	var target := Vector2i(window_width, window_height)
+	if Engine.is_embedded_in_editor():
+		_apply_embedded_content_scale(window)
+		return
 	DisplayServer.window_set_min_size(Vector2i(640, 360))
 	if fullscreen:
 		_apply_fullscreen(window, target)
@@ -98,11 +97,20 @@ func _deferred_apply_display_settings() -> void:
 		_apply_windowed(window, target)
 
 
+func _apply_embedded_content_scale(window: Window) -> void:
+	## Game tab owns the window; still apply UI layout and 3D render scale.
+	var chosen := _chosen_resolution()
+	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+	window.content_scale_size = chosen
+	_set_scaling_3d_scale(window, chosen, window.size)
+
+
 func _apply_fullscreen(window: Window, target: Vector2i) -> void:
 	_configure_root_window(window, true)
 	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	window.content_scale_size = _ui_design_size()
+	window.content_scale_size = target
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	window.mode = Window.MODE_FULLSCREEN
 	_set_scaling_3d_scale(window, target, _current_screen_size())
@@ -128,8 +136,8 @@ func _apply_windowed(window: Window, target: Vector2i) -> void:
 		window.size = size
 	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	window.content_scale_size = _ui_design_size()
-	_set_scaling_3d_scale(window, size, size)
+	window.content_scale_size = _chosen_resolution()
+	_set_scaling_3d_scale(window, _chosen_resolution(), size)
 	_center_window(size)
 
 
@@ -139,19 +147,16 @@ func _fit_to_work_area(size: Vector2i) -> Vector2i:
 	)
 
 
-## UI design resolution from project.godot. Using the window size here instead
-## would pin the content scale at 1.0, so the HUD would keep a fixed pixel size
-## at every resolution — oversized at 720p, tiny at 4K.
-func _ui_design_size() -> Vector2i:
-	var width := int(
-		ProjectSettings.get_setting("display/window/size/viewport_width", 0)
-	)
-	var height := int(
-		ProjectSettings.get_setting("display/window/size/viewport_height", 0)
-	)
-	if width <= 0 or height <= 0:
-		return DisplayResolutionPresetsScript.DEFAULT_SIZE
-	return Vector2i(width, height)
+## Chosen window resolution from settings (native on first run). This is both
+## the UI layout size and the 3D render target. project.godot stays at 1080p
+## only as a boot fallback so Play does not open a 4K window before this runs.
+func _chosen_resolution() -> Vector2i:
+	if (
+		window_width >= DisplayResolutionPresetsScript.MIN_SIZE.x
+		and window_height >= DisplayResolutionPresetsScript.MIN_SIZE.y
+	):
+		return Vector2i(window_width, window_height)
+	return DisplayResolutionPresetsScript.DEFAULT_SIZE
 
 
 func _set_scaling_3d_scale(window: Window, render_size: Vector2i, output_size: Vector2i) -> void:
@@ -230,17 +235,17 @@ func load_settings() -> void:
 		_apply_native_default_window_size()
 		return
 
-	window_width = int(config.get_value("display", "window_width", window_width))
-	window_height = int(config.get_value("display", "window_height", window_height))
-	fullscreen = bool(config.get_value("display", "fullscreen", fullscreen))
-	if window_width <= 0 or window_height <= 0:
-		_apply_native_default_window_size()
-		return
-	var normalized := DisplayResolutionPresetsScript.normalize_size(
-		Vector2i(window_width, window_height)
+	var loaded_size := Vector2i(
+		int(config.get_value("display", "window_width", window_width)),
+		int(config.get_value("display", "window_height", window_height))
 	)
-	window_width = normalized.x
-	window_height = normalized.y
+	fullscreen = bool(config.get_value("display", "fullscreen", fullscreen))
+	var resolved_size := DisplayResolutionPresetsScript.resolve_saved_window_size(
+		loaded_size, DisplayResolutionPresetsScript.get_default_monitor_size()
+	)
+	window_width = resolved_size.x
+	window_height = resolved_size.y
+	var persist_display := resolved_size != loaded_size
 	master_volume = config.get_value("audio", "master_volume", master_volume)
 	mic_volume = float(config.get_value("audio", "mic_volume", mic_volume))
 	mic_muted = bool(config.get_value("audio", "mic_muted", mic_muted))
@@ -277,6 +282,8 @@ func load_settings() -> void:
 	dev_allow_any_lobby_size = config.get_value(
 		"dev", "dev_allow_any_lobby_size", dev_allow_any_lobby_size
 	)
+	if persist_display:
+		save_settings()
 
 
 func apply_solo_dev_loadout_to_game_state() -> void:

@@ -44,14 +44,30 @@ func begin_death_sequence(
 
 func _collect_materials() -> void:
 	_materials.clear()
+	var owned_for: Dictionary = {}
 	for mesh in _find_mesh_instances(self):
-		var mat := mesh.material_override as StandardMaterial3D
+		var mat := _mesh_material(mesh)
 		if mat == null:
 			continue
-		## Own a duplicate so living monsters / shared mats are untouched.
-		var owned := mat.duplicate() as StandardMaterial3D
-		mesh.material_override = owned
-		_materials.append(owned)
+		var key := mat.get_instance_id()
+		var owned: StandardMaterial3D = owned_for.get(key) as StandardMaterial3D
+		if owned == null:
+			owned = mat.duplicate() as StandardMaterial3D
+			owned_for[key] = owned
+			_materials.append(owned)
+		if mesh.material_override != null:
+			mesh.material_override = owned
+		else:
+			mesh.set_surface_override_material(0, owned)
+
+
+func _mesh_material(mesh: MeshInstance3D) -> StandardMaterial3D:
+	if mesh.material_override is StandardMaterial3D:
+		return mesh.material_override as StandardMaterial3D
+	var override_mat := mesh.get_surface_override_material(0)
+	if override_mat is StandardMaterial3D:
+		return override_mat as StandardMaterial3D
+	return null
 
 
 func _find_mesh_instances(root: Node) -> Array[MeshInstance3D]:

@@ -14,6 +14,7 @@ radius = 0.2
 height = 0.4
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mid"]
+resource_local_to_scene = true
 albedo_color = Color(0.72, 0.28, 0.22, 1)
 metallic = 0.05
 roughness = 0.62
@@ -27,6 +28,7 @@ radius = 0.06
 height = 0.12
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hand"]
+resource_local_to_scene = true
 albedo_color = Color(0.72, 0.28, 0.22, 1)
 metallic = 0.05
 roughness = 0.62
@@ -102,7 +104,7 @@ cast_shadow = 1
 
 [node name="Sight" type="Node" parent="Senses" index="0"]
 script = ExtResource("6_sight")
-editor_description = "Blind on patrol/idle; 20m player-wide cone only in alert/chase."
+editor_description = "Blind on patrol/idle. 20 m player-thin cone (green gizmo) only in ALERT or CHASE. Tune Sight Range and Cone Width At Max Range."
 sight_range = 20.0
 require_line_of_sight = true
 eye_height = 0.95
@@ -113,7 +115,7 @@ only_when_alert_or_chase = true
 
 [node name="Hearing" type="Node" parent="Senses" index="1"]
 script = ExtResource("7_hear")
-editor_description = "Low-moderate audio detection. Directs rats toward sound."
+editor_description = "Pack hearing (cyan gizmo). Tune Hear Range; this is how the Wretch aims Command Pack and directs rats."
 hear_range = 10.0
 speech_urgency = 1.15
 sample_speaking_players = true

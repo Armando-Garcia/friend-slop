@@ -266,8 +266,8 @@ func _update_resolution_hint() -> void:
 		return
 	if SettingsManager.is_running_embedded_in_editor():
 		_resolution_hint_label.text = (
-			"Display settings apply when running the exported game or with "
-			+ "Embed Game On Next Play disabled in the Godot editor."
+			"Window size cannot change in the embedded Game tab, "
+			+ "but render and UI scale still follow the chosen resolution."
 		)
 	elif SettingsManager.fullscreen:
 		_resolution_hint_label.text = (

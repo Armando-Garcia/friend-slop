@@ -167,11 +167,24 @@ func _spawn_monster(entry: Dictionary, world_pos: Vector3) -> void:
 	var parent := _monster_parent()
 	parent.add_child(monster)
 	if monster is Node3D:
-		(monster as Node3D).global_position = world_pos
+		var spawned := monster as Node3D
+		spawned.global_position = world_pos
+		_face_spawned_monster_toward_player(spawned)
 	if monster.has_method("apply_summon_appearance"):
 		var tint: Color = entry.get("tint", Color.WHITE)
 		var eye_glow: Color = entry.get("eye_glow_color", Color(0.2, 0.55, 1.0, 1.0))
 		monster.call("apply_summon_appearance", tint, eye_glow)
+
+
+func _face_spawned_monster_toward_player(spawned: Node3D) -> void:
+	if _player == null or spawned == null:
+		return
+	var face := _player.global_position
+	face.y = spawned.global_position.y
+	var flat := Vector3(face.x - spawned.global_position.x, 0.0, face.z - spawned.global_position.z)
+	if flat.length_squared() < 0.04:
+		return
+	spawned.look_at(face, Vector3.UP)
 
 
 func _monster_parent() -> Node:

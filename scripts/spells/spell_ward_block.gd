@@ -22,9 +22,10 @@ static func ward_from_node(node: Node) -> Node:
 
 
 ## If `body` belongs to a live ward, spend it and return true.
+## `damage` is subtracted on HP wards; hit-count wards still spend one cast.
 ## Pass `ignore_caster` so a monster/player cannot pop their own shield.
 static func try_block(
-	body: Node, blocked_damage: float = 0.0, ignore_caster: Variant = null
+	body: Node, damage: float = 0.0, ignore_caster: Variant = null
 ) -> bool:
 	if body == null or not is_instance_valid(body):
 		return false
@@ -35,7 +36,7 @@ static func try_block(
 	if caster != null and ward.has_method("is_owned_by"):
 		if bool(ward.call("is_owned_by", caster)):
 			return false
-	ward.call("notify_spell_blocked", blocked_damage, caster)
+	ward.call("notify_spell_blocked", damage, caster)
 	notify_caster_warded(caster, ward)
 	return true
 

@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://bcharacter01" path="res://scenes/characters/character.tscn" id="1_character"]
 [ext_resource type="Script" path="res://scripts/monsters/summon.gd" id="2_summon"]
+[ext_resource type="Script" uid="uid://csensegizmo01" path="res://scripts/monsters/monster_sense_gizmos.gd" id="3_sensegizmo"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_summon"]
 radius = 0.2
@@ -12,6 +13,7 @@ radius = 0.035
 height = 0.07
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_eye"]
+resource_local_to_scene = true
 shading_mode = 0
 albedo_color = Color(0.2, 0.85, 0.35, 1)
 emission_enabled = true
@@ -40,12 +42,14 @@ editor_description = "Chase indicator. Hidden unless AI is in CHASE/ALERT."
 
 [node name="LeftEye" type="MeshInstance3D" parent="Head/Eyes" index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.055, 0.02, -0.135)
+layers = 2
 mesh = SubResource("SphereMesh_eye")
 surface_material_override/0 = SubResource("StandardMaterial3D_eye")
 cast_shadow = 0
 
 [node name="RightEye" type="MeshInstance3D" parent="Head/Eyes" index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.055, 0.02, -0.135)
+layers = 2
 mesh = SubResource("SphereMesh_eye")
 surface_material_override/0 = SubResource("StandardMaterial3D_eye")
 cast_shadow = 0
@@ -59,4 +63,9 @@ omni_range = 1.8
 shadow_enabled = false
 
 [node name="Senses" type="Node" parent="." index="3"]
-editor_description = "Optional MonsterSense children (Sight, Hearing). Empty by default — add per concrete summon."
+editor_description = "Optional Sight / Hearing / LightAwareness children. SenseGizmos draws them when Gizmos → Show Sense Ranges is on."
+
+[node name="SenseGizmos" type="Node3D" parent="." index="4"]
+unique_name_in_owner = true
+editor_description = "Debug overlay: cyan hearing, green sight, yellow light, LOS ray. Toggle Gizmos → Show Sense Ranges on this summon."
+script = ExtResource("3_sensegizmo")

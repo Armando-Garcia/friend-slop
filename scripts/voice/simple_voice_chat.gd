@@ -186,7 +186,7 @@ func set_peer_anchor(steam_id: int, anchor: Node3D) -> void:
 	_emit_log(
 		"anchor",
 		"steam_id=%d node='%s' spatial=%s"
-		% [steam_id, anchor.name if anchor != null else "<none>", spatial]
+		% [steam_id, str(anchor.name) if anchor != null else "<none>", spatial]
 	)
 
 
@@ -400,7 +400,11 @@ func _ensure_remote_playback(steam_id: int, rate: int) -> AudioStreamGeneratorPl
 func _create_remote_player(steam_id: int, rate: int) -> Node:
 	_ensure_child_nodes()
 	var spatial := _wants_spatial(steam_id)
-	var player: Node = AudioStreamPlayer3D.new() if spatial else AudioStreamPlayer.new()
+	var player: Node
+	if spatial:
+		player = AudioStreamPlayer3D.new()
+	else:
+		player = AudioStreamPlayer.new()
 	player.name = "Peer_%d" % steam_id
 	var stream := AudioStreamGenerator.new()
 	stream.mix_rate = float(rate if rate > 0 else sample_rate)
@@ -564,11 +568,7 @@ func _frame_rms(samples: PackedFloat32Array) -> float:
 
 
 func _resolve_local_steam_id() -> int:
-	if Engine.has_singleton("Steam"):
-		var steam: Object = Engine.get_singleton("Steam")
-		if steam.has_method("getSteamID"):
-			return int(steam.call("getSteamID"))
-	return 0
+	return SteamService.get_steam_id()
 
 
 func _maybe_heartbeat() -> void:

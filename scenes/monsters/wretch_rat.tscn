@@ -47,7 +47,7 @@ visible = false
 
 [node name="Sight" type="Node" parent="Senses" index="0"]
 script = ExtResource("3_sight")
-editor_description = "Rat sight only — moderately long."
+editor_description = "Rat omnidirectional sight (green disc gizmo). Tune Sight Range and Eye Height."
 sight_range = 10.0
 require_line_of_sight = true
 eye_height = 0.2

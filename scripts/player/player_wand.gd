@@ -588,8 +588,8 @@ func _sample_cast_release_arc(t: float, from_xf: Transform3D, apex_xf: Transform
 	if perp.dot(left_up) < 0.0:
 		perp = -perp
 	var tip := mid + radius_vec * cos(PI * t) + perp * sin(PI * t)
-	var basis := from_xf.basis.slerp(apex_xf.basis, clampf(t, 0.0, 1.0)).orthonormalized()
-	transform = _tip_matched_transform(basis, tip)
+	var pose_basis := from_xf.basis.slerp(apex_xf.basis, clampf(t, 0.0, 1.0)).orthonormalized()
+	transform = _tip_matched_transform(pose_basis, tip)
 
 
 ## Straight tip drop from apex to the exact pre-click tip / pose.
@@ -599,12 +599,12 @@ func _sample_cast_release_drop(t: float, apex_xf: Transform3D, idle_xf: Transfor
 	var p1 := idle_xf * tip_local
 	var u := clampf(t, 0.0, 1.0)
 	var tip := p0.lerp(p1, u)
-	var basis := apex_xf.basis.slerp(idle_xf.basis, u).orthonormalized()
-	transform = _tip_matched_transform(basis, tip)
+	var pose_basis := apex_xf.basis.slerp(idle_xf.basis, u).orthonormalized()
+	transform = _tip_matched_transform(pose_basis, tip)
 
 
-func _tip_matched_transform(basis: Basis, tip_parent: Vector3) -> Transform3D:
-	return Transform3D(basis, tip_parent - basis * _tip_rest_local)
+func _tip_matched_transform(pose_basis: Basis, tip_parent: Vector3) -> Transform3D:
+	return Transform3D(pose_basis, tip_parent - pose_basis * _tip_rest_local)
 
 
 func play_cast_animation(spell: SpellDefinition, keep_armed: bool = true) -> void:
@@ -866,9 +866,9 @@ func _pulse_tip(color: Color, duration: float) -> void:
 	tween.tween_callback(_refresh_tip_light)
 
 
-func _set_tip_visible(visible: bool) -> void:
+func _set_tip_visible(tip_on: bool) -> void:
 	if _tip_mesh != null:
-		_tip_mesh.visible = visible
+		_tip_mesh.visible = tip_on
 
 
 func _emit_burst(particles: CPUParticles3D, color: Color) -> void:

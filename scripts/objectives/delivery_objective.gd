@@ -119,11 +119,6 @@ func setup(
 		# Force a selection refresh after preview rebuild.
 		_editor_selected = false
 		_update_editor_selection_highlight()
-	TomeDebug.log(
-		"DeliveryObjective",
-		"Spawned item=%s turn_in=%s"
-		% [str(_item_cell), str(_turn_in_cell)]
-	)
 	phase_changed.emit(state.phase)
 
 

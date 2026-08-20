@@ -1,613 +1,622 @@
 @tool
 extends Node3D
 
-## Single-type monster lookdev studio. Dropdown spawns one monster at origin.
-## Dummy + ability buttons work in the inspector; F6 Play Scene enables live aggro.
+## Live monster AI over the real MazeGenerator (corridors + clearing tools).
 
 const MONSTER_PICK_WRETCH := 0
 const MONSTER_PICK_ASH_WRETCH := 1
 const MONSTER_PICK_EMBER_WRETCH := 2
-const ABILITY_SLOT_COUNT := 6
-const DUMMY_DISTANCE := 6.0
-const NONE_LABEL := "—(none)—"
+const MONSTER_PICK_CHARGER := 3
+const EDITOR_MAZE_SEED := 4242
 
 const WretchScene := preload("res://scenes/monsters/wretch.tscn")
 const AshWretchScene := preload("res://scenes/monsters/ash_wretch.tscn")
 const EmberWretchScene := preload("res://scenes/monsters/ember_wretch.tscn")
-const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
-const FireballSpell := preload("res://resources/spells/fireball.tres")
-const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
-const WorkspacePlayerDummyScript := preload(
-	"res://scripts/monsters/workspace_player_dummy.gd"
-)
+const ChargerScene := preload("res://scenes/monsters/charger.tscn")
+const PlayableScene := preload("res://scenes/characters/playable_character.tscn")
+const MazePathGraphScript := preload("res://scripts/maze_path_graph.gd")
 
-@export_group("Monster")
-## Which type scene SpawnRoot instantiates at the origin.
-@export_enum("Rat Queen", "Ice Caster", "Ember Caster")
-var monster_type: int = MONSTER_PICK_WRETCH:
+@export_group("Arena")
+## Same seed MazeGenerator uses when you press Rebuild.
+@export var maze_seed: int = EDITOR_MAZE_SEED:
 	set(value):
-		var changed := monster_type != value
-		monster_type = value
-		if not is_inside_tree():
+		maze_seed = value
+		_on_maze_knob_changed()
+@export_range(3, 50, 1) var maze_width: int = 8:
+	set(value):
+		maze_width = maxi(value, 1)
+		_on_maze_knob_changed()
+@export_range(3, 50, 1) var maze_height: int = 8:
+	set(value):
+		maze_height = maxi(value, 1)
+		_on_maze_knob_changed()
+@export var cell_size: float = 4.0:
+	set(value):
+		cell_size = maxf(value, 0.1)
+		_on_maze_knob_changed()
+@export var wall_height: float = 3.0:
+	set(value):
+		wall_height = maxf(value, 0.5)
+		_on_maze_knob_changed()
+@export_range(1.0, 12.0, 0.5) var mean_corridor_length: float = 4.0:
+	set(value):
+		mean_corridor_length = maxf(value, 1.0)
+		_on_maze_knob_changed()
+@export_range(0, 8, 1) var corridor_length_variance: int = 1:
+	set(value):
+		corridor_length_variance = maxi(value, 0)
+		_on_maze_knob_changed()
+@export_range(0, 8, 1) var clearing_count: int = 1:
+	set(value):
+		clearing_count = maxi(value, 0)
+		_on_maze_knob_changed()
+@export_range(0.0, 8.0, 0.5) var clearing_size: float = 1.5:
+	set(value):
+		clearing_size = maxf(value, 0.0)
+		_on_maze_knob_changed()
+@export_range(0.0, 24.0, 0.5) var clearing_separation: float = 6.0:
+	set(value):
+		clearing_separation = maxf(value, 0.0)
+		_on_maze_knob_changed()
+@export_range(0.0, 12.0, 0.5) var spire_clearing_size: float = 1.0:
+	set(value):
+		spire_clearing_size = maxf(value, 0.0)
+		_on_maze_knob_changed()
+@export_tool_button("Rebuild Arena", "Callable")
+var rebuild_arena_action := rebuild_arena
+
+@export_group("Patrol")
+## Top-down rect. Height is Z on the floor. Independent of spawn.
+@export var lock_patrol_square: bool = true:
+	set(value):
+		lock_patrol_square = value
+		if _syncing_patrol:
 			return
-		if changed:
-			_respawn_monster_from_scene()
-		else:
-			_focus_selected_monster()
+		if lock_patrol_square:
+			var side := maxf(patrol_width, patrol_height)
+			_syncing_patrol = true
+			patrol_width = side
+			patrol_height = side
+			_syncing_patrol = false
+		_apply_patrol_inspector()
+@export_range(-80.0, 80.0, 0.1, "or_greater", "or_less", "suffix:m")
+var patrol_origin_x: float = 0.0:
+	set(value):
+		patrol_origin_x = value
+		_apply_patrol_inspector()
+@export_range(-80.0, 80.0, 0.1, "or_greater", "or_less", "suffix:m")
+var patrol_origin_z: float = 0.0:
+	set(value):
+		patrol_origin_z = value
+		_apply_patrol_inspector()
+@export_range(1.0, 80.0, 0.1, "or_greater", "suffix:m") var patrol_width: float = 12.0:
+	set(value):
+		patrol_width = maxf(value, 1.0)
+		if _syncing_patrol:
+			return
+		if lock_patrol_square:
+			_syncing_patrol = true
+			patrol_height = patrol_width
+			_syncing_patrol = false
+		_apply_patrol_inspector()
+@export_range(1.0, 80.0, 0.1, "or_greater", "suffix:m") var patrol_height: float = 12.0:
+	set(value):
+		patrol_height = maxf(value, 1.0)
+		if _syncing_patrol:
+			return
+		if lock_patrol_square:
+			_syncing_patrol = true
+			patrol_width = patrol_height
+			_syncing_patrol = false
+		_apply_patrol_inspector()
+## Select the PatrolArea node: move XZ, scale X/Z. Independent of spawn.
+@export_tool_button("Fit Patrol Size", "Callable")
+var fit_patrol_action := fit_patrol_to_maze
+@export_tool_button("Move Patrol To Spawn", "Callable")
+var center_patrol_action := center_patrol_on_spawn
 
-@export_tool_button("Reload Monster", "Callable")
-var reload_monster_action := reload_selected_monster
-@export_tool_button("Ensure Monster", "Callable")
-var ensure_monster_action := ensure_one_monster
-@export_tool_button("Clear Monster + Corpses", "Callable")
-var clear_monsters_action := clear_monsters_and_corpses
-@export_tool_button("Set Patrol Pose", "Callable")
-var set_patrol_pose_action := set_patrol_pose
-@export_tool_button("Set Chase Pose", "Callable")
-var set_chase_pose_action := set_chase_pose
-## Look-dev HP so one default fireball (20) can kill for death/ragdoll preview.
-@export_range(1.0, 200.0, 1.0) var preview_max_health: float = 20.0
-@export_range(1.0, 60.0, 0.5) var preview_death_linger_sec: float = 10.0
-@export_range(0.25, 10.0, 0.25) var preview_death_fade_sec: float = 2.0
+@export_group("Spawn")
+## Type instanced by Spawn Monster.
+@export_enum("Wretch", "Ash Wretch", "Ember Wretch", "Charger")
+var monster_type: int = MONSTER_PICK_WRETCH
+## Fixed maze area for Spawn Monster.
+@export_enum("Northwest", "Northeast", "Southwest", "Southeast", "Center", "Clearing")
+var monster_spawn: int = 0:
+	set(value):
+		monster_spawn = value
+		_on_spawn_tweaked()
+## Fixed maze area for Spawn Player.
+@export_enum("Northwest", "Northeast", "Southwest", "Southeast", "Center", "Clearing")
+var player_spawn: int = 5:
+	set(value):
+		player_spawn = value
+		_on_spawn_tweaked()
+@export_tool_button("Spawn Monster", "Callable")
+var spawn_monster_action := spawn_monster
+@export_tool_button("Spawn Player", "Callable")
+var spawn_player_action := spawn_player
+@export_tool_button("Clear Spawned", "Callable")
+var clear_spawned_action := clear_spawned
+## Orange chase disc + yellow attack disc on spawned monsters.
 @export var show_combat_ranges: bool = true
+## Cyan hearing, green sight, yellow light, LOS ray from Senses/.
+@export var show_sense_ranges: bool = true
+## Magenta landing pad + orange range ring + yellow hop arc for Charger knockup.
+@export var show_knockup_preview: bool = true
 
-@export_group("Dummy")
-@export_tool_button("Spawn Player Dummy", "Callable")
-var spawn_dummy_action := spawn_player_dummy
-@export_tool_button("Clear Dummy", "Callable")
-var clear_dummy_action := clear_player_dummy
+@export_group("Charger Lookdev")
+## Last spawned Charger: lock, ward, bow, turn red, then ram if a player is spawned.
+@export_tool_button("Preview Telegraph", "Callable")
+var preview_charger_telegraph_action := preview_charger_telegraph
+## Skip telegraph: locked ram toward the spawned player (or current facing).
+@export_tool_button("Preview Charge", "Callable")
+var preview_charger_charge_action := preview_charger_charge
+## Force wall stun, then frantic search, then patrol if nobody is in sight.
+@export_tool_button("Preview Wall Stun", "Callable")
+var preview_charger_wall_stun_action := preview_charger_wall_stun
+## Frantic look for players, then wander back onto the patrol path.
+@export_tool_button("Preview Search", "Callable")
+var preview_charger_search_action := preview_charger_search
+## Launch the spawned player along the Charger's knockup arc (see KnockupGizmo).
+@export_tool_button("Preview Knockup", "Callable")
+var preview_charger_knockup_action := preview_charger_knockup
 
-@export_group("Abilities")
-@export var ability_1_name: String = NONE_LABEL
-@export var ability_2_name: String = NONE_LABEL
-@export var ability_3_name: String = NONE_LABEL
-@export var ability_4_name: String = NONE_LABEL
-@export var ability_5_name: String = NONE_LABEL
-@export var ability_6_name: String = NONE_LABEL
-@export_tool_button("Preview Ability 1", "Callable")
-var preview_ability_1_action := preview_ability_1
-@export_tool_button("Preview Ability 2", "Callable")
-var preview_ability_2_action := preview_ability_2
-@export_tool_button("Preview Ability 3", "Callable")
-var preview_ability_3_action := preview_ability_3
-@export_tool_button("Preview Ability 4", "Callable")
-var preview_ability_4_action := preview_ability_4
-@export_tool_button("Preview Ability 5", "Callable")
-var preview_ability_5_action := preview_ability_5
-@export_tool_button("Preview Ability 6", "Callable")
-var preview_ability_6_action := preview_ability_6
-@export_tool_button("Preview Combo", "Callable")
-var preview_combo_action := preview_combo
-
-@export_group("Fireball")
-@export_tool_button("Cast Fireball", "Callable")
-var cast_fireball_action := cast_fireball_at_monster
-@export_range(0.0, 1.5, 0.05) var tip_forward_nudge: float = 0.08
-
-var _spawn_root: Node3D
-var _dummy_root: Node3D
-
-
-func get_monster_scene(pick: int = -1) -> PackedScene:
-	var which := monster_type if pick < 0 else pick
-	match which:
-		MONSTER_PICK_ASH_WRETCH:
-			return AshWretchScene
-		MONSTER_PICK_EMBER_WRETCH:
-			return EmberWretchScene
-		_:
-			return WretchScene
+var _spawn_index: int = 0
+var _rebuilding: bool = false
+var _syncing_patrol: bool = false
+var _patrol_ready: bool = false
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_cache_spawn_root()
-	_cache_dummy_root()
-	_ensure_bucket("FireballPreview")
-	_ensure_bucket("AbilityPreview")
-	_respawn_monster_from_scene()
-	_aim_wand_at_target()
-	set_process(true)
+	_pull_patrol_inspector()
+	_patrol_ready = true
+	rebuild_arena()
 	set_process_unhandled_input(true)
 
 
-func _process(_delta: float) -> void:
-	_aim_wand_at_target()
+func editor_refresh_environment_preview() -> void:
+	## MazeGenerator knobs (clearings, corridor length) call this on the parent.
+	rebuild_arena()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if Engine.is_editor_hint() and not _is_playing_lookdev():
+	if Engine.is_editor_hint() and not _is_playing():
 		return
-	if event.is_action_pressed("ui_accept") or (
-		event is InputEventKey
-		and event.pressed
-		and not event.echo
-		and (event as InputEventKey).keycode == KEY_SPACE
-	):
-		cast_fireball_at_monster()
-		get_viewport().set_input_as_handled()
-
-
-func reload_selected_monster() -> void:
-	_respawn_monster_from_scene()
-
-
-func ensure_one_monster() -> void:
-	_cache_spawn_root()
-	if _spawn_root == null:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
-	if _living_monster() != null:
-		_focus_selected_monster()
+	var key := (event as InputEventKey).keycode
+	match key:
+		KEY_F1:
+			monster_type = MONSTER_PICK_WRETCH
+			spawn_monster()
+		KEY_F2:
+			monster_type = MONSTER_PICK_ASH_WRETCH
+			spawn_monster()
+		KEY_F3:
+			monster_type = MONSTER_PICK_EMBER_WRETCH
+			spawn_monster()
+		KEY_F4:
+			monster_type = MONSTER_PICK_CHARGER
+			spawn_monster()
+		KEY_F9:
+			spawn_player()
+		KEY_F10:
+			clear_spawned()
+		_:
+			return
+	get_viewport().set_input_as_handled()
+
+
+func rebuild_arena() -> void:
+	if not is_inside_tree() or _rebuilding:
 		return
-	_respawn_monster_from_scene()
-
-
-func clear_monsters_and_corpses() -> void:
-	_cache_spawn_root()
-	_clear_spawn_root_immediate()
-	_clear_bucket("FireballPreview")
-	_clear_bucket("AbilityPreview")
-	_reset_ability_labels()
-	_notify_hud()
-
-
-func set_patrol_pose() -> void:
-	ensure_one_monster()
-	var monster := _living_monster()
-	if monster != null and monster.has_method("set_lookdev_pose"):
-		monster.call("set_lookdev_pose", MonsterAIScript.LookdevPose.PATROL, true)
-
-
-func set_chase_pose() -> void:
-	ensure_one_monster()
-	var monster := _living_monster()
-	if monster != null and monster.has_method("set_lookdev_pose"):
-		monster.call("set_lookdev_pose", MonsterAIScript.LookdevPose.CHASE, true)
-
-
-func spawn_player_dummy() -> void:
-	ensure_one_monster()
-	_cache_dummy_root()
-	if _dummy_root == null:
+	_rebuilding = true
+	var maze := _maze()
+	if maze == null or not maze.has_method("generate_maze"):
+		_rebuilding = false
+		push_error("Monster workspace needs a MazeGenerator child")
 		return
-	_free_dummy_children()
-	var dummy: CharacterBody3D = WorkspacePlayerDummyScript.new()
-	dummy.name = "PlayerDummy"
-	dummy.process_mode = Node.PROCESS_MODE_ALWAYS
-	_dummy_root.add_child(dummy)
-	var origin := Vector3.ZERO
-	var forward := Vector3(0.0, 0.0, -1.0)
-	var monster := _living_monster()
-	if monster is Node3D:
-		var body := monster as Node3D
-		origin = body.global_position
-		forward = -body.global_transform.basis.z
-		forward.y = 0.0
-		if forward.length_squared() < 0.0001:
-			forward = Vector3(0.0, 0.0, -1.0)
-		else:
-			forward = forward.normalized()
-	dummy.global_position = origin + forward * DUMMY_DISTANCE
-	_bind_monster_to_dummy(monster)
-	if dummy.has_method("pin_home"):
-		dummy.call("pin_home")
-	_notify_hud()
+	_push_maze_knobs(maze)
+	maze.set("regenerate_on_ready", false)
+	maze.set("show_pathing", true)
+	maze.call("generate_maze", maze_seed)
+	_hide_roster_spawn_preview()
+	_clear_node("SpawnRoot")
+	_clear_node("PlayerRoot")
+	_spawn_index = 0
+	_set_overview_current(true)
+	_aim_overview_camera()
+	_show_lookdev_gizmos()
+	_rebuilding = false
 
 
-func clear_player_dummy() -> void:
-	_free_dummy_children()
-	var monster := _living_monster()
-	if monster != null and monster.has_method("set_lookdev_aggro"):
-		monster.call("set_lookdev_aggro", null)
-	_enable_lookdev(monster)
-	_notify_hud()
-
-
-func preview_ability_1() -> void:
-	_preview_ability_at(0)
-
-
-func preview_ability_2() -> void:
-	_preview_ability_at(1)
-
-
-func preview_ability_3() -> void:
-	_preview_ability_at(2)
-
-
-func preview_ability_4() -> void:
-	_preview_ability_at(3)
-
-
-func preview_ability_5() -> void:
-	_preview_ability_at(4)
-
-
-func preview_ability_6() -> void:
-	_preview_ability_at(5)
-
-
-func preview_ability_slot(index: int) -> void:
-	_preview_ability_at(index)
-
-
-func preview_combo() -> void:
-	ensure_one_monster()
-	var monster := _living_monster()
-	if monster == null:
-		push_warning("MonsterWorkspace: no monster for combo")
-		return
-	if _living_dummy() == null:
-		spawn_player_dummy()
-	var dummy := _living_dummy()
-	if dummy == null:
-		push_warning("MonsterWorkspace: combo needs a player dummy")
-		return
-	var caster := monster.get_node_or_null("CasterCombat")
-	if caster == null or not caster.has_method("try_trigger_combo"):
-		push_warning("MonsterWorkspace: no CasterCombat on this type")
-		return
-	if "_combo_lockout_left" in caster:
-		caster.set("_combo_lockout_left", 0.0)
-	caster.call("try_trigger_combo", dummy, 1.0, false)
-
-
-func has_preview_combo() -> bool:
-	var monster := _living_monster()
-	if monster == null:
-		return false
-	return monster.get_node_or_null("CasterCombat") != null
-
-
-func ability_preview_labels() -> PackedStringArray:
-	var out := PackedStringArray()
-	var monster := _living_monster()
-	var abilities := _ordered_preview_abilities(monster)
-	for i in range(ABILITY_SLOT_COUNT):
-		out.append(_format_ability_label(abilities, i))
-	return out
-
-
-func cast_fireball_at_monster() -> void:
-	if not is_inside_tree():
-		return
-	ensure_one_monster()
-	var target := _fireball_aim_node()
-	if target == null:
-		push_warning("MonsterWorkspace: no living monster to shoot")
-		return
-	var monster := _living_monster()
-	_apply_preview_stats(monster)
-
-	var origin := _wand_cast_origin()
-	var aim_at: Vector3 = target.global_position + Vector3(0.0, 0.4, 0.0)
-	var direction := aim_at - origin
-	if direction.length_squared() < 0.0001:
-		direction = Vector3(0.0, 0.0, -1.0)
-	else:
-		direction = direction.normalized()
-	origin += direction * tip_forward_nudge
-
-	var wand := _wand()
-	## PlayerWand is not @tool — skip cast FX on editor placeholder instances.
-	if (
-		wand != null
-		and not Engine.is_editor_hint()
-		and wand.has_method("play_cast_success")
-	):
-		wand.call("play_cast_success", FireballSpell, true)
-
-	var bucket := _ensure_bucket("FireballPreview")
-	## One shot at a time for clear look-dev.
-	_clear_bucket_children(bucket)
-	var lookdev := Engine.is_editor_hint()
-	var projectile: Node = FireballProjectileScript.spawn(
-		bucket, origin, direction, null, lookdev
-	)
-	if projectile != null:
-		projectile.process_mode = Node.PROCESS_MODE_ALWAYS
-
-
-func _respawn_monster_from_scene() -> void:
-	_cache_spawn_root()
-	if _spawn_root == null:
-		return
-	_clear_spawn_root_immediate()
-	_clear_bucket("AbilityPreview")
-	_spawn_selected_monster()
-	_focus_selected_monster()
-	_notify_hud()
-
-
-func _spawn_selected_monster() -> Node:
-	var packed: PackedScene = get_monster_scene()
+func spawn_monster() -> void:
+	var packed := _monster_scene(monster_type)
 	if packed == null:
-		push_warning("MonsterWorkspace: no scene for pick %s" % monster_type)
-		return null
-	## Fresh pack so inspector edits to type scenes show up immediately.
+		return
 	if packed.resource_path != "":
 		packed = load(packed.resource_path) as PackedScene
 	var monster: Node = packed.instantiate()
-	monster.process_mode = Node.PROCESS_MODE_ALWAYS
-	_spawn_root.add_child(monster)
-	if monster is Node3D:
-		(monster as Node3D).position = Vector3.ZERO
-	_enable_lookdev(monster)
-	if (
-		monster.has_method("apply_summon_appearance")
-		and "body_tint" in monster
-		and "eye_glow_color" in monster
-	):
-		monster.call(
-			"apply_summon_appearance",
-			monster.get("body_tint"),
-			monster.get("eye_glow_color")
-		)
-	return monster
-
-
-func _focus_selected_monster() -> void:
-	var monster := _living_monster()
-	if monster == null:
-		_reset_ability_labels()
-		return
-	_apply_preview_stats(monster)
-	_enable_lookdev(monster)
-	_refresh_ability_labels(monster)
-	_bind_monster_to_dummy(monster)
-
-
-func _enable_lookdev(node: Node) -> void:
-	if node == null:
-		return
-	if "show_combat_ranges" in node:
-		node.set("show_combat_ranges", show_combat_ranges)
-	if _living_dummy() != null:
-		_bind_monster_to_dummy(node)
-		return
-	if "lookdev_override" in node:
-		node.set("lookdev_override", true)
-	if node.has_method("set_lookdev_pose"):
-		var pose = node.get("lookdev_pose")
-		if pose == null:
-			pose = MonsterAIScript.LookdevPose.PATROL
-		node.call("set_lookdev_pose", pose, true)
-
-
-func _bind_monster_to_dummy(monster: Node) -> void:
-	var dummy := _living_dummy()
-	if dummy == null or monster == null:
-		return
-	if monster is Node3D:
-		var body := monster as Node3D
-		if body.global_position.distance_squared_to(dummy.global_position) > 0.0001:
-			body.look_at(dummy.global_position, Vector3.UP)
-			dummy.look_at(body.global_position, Vector3.UP)
-	if monster.has_method("set_lookdev_aggro"):
-		monster.call("set_lookdev_aggro", dummy)
-	elif "lookdev_override" in monster:
+	var spawn := _monster_spawn_point()
+	monster.set_meta("lookdev_live_ai", true)
+	monster.set_meta("maze_path_graph", _path_graph())
+	monster.set_meta("patrol_home", spawn)
+	if "lookdev_override" in monster:
 		monster.set("lookdev_override", false)
+	if "show_combat_ranges" in monster:
+		monster.set("show_combat_ranges", show_combat_ranges)
+	if "show_sense_ranges" in monster:
+		monster.set("show_sense_ranges", show_sense_ranges)
+	monster.process_mode = Node.PROCESS_MODE_ALWAYS
+	var root := _ensure_bucket("SpawnRoot")
+	root.add_child(monster)
+	if monster is Node3D:
+		(monster as Node3D).global_position = spawn
+	_configure_patrol_area(monster, spawn)
+	_spawn_index += 1
 
 
-func _refresh_ability_labels(monster: Node) -> void:
-	var abilities := _ordered_preview_abilities(monster)
-	ability_1_name = _format_ability_label(abilities, 0)
-	ability_2_name = _format_ability_label(abilities, 1)
-	ability_3_name = _format_ability_label(abilities, 2)
-	ability_4_name = _format_ability_label(abilities, 3)
-	ability_5_name = _format_ability_label(abilities, 4)
-	ability_6_name = _format_ability_label(abilities, 5)
-
-
-func _reset_ability_labels() -> void:
-	ability_1_name = NONE_LABEL
-	ability_2_name = NONE_LABEL
-	ability_3_name = NONE_LABEL
-	ability_4_name = NONE_LABEL
-	ability_5_name = NONE_LABEL
-	ability_6_name = NONE_LABEL
-
-
-func _format_ability_label(abilities: Array, index: int) -> String:
-	if index < 0 or index >= abilities.size():
-		return NONE_LABEL
-	var ability: Node = abilities[index] as Node
-	var name_s: String = ability.name
-	if "display_name" in ability:
-		var displayed := str(ability.get("display_name"))
-		if not displayed.is_empty():
-			name_s = displayed
-	var hand: String = ""
-	if "hand_side" in ability:
-		hand = "Right" if int(ability.get("hand_side")) == 0 else "Left"
-	elif ability.name.to_lower().contains("left"):
-		hand = "Left"
-	elif ability.name.to_lower().contains("right"):
-		hand = "Right"
-	if hand.is_empty():
-		return name_s
-	return "%s (%s)" % [name_s, hand]
-
-
-func _ordered_preview_abilities(monster: Node) -> Array[Node]:
-	var out: Array[Node] = []
-	if monster == null:
-		return out
-	if monster.has_method("get_ability_placeholders"):
-		var raw: Array = monster.call("get_ability_placeholders")
-		var right: Array[Node] = []
-		var left: Array[Node] = []
-		var other: Array[Node] = []
-		for item in raw:
-			if not (item is Node):
-				continue
-			var ability: Node = item
-			if "hand_side" in ability:
-				if int(ability.get("hand_side")) == 0:
-					right.append(ability)
-				else:
-					left.append(ability)
-			else:
-				other.append(ability)
-		out.append_array(right)
-		out.append_array(left)
-		out.append_array(other)
-	return out
-
-
-func _preview_ability_at(index: int) -> void:
-	ensure_one_monster()
-	var monster := _living_monster()
-	if monster == null:
-		push_warning("MonsterWorkspace: no monster for ability preview")
+func spawn_player() -> void:
+	clear_player()
+	var player := PlayableScene.instantiate() as Node3D
+	if player == null:
+		push_error("Monster workspace Spawn Player failed to instance playable_character.tscn")
 		return
-	_refresh_ability_labels(monster)
-	var abilities := _ordered_preview_abilities(monster)
-	if index < 0 or index >= abilities.size():
+	var playing := _is_playing()
+	player.name = "PlayableCharacter"
+	player.process_mode = Node.PROCESS_MODE_ALWAYS
+	var root := _ensure_bucket("PlayerRoot")
+	root.add_child(player)
+	_prepare_sandbox_player(player, playing)
+	var spawn := _pad_point(player_spawn)
+	player.global_position = spawn
+	var monster := _last_spawned_monster()
+	if monster != null:
+		_face_toward(player, monster.global_position)
+		_face_toward(monster, player.global_position)
+	_set_overview_current(not playing)
+
+
+func preview_charger_telegraph() -> void:
+	var charger := _charger_actor()
+	if charger == null:
 		return
-	var ability: Node = abilities[index]
-	_clear_bucket("AbilityPreview")
-	## Give summon / projectile casts a stable lookdev parent when they ask for match root.
-	if ability.has_method("set_meta"):
-		ability.set_meta("lookdev_preview_parent", _ensure_bucket("AbilityPreview"))
-	if ability.has_method("preview_cast"):
-		ability.call("preview_cast")
-	else:
-		push_warning("MonsterWorkspace: %s has no preview_cast" % ability.name)
+	var player := _last_spawned_player()
+	if player != null and charger.has_method("begin_lock_on"):
+		charger.call("begin_lock_on", player, false)
+	elif charger.has_method("preview_telegraph"):
+		charger.call("preview_telegraph")
 
 
-func _monster_matches_pick(node: Node, pick: int) -> bool:
-	if node == null:
-		return false
-	var packed := get_monster_scene(pick)
-	if packed == null:
-		return false
-	var path := str(node.get("scene_file_path"))
-	if path.is_empty() or path != packed.resource_path:
-		return false
-	## Reject stale workspace overrides that swapped the type script.
-	var script: Script = node.get_script()
-	var script_path := "" if script == null else str(script.resource_path)
-	var ok := false
+func preview_charger_charge() -> void:
+	var charger := _charger_actor()
+	if charger == null or not charger.has_method("begin_charge_now"):
+		return
+	charger.call("begin_charge_now", false, _last_spawned_player())
+
+
+func preview_charger_wall_stun() -> void:
+	var charger := _charger_actor()
+	if charger == null or not charger.has_method("begin_wall_stun_now"):
+		return
+	charger.call("begin_wall_stun_now")
+
+
+func preview_charger_search() -> void:
+	var charger := _charger_actor()
+	if charger == null or not charger.has_method("begin_search_now"):
+		return
+	charger.call("begin_search_now")
+
+
+func preview_charger_knockup() -> void:
+	var charger := _charger_actor()
+	var player := _last_spawned_player()
+	if charger == null or player == null:
+		return
+	if charger.has_method("preview_knockup"):
+		charger.call("preview_knockup", player)
+
+
+func _prepare_sandbox_player(player: Node3D, playing: bool) -> void:
+	## Editor does not run PlayableCharacter._ready (script is not @tool).
+	if "is_alive" in player:
+		player.set("is_alive", true)
+	if not player.is_in_group("player"):
+		player.add_to_group("player")
+	if player is CollisionObject3D:
+		(player as CollisionObject3D).collision_layer = 1
+		(player as CollisionObject3D).collision_mask = 1
+	if playing:
+		return
+	var cam := player.find_child("FirstPersonCamera", true, false) as Camera3D
+	if cam != null:
+		cam.current = false
+	var sync := player.get_node_or_null("MultiplayerSynchronizer")
+	if sync != null:
+		sync.process_mode = Node.PROCESS_MODE_DISABLED
+
+
+func clear_spawned() -> void:
+	_spawn_index = 0
+	_clear_node("SpawnRoot")
+	clear_player()
+
+
+func clear_player() -> void:
+	_clear_node("PlayerRoot")
+	_set_overview_current(true)
+
+
+func fit_patrol_to_maze() -> void:
+	var area := _patrol_area()
+	var graph := _path_graph()
+	if area == null or graph.is_empty() or not area.has_method("set_rect"):
+		return
+	var home := _patrol_home()
+	var fitted: Vector2 = MazePathGraphScript.default_patrol_size(home, graph)
+	var cell := float(graph.get("cell_size", 4.0))
+	var cap := cell * 5.0
+	fitted.x = minf(maxf(fitted.x, cell * 2.0), cap)
+	fitted.y = minf(maxf(fitted.y, cell * 2.0), cap)
+	area.call("set_rect", home, fitted)
+
+
+func center_patrol_on_spawn() -> void:
+	var area := _patrol_area()
+	if area == null or not area.has_method("set_rect"):
+		return
+	area.call("set_rect", _monster_spawn_point(), _patrol_size())
+
+
+func on_patrol_area_changed() -> void:
+	if not is_inside_tree() or _rebuilding or _syncing_patrol:
+		return
+	_pull_patrol_inspector()
+	_refresh_pathing_overlay()
+
+
+func _monster_scene(pick: int) -> PackedScene:
 	match pick:
-		MONSTER_PICK_WRETCH:
-			ok = (
-				script_path.ends_with("wretch.gd")
-				and not script_path.ends_with("ash_wretch.gd")
-			)
 		MONSTER_PICK_ASH_WRETCH:
-			## Ash uses the base Monster script on its type scene (like Ember).
-			ok = (
-				script_path.ends_with("monster.gd")
-				or script_path.ends_with("ash_wretch.gd")
-			)
+			return AshWretchScene
 		MONSTER_PICK_EMBER_WRETCH:
-			## Ember still uses the base Monster script on its type scene.
-			ok = (
-				script_path.ends_with("monster.gd")
-				or script_path.ends_with("ember_wretch.gd")
-			)
+			return EmberWretchScene
+		MONSTER_PICK_CHARGER:
+			return ChargerScene
 		_:
-			ok = true
-	return ok
+			return WretchScene
 
 
-func _find_spawned_monster(pick: int) -> Node:
-	_cache_spawn_root()
-	if _spawn_root == null:
+func _monster_spawn_point() -> Vector3:
+	return _pad_point(monster_spawn)
+
+
+func _pad_point(pad: int) -> Vector3:
+	var graph := _path_graph()
+	var pos: Vector3 = MazePathGraphScript.spawn_at_pad(graph, pad)
+	if pos == Vector3.ZERO:
+		return Vector3(0.0, 0.05, 0.0)
+	pos.y = 0.05
+	return pos
+
+
+func _configure_patrol_area(monster: Node, _spawn: Vector3) -> void:
+	var home := _patrol_home()
+	var size := _patrol_size()
+	if "patrol_radius" in monster:
+		monster.set("patrol_radius", maxf(size.x, size.y) * 0.5)
+	## Meta works on editor placeholders; do not call monster methods here.
+	monster.set_meta("patrol_home", home)
+	monster.set_meta("patrol_size", size)
+	monster.set_meta("maze_path_graph", _path_graph())
+	_refresh_pathing_overlay()
+
+
+func _last_spawned_monster() -> CharacterBody3D:
+	var root := get_node_or_null("SpawnRoot")
+	if root == null or root.get_child_count() < 1:
 		return null
-	for child in _spawn_root.get_children():
-		if not (child is Node3D):
-			continue
-		if not child.has_method("die"):
-			continue
-		var alive = child.get("is_alive")
-		if alive != null and not bool(alive):
-			continue
-		if _monster_matches_pick(child, pick):
-			return child
+	var last := root.get_child(root.get_child_count() - 1)
+	return last as CharacterBody3D
+
+
+func _last_spawned_player() -> Node3D:
+	var root := get_node_or_null("PlayerRoot")
+	if root == null or root.get_child_count() < 1:
+		return null
+	return root.get_child(root.get_child_count() - 1) as Node3D
+
+
+func _charger_actor() -> Node:
+	var monster := _last_spawned_monster()
+	if monster != null and monster.has_method("begin_lock_on"):
+		return monster
 	return null
 
 
-func _living_monster() -> Node:
-	return _find_spawned_monster(monster_type)
+func _face_toward(node: Node3D, world_xz: Vector3) -> void:
+	var at := Vector3(world_xz.x, node.global_position.y, world_xz.z)
+	if node.global_position.distance_squared_to(at) < 0.0001:
+		return
+	node.look_at(at, Vector3.UP)
 
 
-func _living_dummy() -> Node3D:
-	_cache_dummy_root()
-	if _dummy_root == null:
+func _aim_overview_camera() -> void:
+	var cam := get_node_or_null("Camera3D") as Camera3D
+	var maze := _maze()
+	if cam == null or maze == null:
+		return
+	var width := float(int(maze.get("maze_width")))
+	var height := float(int(maze.get("maze_height")))
+	var cs := float(maze.get("cell_size"))
+	var span := (maxi(int(width), int(height)) * 2 + 1) * cs
+	var dist := span * 0.55
+	cam.position = Vector3(dist * 0.55, dist * 0.7, dist)
+	var look := Vector3(0.0, 0.4, 0.0)
+	if cam.global_position.distance_squared_to(look) > 0.0001:
+		cam.look_at(look, Vector3.UP)
+
+
+func _set_overview_current(enabled: bool) -> void:
+	var cam := get_node_or_null("Camera3D") as Camera3D
+	if cam != null:
+		cam.current = enabled
+
+
+func _show_lookdev_gizmos() -> void:
+	var maze := _maze()
+	if maze != null:
+		maze.set("show_pathing", true)
+	var area := _patrol_area()
+	if area != null:
+		area.visible = true
+	_refresh_pathing_overlay()
+
+
+func _on_maze_knob_changed() -> void:
+	if not is_inside_tree():
+		return
+	rebuild_arena()
+
+
+func _on_spawn_tweaked() -> void:
+	if not is_inside_tree():
+		return
+	_refresh_pathing_overlay()
+
+
+func _push_maze_knobs(maze: Node) -> void:
+	maze.set("maze_width", maze_width)
+	maze.set("maze_height", maze_height)
+	maze.set("cell_size", cell_size)
+	maze.set("wall_height", wall_height)
+	maze.set("mean_corridor_length", mean_corridor_length)
+	maze.set("corridor_length_variance", corridor_length_variance)
+	maze.set("clearing_count", clearing_count)
+	maze.set("clearing_size", clearing_size)
+	maze.set("clearing_separation", clearing_separation)
+	maze.set("spire_clearing_size", spire_clearing_size)
+
+
+func _refresh_pathing_overlay() -> void:
+	if not is_inside_tree():
+		return
+	var paths := _maze_paths()
+	if (
+		paths == null
+		or paths.get_script() == null
+		or not (paths.get_script() as Script).is_tool()
+		or not paths.has_method("set_lookdev")
+	):
+		return
+	var home := _patrol_home()
+	var size := _patrol_size()
+	paths.call("set_lookdev", {
+		"monster_pad": _pad_point(monster_spawn),
+		"player_pad": _pad_point(player_spawn),
+		"patrol_home": home,
+		"patrol_size": size,
+	})
+	var monster := _last_spawned_monster()
+	if monster == null:
+		return
+	if "patrol_radius" in monster:
+		monster.set("patrol_radius", maxf(size.x, size.y) * 0.5)
+	monster.set_meta("patrol_home", home)
+	monster.set_meta("patrol_size", size)
+	monster.set_meta("maze_path_graph", _path_graph())
+
+
+func _patrol_area() -> Node3D:
+	return get_node_or_null("PatrolArea") as Node3D
+
+
+func _patrol_home() -> Vector3:
+	var area := _patrol_area()
+	if area != null and area.has_method("rect_home"):
+		return area.call("rect_home")
+	return Vector3(0.0, 0.04, 0.0)
+
+
+func _patrol_size() -> Vector2:
+	var area := _patrol_area()
+	if area != null and area.has_method("rect_size"):
+		return area.call("rect_size")
+	return Vector2(maxf(patrol_width, 1.0), maxf(patrol_height, 1.0))
+
+
+func _apply_patrol_inspector() -> void:
+	if _syncing_patrol or not _patrol_ready or not is_inside_tree():
+		return
+	_syncing_patrol = true
+	var area := _patrol_area()
+	if area != null:
+		if "lock_square" in area:
+			area.set("lock_square", lock_patrol_square)
+		if area.has_method("set_rect"):
+			area.call(
+				"set_rect",
+				Vector3(patrol_origin_x, 0.04, patrol_origin_z),
+				Vector2(patrol_width, patrol_height)
+			)
+	_syncing_patrol = false
+	_refresh_pathing_overlay()
+
+
+func _pull_patrol_inspector() -> void:
+	_syncing_patrol = true
+	var home := _patrol_home()
+	var size := _patrol_size()
+	patrol_origin_x = home.x
+	patrol_origin_z = home.z
+	patrol_width = size.x
+	patrol_height = size.y
+	var area := _patrol_area()
+	if area != null and "lock_square" in area:
+		lock_patrol_square = bool(area.get("lock_square"))
+	_syncing_patrol = false
+
+
+func _hide_roster_spawn_preview() -> void:
+	var maze := _maze()
+	if maze == null:
+		return
+	var preview := maze.get_node_or_null("SpawnZonePreview")
+	if preview != null:
+		preview.visible = false
+
+
+func _path_graph() -> Dictionary:
+	var paths := _maze_paths()
+	if paths != null and "graph" in paths:
+		var g = paths.get("graph")
+		if g is Dictionary:
+			return g
+	return {}
+
+
+func _maze_paths() -> Node:
+	var maze := _maze()
+	if maze == null:
 		return null
-	for child in _dummy_root.get_children():
-		if child is Node3D and is_instance_valid(child):
-			return child as Node3D
-	return null
+	return maze.get_node_or_null("MazePaths")
 
 
-func _fireball_aim_node() -> Node3D:
-	var dummy := _living_dummy()
-	if dummy != null:
-		return dummy
-	return _living_monster() as Node3D
+func _maze() -> Node:
+	return get_node_or_null("MazeGenerator")
 
 
-func _apply_preview_stats(node: Node) -> void:
-	if node == null:
-		return
-	if "max_health" in node:
-		node.set("max_health", preview_max_health)
-	if "current_health" in node:
-		node.set("current_health", preview_max_health)
-	if "death_linger_sec" in node:
-		node.set("death_linger_sec", preview_death_linger_sec)
-	if "death_fade_sec" in node:
-		node.set("death_fade_sec", preview_death_fade_sec)
-
-
-func _wand() -> Node3D:
-	return get_node_or_null("Wand") as Node3D
-
-
-func _wand_cast_origin() -> Vector3:
-	var wand := _wand()
-	if wand == null:
-		return global_position + Vector3(-1.5, 1.0, 2.5)
-	var tip := wand.get_node_or_null("Model/CastOrigin") as Node3D
-	if tip == null:
-		tip = wand.get_node_or_null("CastOrigin") as Node3D
-	if tip != null:
-		return tip.global_position
-	return wand.global_position
-
-
-func _aim_wand_at_target() -> void:
-	var wand := _wand()
-	var target := _fireball_aim_node()
-	if wand == null or target == null:
-		return
-	var from := wand.global_position
-	var to: Vector3 = target.global_position + Vector3(0.0, 0.4, 0.0)
-	var flat := Vector3(to.x - from.x, to.y - from.y, to.z - from.z)
-	if flat.length_squared() < 0.0001:
-		return
-	## Wand shaft points along local -Z (see player_wand Model).
-	wand.look_at(to, Vector3.UP)
-
-
-func _is_playing_lookdev() -> bool:
-	## Editor Play Scene / runtime — not idle edited scene.
-	return not Engine.is_editor_hint()
-
-
-func _notify_hud() -> void:
-	var hud := get_node_or_null("LookdevHud")
-	if hud != null and hud.has_method("rebuild"):
-		hud.call("rebuild")
+func _is_playing() -> bool:
+	return not Engine.is_editor_hint() or (
+		get_tree() != null and get_tree().edited_scene_root == null
+	)
 
 
 func _ensure_bucket(bucket_name: String) -> Node3D:
 	var bucket := get_node_or_null(bucket_name) as Node3D
 	if bucket != null:
-		bucket.process_mode = Node.PROCESS_MODE_ALWAYS
 		return bucket
 	bucket = Node3D.new()
 	bucket.name = bucket_name
@@ -616,35 +625,11 @@ func _ensure_bucket(bucket_name: String) -> Node3D:
 	return bucket
 
 
-func _clear_bucket(bucket_name: String) -> void:
-	var bucket := get_node_or_null(bucket_name) as Node3D
-	if bucket == null:
+func _clear_node(node_name: String) -> void:
+	var node := get_node_or_null(node_name)
+	if node == null:
 		return
-	_clear_bucket_children(bucket)
-
-
-func _clear_bucket_children(bucket: Node) -> void:
-	var kids := bucket.get_children()
+	var kids := node.get_children()
 	for child in kids:
-		bucket.remove_child(child)
+		node.remove_child(child)
 		child.free()
-
-
-func _clear_spawn_root_immediate() -> void:
-	if _spawn_root == null:
-		return
-	_clear_bucket_children(_spawn_root)
-
-
-func _cache_spawn_root() -> void:
-	_spawn_root = get_node_or_null("SpawnRoot") as Node3D
-
-
-func _cache_dummy_root() -> void:
-	_dummy_root = get_node_or_null("DummyRoot") as Node3D
-
-
-func _free_dummy_children() -> void:
-	_cache_dummy_root()
-	if _dummy_root != null:
-		_clear_bucket_children(_dummy_root)

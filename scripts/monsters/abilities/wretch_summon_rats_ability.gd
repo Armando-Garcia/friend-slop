@@ -72,11 +72,11 @@ func _fire_cast(monster: Node3D, _target: Node3D) -> void:
 	var land := _spawn_position(monster)
 	var origin := resolve_cast_origin(monster)
 	var orb = WretchSummonDropOrbScript.spawn(parent, origin, land, drop_duration_sec)
-	var pending_open := true
+	var pending_open := [true]
 	var release_pending := func() -> void:
-		if not pending_open:
+		if not pending_open[0]:
 			return
-		pending_open = false
+		pending_open[0] = false
 		if host != null and is_instance_valid(host) and host.has_method("complete_pending_spawn"):
 			host.call("complete_pending_spawn")
 	orb.landed.connect(

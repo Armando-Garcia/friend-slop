@@ -373,15 +373,15 @@ func _refresh_hotbar() -> void:
 		var item_id := ""
 		if _inventory != null and _inventory.has_method("get_slot"):
 			item_id = str(_inventory.call("get_slot", i))
-		var name := ""
+		var item_name := ""
 		if _inventory != null and _inventory.has_method("display_name"):
-			name = str(_inventory.call("display_name", item_id))
+			item_name = str(_inventory.call("display_name", item_id))
 		elif not item_id.is_empty():
-			name = item_id.capitalize()
-		if name.is_empty():
+			item_name = item_id.capitalize()
+		if item_name.is_empty():
 			_hotbar_labels[i].text = "%d\n—" % (i + 1)
 		else:
-			_hotbar_labels[i].text = "%d\n%s" % [i + 1, name]
+			_hotbar_labels[i].text = "%d\n%s" % [i + 1, item_name]
 
 
 func show_casting_state(

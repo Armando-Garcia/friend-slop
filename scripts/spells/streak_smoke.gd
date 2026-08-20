@@ -245,7 +245,7 @@ func _enforce_point_budget(points: Array, max_points: int) -> void:
 
 func _thin_oldest_points(points: Array) -> bool:
 	## Drop every other sample in the oldest half — keeps length, lowers density.
-	var half := points.size() / 2
+	var half := int(points.size() / 2.0)
 	if half < 4:
 		return false
 	var removed := false
@@ -274,8 +274,8 @@ func _lifetime_for_point(pt: Dictionary) -> float:
 	u = u * u
 	var early := maxf(float(trail_early_life_scale), 0.05)
 	var late := maxf(float(trail_late_life_scale), 0.05)
-	var scale := lerpf(early, late, u)
-	return maxf(base * scale, 0.05)
+	var life_scale := lerpf(early, late, u)
+	return maxf(base * life_scale, 0.05)
 
 
 func _fade_start_for_point(pt: Dictionary) -> float:

@@ -47,10 +47,10 @@ func _check_monster_book_opens(book: Control) -> String:
 	var prev_btn: Button = book.get_node("Center/BookRoot/OpenBook/PrevButton")
 	var next_btn: Button = book.get_node("Center/BookRoot/OpenBook/NextButton")
 	var problem := ""
-	if book.page_count() != 3:
-		problem = "Expected 3 baked monster pages, got %d" % book.page_count()
+	if book.page_count() != 4:
+		problem = "Expected 4 baked monster pages, got %d" % book.page_count()
 	elif book.spread_count() != 2:
-		problem = "Expected 2 spreads for 3 pages, got %d" % book.spread_count()
+		problem = "Expected 2 spreads for 4 pages, got %d" % book.spread_count()
 	elif left_title != "Rat Queen" or book.get_page_index() != 0:
 		problem = "Expected monster book to open on Rat Queen (page index 0)"
 	elif not prev_btn.disabled:
@@ -142,8 +142,8 @@ func _test_monster_odd_page_blank_right(tree: SceneTree) -> int:
 	if left_title != "Ember Caster":
 		push_error("Expected last spread left page to be Ember Caster")
 		return 1
-	if right_title != "":
-		push_error("Expected blank parchment on odd last page (empty title)")
+	if right_title != "Charger":
+		push_error("Expected last spread right page to be Charger")
 		return 1
 	return 0
 
