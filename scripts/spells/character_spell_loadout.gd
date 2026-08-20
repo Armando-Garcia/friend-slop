@@ -10,6 +10,7 @@ signal loadout_changed()
 
 const SOURCE_STARTING := "starting"
 const SOURCE_TOME := "tome"
+const FlareEffectScript := preload("res://scripts/spells/flare_effect.gd")
 
 var _spell_defs: Dictionary = {}
 ## spell_id -> { "learned_at": int }
@@ -18,6 +19,8 @@ var _starting: Dictionary = {}
 var _learned: Dictionary = {}
 ## spell_id -> cooldown end time (msec)
 var _cooldown_until_msec: Dictionary = {}
+## spell_id -> { "count": int, "next_msec": int }
+var _ammo: Dictionary = {}
 
 
 func configure(spells: Array[SpellDefinition]) -> void:
@@ -31,14 +34,21 @@ func reset() -> void:
 	_starting.clear()
 	_learned.clear()
 	_cooldown_until_msec.clear()
+	_ammo.clear()
 	loadout_changed.emit()
 
 
 func is_on_cooldown(spell_id: String) -> bool:
+	if _ammo_max(spell_id) > 0:
+		return ammo_count(spell_id) <= 0
 	return remaining_cooldown_sec(spell_id) > 0.0
 
 
 func remaining_cooldown_sec(spell_id: String) -> float:
+	if _ammo_max(spell_id) > 0:
+		if ammo_count(spell_id) > 0:
+			return 0.0
+		return remaining_ammo_refill_sec(spell_id)
 	if not _cooldown_until_msec.has(spell_id):
 		return 0.0
 	var remaining_msec: int = int(_cooldown_until_msec[spell_id]) - Time.get_ticks_msec()
@@ -49,12 +59,109 @@ func remaining_cooldown_sec(spell_id: String) -> float:
 
 
 func start_cooldown(spell_id: String) -> void:
+	if _ammo_max(spell_id) > 0:
+		spend_ammo(spell_id)
+		return
 	var spell: SpellDefinition = get_spell_definition(spell_id)
 	if spell == null or spell.cooldown_sec <= 0.0:
 		return
 	_cooldown_until_msec[spell_id] = (
 		Time.get_ticks_msec() + int(round(spell.cooldown_sec * 1000.0))
 	)
+
+
+func ammo_max(spell_id: String) -> int:
+	return _ammo_max(spell_id)
+
+
+func ammo_refill_sec(spell_id: String) -> float:
+	if spell_id == "flare":
+		return FlareEffectScript.authored_ammo_refill_sec()
+	var spell: SpellDefinition = get_spell_definition(spell_id)
+	if spell == null:
+		return 0.0
+	return maxf(spell.ammo_refill_sec, 0.0)
+
+
+func ammo_count(spell_id: String) -> int:
+	if _ammo_max(spell_id) <= 0:
+		return 0
+	_tick_ammo(spell_id)
+	return int(_ammo[spell_id]["count"])
+
+
+func remaining_ammo_refill_sec(spell_id: String) -> float:
+	if _ammo_max(spell_id) <= 0:
+		return 0.0
+	_tick_ammo(spell_id)
+	var entry: Dictionary = _ammo[spell_id]
+	if int(entry["count"]) >= _ammo_max(spell_id):
+		return 0.0
+	var next_msec := int(entry["next_msec"])
+	if next_msec <= 0:
+		return 0.0
+	return maxf(0.0, float(next_msec - Time.get_ticks_msec()) / 1000.0)
+
+
+func spend_ammo(spell_id: String) -> bool:
+	if _ammo_max(spell_id) <= 0:
+		return true
+	_tick_ammo(spell_id)
+	var entry: Dictionary = _ammo[spell_id]
+	var count := int(entry["count"])
+	if count <= 0:
+		return false
+	entry["count"] = count - 1
+	if int(entry["next_msec"]) <= 0:
+		var refill_msec := _ammo_refill_msec(spell_id)
+		if refill_msec > 0:
+			entry["next_msec"] = Time.get_ticks_msec() + refill_msec
+	return true
+
+
+func _ammo_max(spell_id: String) -> int:
+	if spell_id == "flare":
+		return FlareEffectScript.authored_ammo_max()
+	var spell: SpellDefinition = get_spell_definition(spell_id)
+	if spell == null:
+		return 0
+	return maxi(spell.ammo_max, 0)
+
+
+func _ammo_refill_msec(spell_id: String) -> int:
+	return int(round(ammo_refill_sec(spell_id) * 1000.0))
+
+
+func _tick_ammo(spell_id: String) -> void:
+	var max_count := _ammo_max(spell_id)
+	if max_count <= 0:
+		_ammo.erase(spell_id)
+		return
+	if not _ammo.has(spell_id):
+		_ammo[spell_id] = {"count": max_count, "next_msec": 0}
+		return
+	var entry: Dictionary = _ammo[spell_id]
+	var count := int(entry["count"])
+	if count >= max_count:
+		entry["count"] = max_count
+		entry["next_msec"] = 0
+		return
+	var refill_msec := _ammo_refill_msec(spell_id)
+	if refill_msec <= 0:
+		return
+	var now := Time.get_ticks_msec()
+	var next_msec := int(entry["next_msec"])
+	if next_msec <= 0:
+		entry["next_msec"] = now + refill_msec
+		return
+	while count < max_count and now >= next_msec:
+		count += 1
+		if count >= max_count:
+			next_msec = 0
+			break
+		next_msec += refill_msec
+	entry["count"] = count
+	entry["next_msec"] = next_msec
 
 
 func knows(spell_id: String) -> bool:

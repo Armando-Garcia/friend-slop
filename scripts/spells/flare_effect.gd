@@ -3,6 +3,7 @@ class_name FlareEffect
 extends Area3D
 
 ## Signal flare: GPU comet trail while flying, then a pulsing omni beacon.
+## Slides on walls, floors, players, and monsters with drag += contact_drag.
 ## Tune on the Flare root in scenes/spells/flare.tscn (static lookdev).
 ## Flight + wand launch previews live in scenes/spells/flare_workspace.tscn.
 
@@ -13,21 +14,23 @@ const FlareFlightScript := preload("res://scripts/spells/flare_flight.gd")
 const FlareParticlesScript := preload("res://scripts/spells/flare_particles.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
-const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
+
+## Cached ammo knobs from scenes/spells/flare.tscn (source of truth for loadout).
+static var _authored_ammo_cache: Dictionary = {}
 
 @export_group("Beacon")
-## Peak omni brightness while the stuck flare is burning (before fade-out).
+## Peak omni brightness while the flare is burning (before fade-out).
 @export_range(2.0, 80.0, 0.5) var light_peak_energy: float = 36.0
 ## How far the red beacon light reaches across the maze.
 @export_range(40.0, 480.0, 1.0) var light_range: float = 320.0
-## Seconds the beacon stays lit after the rocket sticks (pulse + fade use this).
+## Seconds the beacon stays lit after launch (pulse + fade use this).
 @export_range(4.0, 60.0, 0.5) var duration_sec: float = DEFAULT_DURATION_SEC
 ## Visible thermite core radius (world units).
 @export_range(0.01, 0.5, 0.005) var core_radius: float = 0.04:
 	set(value):
 		core_radius = maxf(value, 0.005)
 		_apply_core_visual_size()
-## Physics probe radius for players, floors, and walls during flight.
+## Physics probe radius for floors, walls, players, and monsters during flight.
 @export_range(0.05, 1.0, 0.01) var hit_radius: float = FlareFlightScript.HIT_RADIUS:
 	set(value):
 		hit_radius = maxf(value, 0.02)
@@ -43,8 +46,20 @@ const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 ## Downward pull while coasting. Lower = longer sky hang;
 ## raise horizontal_drag if the rocket travels too far sideways.
 @export_range(0.0, 40.0, 0.1) var flight_gravity: float = FlareFlightScript.GRAVITY
-## Extra drag while scraping a maze wall (does not stick — slides along the face).
-@export_range(0.0, 8.0, 0.05) var wall_drag: float = FlareFlightScript.WALL_DRAG
+## Added to `drag` while scraping any surface (walls, floor, players, monsters).
+@export_range(0.0, 8.0, 0.05) var contact_drag: float = FlareFlightScript.CONTACT_DRAG
+
+@export_group("Ammo")
+## How many flares the player can hold at once.
+@export_range(1, 20, 1) var ammo_max: int = 3:
+	set(value):
+		ammo_max = maxi(value, 1)
+		_invalidate_authored_ammo_cache()
+## Seconds between refills while below ammo_max.
+@export_range(0.05, 30.0, 0.05) var ammo_refill_sec: float = 2.0:
+	set(value):
+		ammo_refill_sec = maxf(value, 0.05)
+		_invalidate_authored_ammo_cache()
 
 @export_group("Comet VFX")
 ## GPU comet streak while flying. Off during beacon phase (no CPU particles).
@@ -106,6 +121,39 @@ var _velocity := Vector3.ZERO
 var _caster: Node3D
 var _life_t := 0.0
 var _pulse_t := 1.0
+var _sliding_on_contact := false
+
+
+static func authored_ammo_max() -> int:
+	_ensure_authored_ammo_cache()
+	return maxi(int(_authored_ammo_cache.get("max", 3)), 1)
+
+
+static func authored_ammo_refill_sec() -> float:
+	_ensure_authored_ammo_cache()
+	return maxf(float(_authored_ammo_cache.get("refill", 2.0)), 0.05)
+
+
+static func _invalidate_authored_ammo_cache() -> void:
+	_authored_ammo_cache.clear()
+
+
+static func _ensure_authored_ammo_cache() -> void:
+	if not _authored_ammo_cache.is_empty():
+		return
+	var packed := load(SCENE_PATH) as PackedScene
+	if packed == null:
+		_authored_ammo_cache = {"max": 3, "refill": 2.0}
+		return
+	var sample := packed.instantiate() as FlareEffect
+	if sample == null:
+		_authored_ammo_cache = {"max": 3, "refill": 2.0}
+		return
+	_authored_ammo_cache = {
+		"max": maxi(sample.ammo_max, 1),
+		"refill": maxf(sample.ammo_refill_sec, 0.05),
+	}
+	sample.free()
 
 
 static func spawn(
@@ -170,7 +218,7 @@ func copy_tuning_to(target: FlareEffect) -> void:
 	target.drag = drag
 	target.horizontal_drag = horizontal_drag
 	target.flight_gravity = flight_gravity
-	target.wall_drag = wall_drag
+	target.contact_drag = contact_drag
 	target.comet_sparks_enabled = comet_sparks_enabled
 	target.comet_spark_amount = comet_spark_amount
 	target.comet_spark_lifetime = comet_spark_lifetime
@@ -206,27 +254,41 @@ func _physics_process(delta: float) -> void:
 func _step_flight(delta: float) -> void:
 	if not _playing or not _flying:
 		return
+	var on_contact := _sliding_on_contact
 	_velocity = FlareFlightScript.step_velocity(
-		_velocity, delta, drag, flight_gravity, horizontal_drag
+		_velocity,
+		delta,
+		drag + (contact_drag if on_contact else 0.0),
+		flight_gravity,
+		horizontal_drag
 	)
 	var motion := _velocity * delta
 	if _is_lookdev_launch():
-		global_position += motion
-		if _velocity.length_squared() > 0.0001:
-			_direction = _velocity.normalized()
-		if global_position.y <= 0.0 and _velocity.y <= 0.0:
-			global_position.y = 0.0
-			_stick(null)
-			return
-		_refresh_visual_state()
+		_step_lookdev_flight(motion, delta, on_contact)
 		return
-	if _move_and_slide_flight(motion, delta):
-		return
+	_move_and_slide_flight(motion, delta, on_contact)
 	if _velocity.length_squared() > 0.0001:
 		_direction = _velocity.normalized()
 	_touch_fake_walls()
-	if _probe_players():
-		return
+	_refresh_visual_state()
+
+
+func _step_lookdev_flight(
+	motion: Vector3, delta: float, already_applied_contact_drag: bool
+) -> void:
+	## Workspace floor has no collider — treat y=0 as a slide plane.
+	global_position += motion
+	_sliding_on_contact = false
+	if global_position.y <= 0.0:
+		global_position.y = 0.0
+		_velocity = FlareFlightScript.slide_on_contact(_velocity, Vector3.UP)
+		if not already_applied_contact_drag:
+			_velocity = FlareFlightScript.step_velocity(
+				_velocity, delta, contact_drag, 0.0, 0.0
+			)
+		_sliding_on_contact = true
+	if _velocity.length_squared() > 0.0001:
+		_direction = _velocity.normalized()
 	_refresh_visual_state()
 
 
@@ -245,6 +307,7 @@ func play_launch() -> void:
 	_playing = true
 	_life_t = 0.0
 	_pulse_t = 1.0
+	_sliding_on_contact = false
 
 	_reset_core_visuals()
 	_configure_comet_sparks()
@@ -459,10 +522,13 @@ func _reset_core_visuals() -> void:
 		_beacon_light.set_param(Light3D.PARAM_VOLUMETRIC_FOG_ENERGY, 0.0)
 
 
-func _move_and_slide_flight(motion: Vector3, delta: float) -> bool:
+func _move_and_slide_flight(
+	motion: Vector3, delta: float, already_applied_contact_drag: bool
+) -> void:
+	_sliding_on_contact = false
 	if _hit_shape == null or not is_inside_tree():
 		global_position += motion
-		return false
+		return
 	var space_state := get_world_3d().direct_space_state
 	var remaining := motion
 	var scraped := false
@@ -481,23 +547,18 @@ func _move_and_slide_flight(motion: Vector3, delta: float) -> bool:
 			global_position += remaining
 			break
 		global_position += remaining * safe_fraction
-		if _probe_players():
-			return true
 		var normal := _contact_normal(space_state, remaining, contact)
-		var collider := _contact_collider(space_state, remaining, contact)
-		if collider is Node3D and _try_hit_player(collider as Node3D):
-			return true
-		if _should_stick_on_surface(collider, normal):
-			_stick(null)
-			return true
-		_velocity = FlareFlightScript.slide_on_wall(
-			_velocity, normal, delta if not scraped else 0.0, wall_drag
-		)
+		_velocity = FlareFlightScript.slide_on_contact(_velocity, normal)
+		if not scraped and not already_applied_contact_drag:
+			## First contact this tick: flight step used `drag` only; add contact_drag now.
+			_velocity = FlareFlightScript.step_velocity(
+				_velocity, delta, contact_drag, 0.0, 0.0
+			)
 		scraped = true
 		remaining = remaining.slide(normal) * (1.0 - safe_fraction)
 		if remaining.length_squared() < 0.00000001 or _velocity.length_squared() < 0.0001:
 			break
-	return false
+	_sliding_on_contact = scraped
 
 
 func _contact_normal(
@@ -509,23 +570,11 @@ func _contact_normal(
 	if rest.is_empty():
 		if motion.length_squared() > 0.0001:
 			return -motion.normalized()
-		return Vector3.FORWARD
+		return Vector3.UP
 	var n: Vector3 = rest.get("normal", Vector3.ZERO)
 	if n.length_squared() < 0.0001:
 		return Vector3.UP
 	return n.normalized()
-
-
-func _contact_collider(
-	space_state: PhysicsDirectSpaceState3D,
-	motion: Vector3,
-	contact: PackedFloat32Array
-) -> Object:
-	var rest := _contact_rest(space_state, motion, contact)
-	var collider_id: int = int(rest.get("collider_id", 0))
-	if collider_id == 0:
-		return null
-	return instance_from_id(collider_id)
 
 
 func _contact_rest(
@@ -545,35 +594,11 @@ func _contact_rest(
 	return space_state.get_rest_info(params)
 
 
-func _should_stick_on_surface(collider: Object, normal: Vector3) -> bool:
-	## Maze walls are slide surfaces — scrape along them. Real floors become beacons.
-	if collider == null or SlideSurfaceScript.is_tagged(collider):
-		return false
-	return FlareFlightScript.is_floor_normal(normal)
-
-
 func _exclude_rids() -> Array:
 	var rids: Array = [get_rid()]
 	if _caster is CollisionObject3D:
 		rids.append((_caster as CollisionObject3D).get_rid())
 	return rids
-
-
-func _probe_players() -> bool:
-	if not is_inside_tree() or _hit_shape == null:
-		return false
-	var space_state := get_world_3d().direct_space_state
-	var params := PhysicsShapeQueryParameters3D.new()
-	params.shape = _hit_shape
-	params.transform = global_transform
-	params.exclude = _exclude_rids()
-	params.collision_mask = collision_mask
-	var hits := space_state.intersect_shape(params, 8)
-	for hit in hits:
-		var collider: Variant = hit.get("collider")
-		if collider is Node3D and _try_hit_player(collider as Node3D):
-			return true
-	return false
 
 
 func _touch_fake_walls() -> void:
@@ -588,36 +613,9 @@ func _touch_fake_walls() -> void:
 			node.call("notify_spell_touch", global_position, radius)
 
 
-func _on_body_entered(body: Node3D) -> void:
-	if not _flying:
-		return
-	if _try_hit_player(body):
-		return
-	if body == _caster:
-		return
-	## Walls slide in `_move_and_slide_flight`; Area overlap is not a stick.
-
-
-func _try_hit_player(body: Node3D) -> bool:
-	if body == null or body == _caster:
-		return false
-	if not body.is_in_group("player"):
-		return false
-	_stick(body)
-	return true
-
-
-func _stick(host: Node3D) -> void:
-	if not _flying:
-		return
-	_flying = false
-	_velocity = Vector3.ZERO
-	monitoring = false
-	set_physics_process(false)
-	set_process(false)
-	if host != null and host.is_in_group("player") and host.is_inside_tree():
-		reparent(host, true)
-	_refresh_visual_state()
+func _on_body_entered(_body: Node3D) -> void:
+	## Contacts slide in `_move_and_slide_flight`; Area overlap does not plant the beacon.
+	pass
 
 
 func _start_beacon_pulse() -> void:

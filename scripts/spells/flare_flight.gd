@@ -12,10 +12,8 @@ const DRAG := 0.12
 const HORIZONTAL_DRAG := 1.55
 ## Downward pull (m/s²). Lower values keep the rocket in the sky longer.
 const GRAVITY := 0.18
-## Extra drag while sliding along a wall (same exp(-k·dt) units as `drag`).
-const WALL_DRAG := 0.8
-## Stick as a beacon on true floors (upward normals). Walls / shoulders slide.
-const FLOOR_STICK_DOT := 0.55
+## Extra added to `drag` while sliding on any contact (walls, floor, players, monsters).
+const CONTACT_DRAG := 1.6
 ## Default collision sphere for player / world hits.
 const HIT_RADIUS := 0.22
 
@@ -47,22 +45,10 @@ static func step_velocity(
 	return Vector3(horizontal.x, vertical_y, horizontal.z)
 
 
-static func is_floor_normal(normal: Vector3) -> bool:
-	return normal.dot(Vector3.UP) > FLOOR_STICK_DOT
-
-
-static func slide_on_wall(
-	velocity: Vector3,
-	normal: Vector3,
-	delta: float,
-	wall_drag: float = WALL_DRAG
-) -> Vector3:
+static func slide_on_contact(velocity: Vector3, normal: Vector3) -> Vector3:
 	if normal.length_squared() < 0.0001:
 		return velocity
-	var n := normal.normalized()
-	var slid := velocity.slide(n)
-	slid *= exp(-maxf(wall_drag, 0.0) * maxf(delta, 0.0))
-	return slid
+	return velocity.slide(normal.normalized())
 
 
 static func simulate_altitude(

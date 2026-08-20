@@ -631,7 +631,7 @@ func _try_release_slot_fire(slot_index: int) -> bool:
 	_spell_fire_charging = false
 	if _wand == null or not _wand.is_cast_charge_ready():
 		if _wand != null:
-			_wand.cancel_cast_charge()
+			_wand.fizzle_cast_charge()
 		_cancel_slot_cast()
 		return false
 	if not _can_fire_slotted_spell(_armed_spell):
@@ -654,10 +654,8 @@ func _fire_armed_spell() -> void:
 	var cost := SpellManaScript.cast_cost(_armed_spell)
 	var spell := _armed_spell
 	if _wand != null:
-		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
-			_wand.return_from_cast_charge()
-		else:
-			await _wand.return_from_cast_charge()
+		## Flourish plays out; don't wait for the return tween before the projectile.
+		_wand.return_from_cast_charge()
 	if not is_instance_valid(self) or spell == null:
 		_spell_fire_releasing = false
 		_cancel_slot_cast()

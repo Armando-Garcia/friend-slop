@@ -8,11 +8,9 @@ enum ShapeKind { SPHERE, BOX, CAPSULE, PRISM }
 
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 
-## Ward recognition bubble — matches shield blue; baseball-sized in world meters.
 const WARD_BUBBLE_COLOR := Color(0.35, 0.65, 1.0, 0.38)
 const WARD_BUBBLE_EDGE := Color(0.18, 0.42, 0.85, 0.7)
 const BASEBALL_RADIUS_M := 0.037
-## LMB cast-charge tip sphere (half golf / half baseball when fully charged).
 const GOLF_BALL_RADIUS_M := 0.0105
 const CHARGE_WARD_RADIUS_M := 0.0185
 const CHARGE_START_COLOR := Color(1.0, 1.0, 1.0, 0.4)
@@ -24,12 +22,11 @@ const RECOGNITION_GROW_SEC := 0.18
 const RECOGNITION_HOLD_SEC := 0.28
 
 @export_group("Editor Preview")
-## When on, the FX plays in the editor viewport (standalone scene or wand instance).
 @export var preview_in_editor: bool = true:
 	set(value):
 		preview_in_editor = value
 		if Engine.is_editor_hint() and _ready_done:
-			_sync_editor_preview()
+			set_active(preview_in_editor)
 
 @export_group("Overall")
 @export_range(0.15, 3.0, 0.01) var overall_size: float = 1.0:
@@ -177,34 +174,19 @@ var _shell_base_scales: Dictionary = {}
 var _apply_queued := false
 var _ready_done := false
 var _recognition_tween: Tween
+var _charge_pop_tween: Tween
+var _charge_popping := false
 
 func _ready() -> void:
 	_ensure_nodes()
 	_ready_done = true
-	_configure_editor_camera()
-	_apply_all()
-	if Engine.is_editor_hint():
-		_sync_editor_preview()
-	else:
-		set_active(false)
-
-func _configure_editor_camera() -> void:
 	var cam := get_node_or_null("EditorCamera") as Camera3D
-	if cam == null:
-		return
-	## Only the standalone lookdev scene should drive a camera; never under the wand in-game.
-	var use_cam := Engine.is_editor_hint() and _is_edited_scene_root()
-	cam.current = use_cam
-
-func _is_edited_scene_root() -> bool:
-	if not is_inside_tree():
-		return false
-	var edited := get_tree().edited_scene_root
-	return edited == self
-
-func _sync_editor_preview() -> void:
-	## Editor-only: play the full animation while tuning exports.
-	set_active(preview_in_editor)
+	if cam != null:
+		cam.current = Engine.is_editor_hint() and is_inside_tree() and (
+			get_tree().edited_scene_root == self
+		)
+	_apply_all()
+	set_active(Engine.is_editor_hint() and preview_in_editor)
 
 func is_active() -> bool:
 	return _active
@@ -215,6 +197,10 @@ func is_recognizing() -> bool:
 func begin_cast_charge_fx(spell: SpellDefinition) -> void:
 	_ensure_nodes()
 	_ensure_recognition_nodes()
+	_charge_popping = false
+	if _charge_pop_tween != null and is_instance_valid(_charge_pop_tween):
+		_charge_pop_tween.kill()
+		_charge_pop_tween = null
 	_cast_charging_fx = true
 	_charge_is_ward = spell != null and spell.effect_id == "ward"
 	_hide_listen_shells()
@@ -223,6 +209,12 @@ func begin_cast_charge_fx(spell: SpellDefinition) -> void:
 	)
 	if _charge_is_ward:
 		_setup_ward_cast_charge_meshes(_charge_spell_color)
+	elif spell != null and spell.effect_id == "fireball":
+		FireballParticles.configure_wand_charge_fireball(
+			_recognition_bubble, _recognition_rim, _world_to_local_radius(GOLF_BALL_RADIUS_M)
+		)
+		_charge_mat = _recognition_bubble.material_override as StandardMaterial3D
+		_charge_rim_mat = _recognition_rim.material_override as StandardMaterial3D
 	else:
 		_setup_generic_cast_charge_meshes(_charge_spell_color)
 	_recognition.visible = true
@@ -276,14 +268,18 @@ func _setup_ward_cast_charge_meshes(spell_color: Color) -> void:
 	_recognition_rim.visible = true
 
 func set_cast_charge_progress(t: float) -> void:
-	if not _cast_charging_fx or _recognition_bubble == null:
+	if _charge_popping or not _cast_charging_fx or _recognition_bubble == null:
 		return
 	var p := clampf(t, 0.0, 1.0)
 	var scale_v := lerpf(CHARGE_START_SCALE, 1.0, p)
 	_recognition_bubble.scale = Vector3.ONE * scale_v
-	if _charge_is_ward and _recognition_rim != null:
+	if _recognition_rim != null and (_charge_is_ward or _charge_rim_mat != null):
 		_recognition_rim.scale = Vector3.ONE * scale_v
+	if _charge_is_ward:
 		_apply_ward_charge_colors(p)
+		return
+	if _charge_rim_mat != null:
+		FireballParticles.apply_wand_charge_fire_progress(_charge_mat, _charge_rim_mat, p)
 		return
 	var col := CHARGE_START_COLOR.lerp(_charge_spell_color, p)
 	col.a = 0.4
@@ -313,7 +309,33 @@ func _apply_ward_charge_colors(p: float) -> void:
 		_charge_rim_mat.albedo_color = edge
 		_charge_rim_mat.emission = edge.lightened(0.15)
 
+func pop_cast_charge_fx() -> void:
+	if _charge_popping or not _cast_charging_fx or _recognition_bubble == null:
+		return
+	if _charge_pop_tween != null and is_instance_valid(_charge_pop_tween):
+		_charge_pop_tween.kill()
+	_charge_popping = true
+	for sparks in _sparks:
+		if sparks != null:
+			sparks.emitting = false
+	if _charge_mat != null:
+		var flash := Color(1.0, 0.93, 0.78, 0.9)
+		_charge_mat.albedo_color = flash
+		_charge_mat.emission = flash
+		_charge_mat.emission_energy_multiplier = 4.5
+	var pop_s := Vector3.ONE * maxf(_recognition_bubble.scale.x * 1.7, 1.25)
+	_charge_pop_tween = create_tween()
+	_charge_pop_tween.tween_property(_recognition_bubble, "scale", pop_s, 0.08)
+	_charge_pop_tween.tween_property(
+		_recognition_bubble, "scale", Vector3.ZERO, 0.14
+	)
+	_charge_pop_tween.tween_callback(end_cast_charge_fx)
+
 func end_cast_charge_fx() -> void:
+	_charge_popping = false
+	if _charge_pop_tween != null and is_instance_valid(_charge_pop_tween):
+		_charge_pop_tween.kill()
+	_charge_pop_tween = null
 	_cast_charging_fx = false
 	_charge_is_ward = false
 	_charge_mat = null
@@ -331,7 +353,6 @@ func _hide_listen_shells() -> void:
 
 func set_active(active: bool) -> void:
 	if _recognizing and not active:
-		## Session idle / tip disarm must not kill an in-flight recognition morph.
 		_active = false
 		set_process(false)
 		for sparks in _sparks:
@@ -363,7 +384,6 @@ func set_active(active: bool) -> void:
 	elif not _recognizing and not _cast_charging_fx:
 		_hide_recognition()
 
-## Voice match: shrink listening orbs, then grow the spell-specific tip FX.
 func play_recognition(spell: SpellDefinition) -> void:
 	if spell == null:
 		return
@@ -405,7 +425,6 @@ func play_recognition(spell: SpellDefinition) -> void:
 	visible = false
 
 func _visual_layers() -> int:
-	## Editor cameras typically cull to WORLD only; include WORLD while editing.
 	if Engine.is_editor_hint():
 		return WorldVisualLayersScript.SCENE_LIGHT_MASK
 	return WorldVisualLayersScript.PLAYER_SELF
@@ -441,12 +460,12 @@ func _process(delta: float) -> void:
 
 func _spin_cast_charge_spheres(delta: float) -> void:
 	_spin_node(_recognition_bubble, CHARGE_BUBBLE_SPIN_DEG, delta)
-	if _charge_is_ward and _recognition_rim != null and _recognition_rim.visible:
+	if _recognition_rim != null and _recognition_rim.visible:
 		_spin_node(_recognition_rim, CHARGE_RIM_SPIN_DEG, delta)
+	if not _charge_is_ward and _charge_rim_mat != null:
+		FireballParticles.scroll_wand_charge_fire(_charge_mat, delta)
 
 func _spin_node(node: Node3D, spin_deg: Vector3, delta: float) -> void:
-	if node == null:
-		return
 	node.rotate_x(deg_to_rad(spin_deg.x) * delta)
 	node.rotate_y(deg_to_rad(spin_deg.y) * delta)
 	node.rotate_z(deg_to_rad(spin_deg.z) * delta)
@@ -611,7 +630,6 @@ func _make_ward_bubble_material(spell_color: Color = WARD_BUBBLE_COLOR) -> Stand
 	mat.emission_enabled = true
 	mat.emission = highlight
 	mat.emission_energy_multiplier = 0.55
-	## Soft white highlight patches for a glassy 3D read.
 	var highlight_noise := FastNoiseLite.new()
 	highlight_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	highlight_noise.frequency = 0.09
@@ -634,7 +652,6 @@ func _make_ward_bubble_material(spell_color: Color = WARD_BUBBLE_COLOR) -> Stand
 	return mat
 
 func _make_ward_rim_material(spell_color: Color = WARD_BUBBLE_EDGE) -> StandardMaterial3D:
-	## Front-face cull → darker silhouette rim while the bubble stays see-through.
 	var edge := Color(spell_color.r * 0.55, spell_color.g * 0.65, spell_color.b * 0.85, 0.7)
 	var mat := StandardMaterial3D.new()
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -706,7 +723,6 @@ func _apply_outer() -> void:
 func _apply_middle() -> void:
 	if _middle == null:
 		return
-	## Same cloudy shell as outer, just smaller / separate spin.
 	_apply_cloudy_shell(
 		_middle,
 		middle_shape,
@@ -718,15 +734,10 @@ func _apply_middle() -> void:
 	)
 
 func _export_float(value: Variant, fallback: float) -> float:
-	## @tool + new exports can hand the inspector nil before first assign.
-	if value == null:
-		return fallback
-	return float(value)
+	return fallback if value == null else float(value)
 
 func _export_color(value: Variant, fallback: Color) -> Color:
-	if typeof(value) != TYPE_COLOR:
-		return fallback
-	return value
+	return fallback if typeof(value) != TYPE_COLOR else value
 
 func _apply_cloudy_shell(
 	mesh_instance: MeshInstance3D,
@@ -761,7 +772,6 @@ func _apply_cloudy_shell(
 			_middle_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 			_middle_noise.fractal_lacunarity = 2.1
 			_middle_noise.fractal_gain = 0.5
-			## Offset seed so veins don't match the outer shell exactly.
 			_middle_noise.seed = 17
 		if _middle_noise_tex == null:
 			_middle_noise_tex = NoiseTexture2D.new()
@@ -770,7 +780,6 @@ func _apply_cloudy_shell(
 			_middle_noise_tex.seamless = true
 		noise = _middle_noise
 		noise_tex = _middle_noise_tex
-	## More veining → denser / sharper cloud breaks.
 	noise.frequency = lerpf(0.035, 0.16, veining)
 	noise.fractal_octaves = int(lerpf(2.0, 5.0, veining))
 	noise_tex.noise = noise
@@ -789,7 +798,6 @@ func _apply_cloudy_shell(
 	mesh_instance.material_override = mat
 
 func _make_shell_alpha_ramp(color: Color, transparency: float) -> Gradient:
-	## Higher transparency widens clear patches; solid color remains in dense veins.
 	var clear_a := clampf(transparency * 0.95, 0.0, 0.95)
 	var mid_a := clampf(lerpf(0.75, 0.28, transparency), 0.1, 0.9)
 	var ramp := Gradient.new()
@@ -815,7 +823,6 @@ func _apply_inner() -> void:
 		_inner_noise.noise_type = FastNoiseLite.TYPE_CELLULAR
 		_inner_noise.fractal_type = FastNoiseLite.FRACTAL_NONE
 		_inner_noise.cellular_jitter = 1.0
-	## Higher amount → denser tiny flakes, not a larger gold wash.
 	_inner_noise.frequency = lerpf(0.22, 0.55, amount)
 	if _inner_noise_tex == null:
 		_inner_noise_tex = NoiseTexture2D.new()
@@ -831,7 +838,6 @@ func _apply_inner() -> void:
 	emission_tex.noise = _inner_noise
 	emission_tex.color_ramp = _make_inner_flake_emission_ramp(flake_color, amount)
 	var mat := StandardMaterial3D.new()
-	## Core stays dark; texture carries sparse metallic flakes only.
 	mat.albedo_color = Color.WHITE
 	mat.albedo_texture = _inner_noise_tex
 	mat.metallic = 0.92
@@ -846,7 +852,6 @@ func _apply_inner() -> void:
 	_inner_base_scale = Vector3.ONE
 
 func _make_inner_flake_albedo_ramp(core: Color, flake: Color, amount: float) -> Gradient:
-	## Only the top noise peaks become flakes — spot color never floods the core.
 	var flake_start := clampf(lerpf(0.94, 0.82, amount), 0.8, 0.96)
 	var ramp := Gradient.new()
 	ramp.offsets = PackedFloat32Array([
@@ -864,7 +869,6 @@ func _make_inner_flake_albedo_ramp(core: Color, flake: Color, amount: float) -> 
 	return ramp
 
 func _make_inner_flake_emission_ramp(flake: Color, amount: float) -> Gradient:
-	## Emission is black on the core so only flakes shine in the spot color.
 	var flake_start := clampf(lerpf(0.94, 0.82, amount), 0.8, 0.96)
 	var ramp := Gradient.new()
 	ramp.offsets = PackedFloat32Array([
@@ -977,24 +981,20 @@ func _configure_spark_emitters(colors: Array, cfg: Dictionary) -> void:
 			sparks.restart()
 
 func _make_shape_mesh(kind: ShapeKind, size: float) -> Mesh:
-	match kind:
-		ShapeKind.BOX:
-			var box := BoxMesh.new()
-			box.size = Vector3.ONE * (size * 2.0)
-			return box
-		ShapeKind.CAPSULE:
-			var capsule := CapsuleMesh.new()
-			capsule.radius = size * 0.7
-			capsule.height = size * 2.4
-			return capsule
-		ShapeKind.PRISM:
-			var prism := PrismMesh.new()
-			prism.size = Vector3.ONE * (size * 2.0)
-			return prism
-		_:
-			var sphere := SphereMesh.new()
-			sphere.radius = size
-			sphere.height = size * 2.0
-			sphere.radial_segments = 24
-			sphere.rings = 12
-			return sphere
+	if kind == ShapeKind.BOX:
+		var box := BoxMesh.new()
+		box.size = Vector3.ONE * (size * 2.0)
+		return box
+	if kind == ShapeKind.PRISM:
+		var prism := PrismMesh.new()
+		prism.size = Vector3.ONE * (size * 2.0)
+		return prism
+	if kind == ShapeKind.CAPSULE:
+		var capsule := CapsuleMesh.new()
+		capsule.radius = size * 0.7
+		capsule.height = size * 2.4
+		return capsule
+	var sphere := SphereMesh.new()
+	sphere.radius = size
+	sphere.height = size * 2.0
+	return sphere

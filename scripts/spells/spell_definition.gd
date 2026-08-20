@@ -18,6 +18,10 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var pitch_targets_hz: PackedFloat32Array = PackedFloat32Array()
 @export var require_rhythm: bool = false
 @export var cooldown_sec: float = 8.0
+## 0 = no ammo bucket (cooldown-only). Flare uses a refillable magazine.
+@export_range(0, 20, 1) var ammo_max: int = 0
+## Seconds between ammo refills while below ammo_max. Ignored if ammo_max is 0.
+@export_range(0.0, 30.0, 0.05) var ammo_refill_sec: float = 0.0
 @export var effect_id: String = ""
 ## Shared hue for mana bar, spell-word HUD, and cast / recognition FX.
 @export var color: Color = Color(0.55, 0.28, 0.72, 1.0)
@@ -25,6 +29,16 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var cast_mode: CastMode = CastMode.CAST
 ## Slot hold time before CAST spells are ready (CHANNEL uses 0).
 @export_range(0.0, 10.0, 0.05) var charge_time_sec: float = 1.0
+## If true, releasing before charge_time_sec completes fizzles instead of casting.
+@export var require_full_charge := false
+
+
+func uses_ammo() -> bool:
+	return ammo_max > 0
+
+
+func requires_full_charge() -> bool:
+	return require_full_charge and not is_channelled() and get_charge_time_sec() > 0.001
 
 
 func get_display_color() -> Color:
@@ -50,6 +64,8 @@ func get_wand_fx_kind() -> WandFxKind:
 func get_charge_time_sec() -> float:
 	if is_channelled():
 		return 0.0
+	if effect_id == "fireball":
+		return FireballProjectile.authored_charge_time_sec()
 	return maxf(charge_time_sec, 0.0)
 
 
@@ -207,13 +223,15 @@ func get_codex_effect_detail() -> String:
 			)
 		"fireball":
 			text = (
-				"Launches a blazing fireball from your wand. "
+				"Hold to charge a fireball at your wand tip, then release to launch. "
+				+ "Let go early and it fizzles into a smoky wisp. "
 				+ "Shots explode on impact and knock players back."
 			)
 		"flare":
 			text = (
 				"Say \"flare\" to form a red cone at your wand tip. A tiny spark "
-				+ "rockets toward your crosshair and bursts into a lasting signal flare."
+				+ "rockets toward your crosshair and bursts into a lasting signal flare. "
+				+ "You carry a limited flare bucket that refills over time."
 			)
 		"ward":
 			text = (

@@ -11,6 +11,7 @@ func run() -> int:
 	failures += _test_learn_unknown_fails()
 	failures += _test_unlearn()
 	failures += _test_starting_vs_learned_sets()
+	failures += _test_flare_ammo_bucket()
 	return failures
 
 
@@ -88,3 +89,50 @@ func _test_starting_vs_learned_sets() -> int:
 		push_error("Expected learning an already-starting spell to fail")
 		return 1
 	return 0
+
+
+func _test_flare_ammo_bucket() -> int:
+	var FlareEffectScript := preload("res://scripts/spells/flare_effect.gd")
+	FlareEffectScript._invalidate_authored_ammo_cache()
+	var authored_max: int = FlareEffectScript.authored_ammo_max()
+	var authored_refill: float = FlareEffectScript.authored_ammo_refill_sec()
+	var loadout := LoadoutScript.new()
+	var flare := SpellDefinitionScript.new()
+	flare.id = "flare"
+	flare.display_name = "Flare"
+	flare.cooldown_sec = 0.0
+	loadout.configure([flare])
+	loadout.apply_starting_spells(["flare"])
+	var failures := 0
+	if loadout.ammo_count("flare") != authored_max:
+		push_error(
+			"Expected flare bucket to start full at %s, got %s"
+			% [authored_max, loadout.ammo_count("flare")]
+		)
+		failures += 1
+	if loadout.is_on_cooldown("flare"):
+		push_error("Expected full flare bucket to be castable")
+		failures += 1
+	loadout.start_cooldown("flare")
+	if loadout.ammo_count("flare") != authored_max - 1:
+		push_error("Expected casting flare to spend one ammo")
+		failures += 1
+	var refill := loadout.remaining_ammo_refill_sec("flare")
+	if refill <= authored_refill * 0.75 or refill > authored_refill + 0.05:
+		push_error(
+			"Expected refill timer near %ss after spend, got %s"
+			% [authored_refill, refill]
+		)
+		failures += 1
+	for _i in range(authored_max - 1):
+		loadout.start_cooldown("flare")
+	if loadout.ammo_count("flare") != 0:
+		push_error("Expected empty flare bucket after spending all ammo")
+		failures += 1
+	if not loadout.is_on_cooldown("flare"):
+		push_error("Expected empty flare bucket to block casting")
+		failures += 1
+	if loadout.spend_ammo("flare"):
+		push_error("Expected spend_ammo to fail when empty")
+		failures += 1
+	return failures

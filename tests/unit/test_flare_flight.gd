@@ -11,7 +11,7 @@ func run() -> int:
 	failures += _test_gravity_pulls_down()
 	failures += _test_upward_shot_stays_aloft()
 	failures += _test_horizontal_drag_limits_travel()
-	failures += _test_slides_on_wall_instead_of_stopping()
+	failures += _test_slides_on_contact_with_extra_drag()
 	return failures
 
 
@@ -101,26 +101,25 @@ func _test_horizontal_drag_limits_travel() -> int:
 	return 0
 
 
-func _test_slides_on_wall_instead_of_stopping() -> int:
-	if FlareFlightScript.is_floor_normal(Vector3.UP) == false:
-		push_error("Expected upward normal to count as a floor")
-		return 1
-	if FlareFlightScript.is_floor_normal(Vector3.RIGHT):
-		push_error("Expected vertical wall normal not to stick")
-		return 1
+func _test_slides_on_contact_with_extra_drag() -> int:
 	var inbound := Vector3(8.0, 2.0, 0.0)
-	var slid := FlareFlightScript.slide_on_wall(inbound, Vector3.LEFT, 1.0 / 60.0)
-	if slid.x > 0.05:
-		push_error("Expected wall slide to cancel into-wall speed, got %s" % slid)
+	var wall_slid := FlareFlightScript.slide_on_contact(inbound, Vector3.LEFT)
+	if wall_slid.x > 0.05:
+		push_error("Expected wall slide to cancel into-wall speed, got %s" % wall_slid)
 		return 1
-	if slid.y <= 0.0:
+	if wall_slid.y <= 0.0:
 		push_error("Expected wall slide to keep along-wall (upward) speed")
 		return 1
-	var no_drag := FlareFlightScript.slide_on_wall(inbound, Vector3.LEFT, 0.25, 0.0)
-	var with_drag := FlareFlightScript.slide_on_wall(
-		inbound, Vector3.LEFT, 0.25, FlareFlightScript.WALL_DRAG
+	var floor_slid := FlareFlightScript.slide_on_contact(Vector3(3.0, -4.0, 1.0), Vector3.UP)
+	if floor_slid.y < -0.05:
+		push_error("Expected floor slide to cancel into-floor speed, got %s" % floor_slid)
+		return 1
+	var dt := 0.25
+	var airborne := FlareFlightScript.step_velocity(wall_slid, dt, 0.3, 0.0, 0.0)
+	var scraping := FlareFlightScript.step_velocity(
+		wall_slid, dt, 0.3 + FlareFlightScript.CONTACT_DRAG, 0.0, 0.0
 	)
-	if with_drag.length() >= no_drag.length():
-		push_error("Expected wall drag 0.8 to bleed slide speed")
+	if scraping.y >= airborne.y:
+		push_error("Expected drag += contact_drag to bleed vertical slide speed")
 		return 1
 	return 0

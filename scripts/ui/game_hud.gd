@@ -486,22 +486,54 @@ func _refresh_spell_hotbar() -> void:
 			spell_name = spell_id.capitalize()
 		var remaining := 0.0
 		var total_cd := 0.0
+		var ammo := 0
+		var ammo_cap := 0
+		var refill_left := 0.0
 		if not spell_id.is_empty() and _loadout != null:
-			if _loadout.has_method("remaining_cooldown_sec"):
-				remaining = float(_loadout.remaining_cooldown_sec(spell_id))
-			if remaining > 0.0 and _loadout.has_method("get_spell_definition"):
-				var def: Resource = _loadout.get_spell_definition(spell_id)
-				if def != null:
-					total_cd = float(def.get("cooldown_sec"))
+			if _loadout.has_method("ammo_max"):
+				ammo_cap = int(_loadout.ammo_max(spell_id))
+			if ammo_cap > 0:
+				if _loadout.has_method("ammo_count"):
+					ammo = int(_loadout.ammo_count(spell_id))
+				if _loadout.has_method("remaining_ammo_refill_sec"):
+					refill_left = float(_loadout.remaining_ammo_refill_sec(spell_id))
+				if _loadout.has_method("ammo_refill_sec"):
+					total_cd = float(_loadout.ammo_refill_sec(spell_id))
+				elif _loadout.has_method("get_spell_definition"):
+					var ammo_def: Resource = _loadout.get_spell_definition(spell_id)
+					if ammo_def != null:
+						total_cd = float(ammo_def.get("ammo_refill_sec"))
+				remaining = refill_left if ammo <= 0 else 0.0
+			else:
+				if _loadout.has_method("remaining_cooldown_sec"):
+					remaining = float(_loadout.remaining_cooldown_sec(spell_id))
+				if remaining > 0.0 and _loadout.has_method("get_spell_definition"):
+					var def: Resource = _loadout.get_spell_definition(spell_id)
+					if def != null:
+						total_cd = float(def.get("cooldown_sec"))
+		var empty_ammo := ammo_cap > 0 and ammo <= 0
 		if spell_name.is_empty():
 			_spell_hotbar_labels[i].text = "%s\n—" % key
+		elif ammo_cap > 0 and ammo > 0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%d" % [key, spell_name, ammo]
+		elif ammo_cap > 0 and remaining > 0.0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
 		elif remaining > 0.0:
 			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
 		else:
 			_spell_hotbar_labels[i].text = "%s\n%s" % [key, spell_name]
-		_apply_spell_slot_style(_spell_hotbar_cells[i], pending, i == selected, remaining > 0.0)
-		_apply_spell_slot_cooldown_fill(i, remaining, total_cd)
-		var label_color := Color(0.55, 0.52, 0.62, 1) if remaining > 0.0 else Color(0.94, 0.9, 1, 1)
+		_apply_spell_slot_style(
+			_spell_hotbar_cells[i], pending, i == selected, remaining > 0.0 or empty_ammo
+		)
+		if ammo_cap > 0 and ammo < ammo_cap and total_cd > 0.0:
+			_apply_spell_slot_cooldown_fill(i, refill_left, total_cd)
+		else:
+			_apply_spell_slot_cooldown_fill(i, remaining, total_cd)
+		var label_color := (
+			Color(0.55, 0.52, 0.62, 1)
+			if remaining > 0.0 or empty_ammo
+			else Color(0.94, 0.9, 1, 1)
+		)
 		_spell_hotbar_labels[i].add_theme_color_override("font_color", label_color)
 
 

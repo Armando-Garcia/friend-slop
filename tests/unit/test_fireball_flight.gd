@@ -6,6 +6,7 @@ const FireballProjectileScript := preload("res://scripts/spells/fireball_project
 const FireballExplosionEffectScript := preload("res://scripts/spells/fireball_explosion_effect.gd")
 const FireballParticlesScript := preload("res://scripts/spells/fireball_particles.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
+const WandListeningFxScript := preload("res://scripts/player/wand_listening_fx.gd")
 
 
 func run(tree: SceneTree) -> int:
@@ -13,6 +14,10 @@ func run(tree: SceneTree) -> int:
 	failures += _test_normal_lifetime()
 	failures += _test_smoke_trail_fade_delay()
 	failures += _test_smoke_uses_mist_texture_without_shadows()
+	failures += _test_travel_speed_is_faster_than_walk()
+	failures += _test_authored_charge_time_is_faster()
+	failures += _test_wand_charge_uses_additive_fire()
+	failures += _test_charge_ball_pop_keeps_bubble_until_tween(tree)
 	failures += _test_embers_use_fine_spark_texture()
 	failures += _test_burst_particle_defaults()
 	failures += _test_hit_radius_matches_visual()
@@ -53,6 +58,54 @@ func _test_smoke_uses_mist_texture_without_shadows() -> int:
 	if not (mat.albedo_texture is GradientTexture2D):
 		push_error("Expected smoke mist texture to be a radial GradientTexture2D")
 		return 1
+	return 0
+
+
+func _test_travel_speed_is_faster_than_walk() -> int:
+	if FireballProjectileScript.SPEED < 24.0:
+		push_error("Expected fireball travel speed to stay snappy")
+		return 1
+	return 0
+
+
+func _test_authored_charge_time_is_faster() -> int:
+	var charge := FireballProjectileScript.authored_charge_time_sec()
+	if charge > 0.85:
+		push_error("Expected fireball scene charge_time_sec to be 0.2s faster than 1.0s")
+		return 1
+	if charge < 0.05:
+		push_error("Expected fireball charge_time_sec to stay positive")
+		return 1
+	return 0
+
+
+func _test_wand_charge_uses_additive_fire() -> int:
+	var core := FireballParticlesScript.make_wand_charge_core_material()
+	if core.blend_mode != BaseMaterial3D.BLEND_MODE_ADD:
+		push_error("Expected wand charge fireball core to use additive blending")
+		return 1
+	if core.albedo_texture == null:
+		push_error("Expected wand charge fireball core to use a fire noise texture")
+		return 1
+	return 0
+
+
+func _test_charge_ball_pop_keeps_bubble_until_tween(tree: SceneTree) -> int:
+	var fx := WandListeningFxScript.new()
+	tree.root.add_child(fx)
+	fx.begin_cast_charge_fx(null)
+	fx.set_cast_charge_progress(0.7)
+	var rec := fx.get_node_or_null("Recognition") as Node3D
+	if rec == null or not rec.visible:
+		push_error("Expected charge ball visible before pop")
+		fx.queue_free()
+		return 1
+	fx.pop_cast_charge_fx()
+	if not rec.visible:
+		push_error("Expected charge ball to stay visible while popping")
+		fx.queue_free()
+		return 1
+	fx.queue_free()
 	return 0
 
 

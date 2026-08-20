@@ -55,10 +55,12 @@ radial_segments = 20
 rings = 10
 
 [node name="Fireball" type="Area3D" unique_id=1121186740]
-editor_description = "Select THIS Fireball root. Radii group sizes core/hit/shell/smoke/embers/light. The white pin at the origin is TravelCastLight (editor gizmo only)."
+editor_description = "Select THIS Fireball root. Cast timing is charge hold + wand lift. Radii group sizes core/hit/shell/smoke/embers/light. The white pin at the origin is TravelCastLight (editor gizmo only)."
 collision_layer = 0
 monitorable = false
 script = ExtResource("1_fireball")
+charge_time_sec = 0.8
+wand_charge_pose_sec = 0.14
 hit_radius = 0.23
 shell_radius = 0.25
 glow_light_base = 0.55
