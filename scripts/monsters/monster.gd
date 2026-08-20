@@ -286,7 +286,9 @@ func die() -> void:
 		remove_from_group("monster")
 	if is_in_group("combat_target"):
 		remove_from_group("combat_target")
-	_spawn_ragdoll_corpse()
+	MonsterCorpseScript.spawn_from_monster(
+		self, _last_hit_dir, death_linger_sec, death_fade_sec, DEATH_IMPULSE_SCALE
+	)
 	queue_free()
 
 
@@ -436,53 +438,6 @@ func _remember_hit_dir(from: Node3D) -> void:
 	away.y = 0.0
 	if away.length_squared() > 0.0001:
 		_last_hit_dir = away.normalized()
-
-
-func _spawn_ragdoll_corpse() -> void:
-	## No skeleton on the character shell — tumble as one RigidBody with body/head meshes.
-	var parent_node := get_parent()
-	if parent_node == null or not is_inside_tree():
-		return
-	var corpse := RigidBody3D.new()
-	corpse.name = "%sCorpse" % name
-	corpse.set_script(MonsterCorpseScript)
-	parent_node.add_child(corpse)
-	corpse.global_transform = global_transform
-
-	var body_colliders: Array[CollisionShape3D] = []
-	for child in get_children():
-		if child is CollisionShape3D:
-			body_colliders.append(child as CollisionShape3D)
-	for collider in body_colliders:
-		_reparent_to_corpse(collider, corpse)
-	_reparent_to_corpse(_body_mesh, corpse)
-	_reparent_to_corpse(get_node_or_null("%MidBody"), corpse)
-	_reparent_to_corpse(head, corpse)
-
-	var impulse: Vector3 = BroomLocomotionScript.knockback_impulse(_last_hit_dir)
-	impulse *= DEATH_IMPULSE_SCALE
-	if corpse.has_method("begin_death_sequence"):
-		corpse.call(
-			"begin_death_sequence",
-			impulse,
-			death_linger_sec,
-			death_fade_sec
-		)
-
-
-func _reparent_to_corpse(node: Node, corpse: Node) -> void:
-	if node == null or corpse == null:
-		return
-	var xf: Transform3D
-	var is_spatial := node is Node3D
-	if is_spatial:
-		xf = (node as Node3D).global_transform
-	var old_parent := node.get_parent()
-	if old_parent != null:
-		old_parent.remove_child(node)
-	corpse.add_child(node)
-	if is_spatial:
-		(node as Node3D).global_transform = xf
 
 
 ## Collects candidates (default players + senses) and prefers one. Override to replace.

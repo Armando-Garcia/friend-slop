@@ -11,9 +11,8 @@ const INTERACT_RANGE_SQ := 9.0
 const PLAYER_MIN_SEPARATION := 0.55
 const AIM_RAY_LENGTH := 200.0
 
-const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
-const GameWorldScript := preload("res://scripts/game_world.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
+const GameWorldScript := preload("res://scripts/game_world.gd")
 const NetworkManagerScript := preload("res://scripts/network/network_manager.gd")
 const TargetHighlightScript := preload("res://scripts/spells/target_highlight.gd")
 const TargetedObjectControlScript := preload("res://scripts/spells/targeted_object_control.gd")
@@ -294,17 +293,6 @@ func set_flame_glow_enabled(active: bool) -> void:
 		_wand.set_flame_glow_enabled(active)
 
 
-func launch_fireball() -> void:
-	launch_fireball_from_params(_aim_fireball_origin(), _aim_fireball_direction())
-
-
-func launch_fireball_from_params(origin: Vector3, direction: Vector3) -> void:
-	var world: Node = GameWorldScript.find_match_root(get_tree())
-	if world == null:
-		world = get_parent()
-	FireballProjectileScript.spawn(world, origin, direction.normalized())
-
-
 func get_wand_cast_origin() -> Vector3:
 	if _wand != null:
 		return _wand.get_cast_origin()
@@ -358,14 +346,6 @@ func _crosshair_world_point() -> Vector3:
 	if hit.is_empty():
 		return far_point
 	return hit.position
-
-
-func _aim_fireball_direction() -> Vector3:
-	return get_wand_cast_direction()
-
-
-func _aim_fireball_origin() -> Vector3:
-	return get_wand_cast_origin()
 
 
 func _input(event: InputEvent) -> void:
