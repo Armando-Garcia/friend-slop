@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://csettingspanel001"]
+[gd_scene load_steps=8 format=3 uid="uid://csettingspanel001"]
 
 [ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="1_settings"]
 [ext_resource type="Script" path="res://scripts/ui/player_voice_list.gd" id="2_player_voice"]
 [ext_resource type="Script" path="res://scripts/ui/menu_toggle_switch.gd" id="3_toggle"]
 [ext_resource type="Script" path="res://scripts/ui/aim_cursor.gd" id="4_aim"]
+[ext_resource type="Script" path="res://scripts/ui/keybinds/settings_controls_tab.gd" id="5_controls"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.12, 0.09, 0.18, 0.96)
@@ -429,10 +430,56 @@ layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("2_player_voice")
 
-[node name="Developer" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="Controls" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 3
+
+[node name="SettingsControlsTab" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+script = ExtResource("5_controls")
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 4
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="FooterRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+text = "Click a bind to remap it."
+
+[node name="RestoreDefaultsButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+text = "Restore Defaults"
+
+[node name="Developer" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+visible = false
+layout_mode = 2
+metadata/_tab_index = 4
 
 [node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer"]
 layout_mode = 2
@@ -505,7 +552,26 @@ theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "Saved locally. Default role applies when you Play alone; lobby size override softens 3-player start rules."
 
-[node name="CloseButton" type="Button" parent="Panel/MarginContainer/VBox"]
+[node name="Footer" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="RevertButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Save & Close"
+size_flags_horizontal = 3
+text = "Revert"
+
+[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Save"
+
+[node name="ExitButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+clip_text = true
+alignment = 1
+text = "Exit"

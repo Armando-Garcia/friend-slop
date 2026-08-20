@@ -52,6 +52,10 @@ res://tests/unit/test_delivery_objective_audio.gd
 res://tests/unit/test_delivery_objective_sync.gd
 res://tests/unit/test_display_resolution_presets.gd
 res://tests/unit/test_settings_display.gd
+res://tests/unit/test_input_rebind.gd
+res://tests/unit/test_input_bind_overlaps.gd
+res://tests/unit/test_settings_edit_session.gd
+res://tests/unit/test_settings_exit_confirm.gd
 res://tests/unit/test_flare_flight.gd
 res://tests/unit/test_ui_scale.gd
 res://tests/unit/test_moon.gd

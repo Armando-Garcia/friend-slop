@@ -6,6 +6,13 @@ signal settings_applied
 
 const DisplayResolutionPresetsScript := preload("res://scripts/ui/display_resolution_presets.gd")
 const MicCaptureBrokerScript := preload("res://scripts/voice/mic_capture_broker.gd")
+const InputRebindCatalogScript := preload("res://scripts/ui/keybinds/input_rebind_catalog.gd")
+const InputRebindStoreScript := preload("res://scripts/ui/keybinds/input_rebind_store.gd")
+
+const INPUT_KEY_MIGRATE := {
+	"sprint": "dash",
+	"wand_raise": "spell_capture",
+}
 
 const SETTINGS_PATH := "user://settings.cfg"
 const MIC_BUS_NAME := "MicCapture"
@@ -41,10 +48,13 @@ var _applied_input_device: String = ""
 var _opened_capture_device: String = ""
 var _capture_device_retry_count: int = 0
 var _capture_device_retry_scheduled: bool = false
+## Catalog action -> packed event from project.godot, captured before user cfg.
+var _input_project_defaults: Dictionary = {}
 
 
 func _ready() -> void:
 	_ensure_mic_bus()
+	snapshot_input_project_defaults()
 	load_settings()
 	apply_audio_settings()
 	apply_display_settings()
@@ -282,8 +292,56 @@ func load_settings() -> void:
 	dev_allow_any_lobby_size = config.get_value(
 		"dev", "dev_allow_any_lobby_size", dev_allow_any_lobby_size
 	)
+	_load_input_binds(config)
 	if persist_display:
 		save_settings()
+
+
+func snapshot_input_project_defaults() -> void:
+	if not _input_project_defaults.is_empty():
+		return
+	_input_project_defaults = InputRebindStoreScript.snapshot_catalog()
+
+
+func get_input_project_defaults() -> Dictionary:
+	if _input_project_defaults.is_empty():
+		snapshot_input_project_defaults()
+	return _input_project_defaults.duplicate(true)
+
+
+func apply_saved_input_binds(binds: Dictionary) -> void:
+	for action in binds.keys():
+		var action_name := str(action)
+		if not InputRebindCatalogScript.has_action(action_name):
+			continue
+		if binds[action] is Dictionary:
+			InputRebindStoreScript.apply_packed(action_name, binds[action] as Dictionary)
+
+
+func pack_live_input_binds() -> Dictionary:
+	return InputRebindStoreScript.snapshot_catalog()
+
+
+func reset_input_action_to_project_default(action: String) -> void:
+	InputRebindStoreScript.restore_action_from_defaults(action, _input_project_defaults)
+
+
+func _load_input_binds(config: ConfigFile) -> void:
+	if not config.has_section("input"):
+		return
+	var binds := {}
+	for key in config.get_section_keys("input"):
+		var action := _migrate_input_action_name(str(key))
+		var value: Variant = config.get_value("input", key, {})
+		if value is Dictionary:
+			binds[action] = value
+	apply_saved_input_binds(binds)
+
+
+func _migrate_input_action_name(action: String) -> String:
+	if INPUT_KEY_MIGRATE.has(action):
+		return str(INPUT_KEY_MIGRATE[action])
+	return action
 
 
 func apply_solo_dev_loadout_to_game_state() -> void:
@@ -311,6 +369,9 @@ func save_settings() -> void:
 	config.set_value("dev", "voice_use_stub", voice_use_stub)
 	config.set_value("dev", "dev_spawn_relic_near_spawn", dev_spawn_relic_near_spawn)
 	config.set_value("dev", "dev_allow_any_lobby_size", dev_allow_any_lobby_size)
+	var binds := pack_live_input_binds()
+	for action in binds.keys():
+		config.set_value("input", str(action), binds[action])
 	config.save(SETTINGS_PATH)
 	settings_applied.emit()
 

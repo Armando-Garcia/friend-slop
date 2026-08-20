@@ -1,7 +1,7 @@
 class_name PlayerDash
 extends RefCounted
 
-## Foot dash on the sprint action for PlayableCharacter (Headmaster + Apprentice).
+## Foot dash for PlayableCharacter (Headmaster + Apprentice).
 ## Tunables live on PlayableCharacter; defaults below are fallbacks for tests.
 
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
@@ -70,7 +70,7 @@ static func _tick_cooldown(player: CharacterBody3D, delta: float) -> void:
 static func _try_dash(player: CharacterBody3D, head: Node3D, config: Dictionary) -> void:
 	if float(player.get_meta(META_COOLDOWN, 0.0)) > 0.0:
 		return
-	if not Input.is_action_just_pressed("sprint"):
+	if not Input.is_action_just_pressed("dash"):
 		return
 	var direction := SlideSurfaceScript.camera_relative_move_direction(head)
 	if direction == Vector3.ZERO:
