@@ -56,42 +56,18 @@ const SOURCE_ID_RELIC := "relic"
 const DEFAULT_LIGHT_DURATION := 20.0
 const DEFAULT_HASTE_DURATION := 4.0
 const DEFAULT_HASTE_MULTIPLIER := 1.65
-const DEFAULT_FIREBALL_CAST_DURATION := 0.0
 const DEFAULT_WARD_DURATION := 1.0
 const DEFAULT_LIGHT_BALL_DURATION := 30.0
 const DEFAULT_TARGET_DURATION := 10.0
 const CLONE_OFFSET_DIST := 0.55
 
 
-static func get_effect_duration_sec(spell: SpellDefinition, params: Dictionary = {}) -> float:
+static func get_effect_duration_sec(spell: SpellDefinition, _params: Dictionary = {}) -> float:
 	if spell == null:
 		return 0.0
-	match spell.effect_id:
-		EFFECT_LIGHT:
-			return float(params.get(KEY_DURATION, DEFAULT_LIGHT_DURATION))
-		EFFECT_HASTE:
-			return float(params.get(KEY_DURATION, DEFAULT_HASTE_DURATION))
-		EFFECT_FIREBALL:
-			return DEFAULT_FIREBALL_CAST_DURATION
-		EFFECT_FLARE:
-			# Beacon fades itself — no right-side active-timer chrome.
-			return 0.0
-		EFFECT_WARD:
-			return float(params.get(KEY_DURATION, DEFAULT_WARD_DURATION))
-		EFFECT_LIGHT_BALL:
-			# Orb fades itself — no right-side active-timer chrome.
-			return 0.0
-		EFFECT_FLASHLIGHT_TOGGLE:
-			return 0.0
-		EFFECT_TARGET:
-			# Highlight fades itself — no right-side active-timer chrome.
-			return 0.0
-		EFFECT_PULL, EFFECT_FOLLOW, EFFECT_STOP, EFFECT_DISPELL, EFFECT_CLONE:
-			return 0.0
-		EFFECT_FAKE_WALL:
-			return 0.0
-		_:
-			return 0.0
+	## Durations live on the world effect (ward fade, haste aura, flare, trails).
+	## HUD no longer shows a top-right timeout strip.
+	return 0.0
 
 
 static func build_params(spell: SpellDefinition, player: CharacterBody3D) -> Dictionary:

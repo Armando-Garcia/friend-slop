@@ -23,8 +23,6 @@ var _selected_spell_id: String = ""
 var _active_spell: Resource
 var _from_tome := false
 var _coaching_countdown := 0.0
-var _active_strip: VBoxContainer
-var _active_rows: Dictionary = {}
 var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
 var _hotbar_row: HBoxContainer
@@ -32,6 +30,7 @@ var _hotbar_labels: Array[Label] = []
 var _spell_hotbar: Node
 var _spell_hotbar_cells: Array[PanelContainer] = []
 var _spell_hotbar_labels: Array[Label] = []
+var _spell_hotbar_fills: Array[ColorRect] = []
 var _mana_root: Control
 var _mana_fill: ColorRect
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
@@ -62,7 +61,6 @@ func _ready() -> void:
 	mic_level_bar.max_value = 1.0
 	mic_level_bar.value = 0.0
 	_setup_spellbook_panel()
-	_setup_active_strip()
 	_setup_bottom_hud()
 	_setup_mana_bar()
 	_update_aim_cursor_visibility()
@@ -414,18 +412,32 @@ func _setup_bottom_hud() -> void:
 
 	_spell_hotbar_cells.clear()
 	_spell_hotbar_labels.clear()
+	_spell_hotbar_fills.clear()
 	for i in SpellHotbarScript.SLOT_COUNT:
 		var cell := PanelContainer.new()
 		cell.custom_minimum_size = SPELL_SLOT_SIZE
+		var stack := Control.new()
+		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var fill := ColorRect.new()
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fill.color = Color(0.12, 0.08, 0.22, 0.72)
+		fill.visible = false
+		fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+		stack.add_child(fill)
 		var label := Label.new()
+		label.set_anchors_preset(Control.PRESET_FULL_RECT)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		label.add_theme_font_size_override("font_size", 14)
 		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
-		cell.add_child(label)
+		stack.add_child(label)
+		cell.add_child(stack)
 		spell_row.add_child(cell)
 		_spell_hotbar_cells.append(cell)
 		_spell_hotbar_labels.append(label)
+		_spell_hotbar_fills.append(fill)
 
 	_hotbar_labels.clear()
 	for i in PlayerInventoryScript.HOTBAR_COUNT:
@@ -472,16 +484,32 @@ func _refresh_spell_hotbar() -> void:
 			spell_name = str(_spell_hotbar.call("display_name", spell_id))
 		elif not spell_id.is_empty():
 			spell_name = spell_id.capitalize()
+		var remaining := 0.0
+		var total_cd := 0.0
+		if not spell_id.is_empty() and _loadout != null:
+			if _loadout.has_method("remaining_cooldown_sec"):
+				remaining = float(_loadout.remaining_cooldown_sec(spell_id))
+			if remaining > 0.0 and _loadout.has_method("get_spell_definition"):
+				var def: Resource = _loadout.get_spell_definition(spell_id)
+				if def != null:
+					total_cd = float(def.get("cooldown_sec"))
 		if spell_name.is_empty():
 			_spell_hotbar_labels[i].text = "%s\n—" % key
+		elif remaining > 0.0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
 		else:
 			_spell_hotbar_labels[i].text = "%s\n%s" % [key, spell_name]
-		_apply_spell_slot_style(_spell_hotbar_cells[i], pending, i == selected)
+		_apply_spell_slot_style(_spell_hotbar_cells[i], pending, i == selected, remaining > 0.0)
+		_apply_spell_slot_cooldown_fill(i, remaining, total_cd)
+		var label_color := Color(0.55, 0.52, 0.62, 1) if remaining > 0.0 else Color(0.94, 0.9, 1, 1)
+		_spell_hotbar_labels[i].add_theme_color_override("font_color", label_color)
 
 
-func _apply_spell_slot_style(cell: PanelContainer, pending: bool, selected: bool) -> void:
+func _apply_spell_slot_style(
+	cell: PanelContainer, pending: bool, selected: bool, on_cooldown: bool
+) -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.10, 0.06, 0.16, 0.88)
+	style.bg_color = Color(0.07, 0.05, 0.10, 0.92) if on_cooldown else Color(0.10, 0.06, 0.16, 0.88)
 	style.set_corner_radius_all(8)
 	if pending:
 		style.set_border_width_all(2)
@@ -491,8 +519,27 @@ func _apply_spell_slot_style(cell: PanelContainer, pending: bool, selected: bool
 		style.border_color = Color(0.78, 0.55, 1.0, 0.95)
 	else:
 		style.set_border_width_all(1)
-		style.border_color = Color(0.72, 0.55, 0.95, 0.45)
+		style.border_color = (
+			Color(0.42, 0.32, 0.55, 0.55) if on_cooldown else Color(0.72, 0.55, 0.95, 0.45)
+		)
 	cell.add_theme_stylebox_override("panel", style)
+
+
+func _apply_spell_slot_cooldown_fill(index: int, remaining: float, total_sec: float) -> void:
+	if index < 0 or index >= _spell_hotbar_fills.size():
+		return
+	var fill := _spell_hotbar_fills[index]
+	if remaining <= 0.0 or total_sec <= 0.0:
+		fill.visible = false
+		return
+	fill.visible = true
+	var fraction := clampf(remaining / total_sec, 0.0, 1.0)
+	fill.anchor_top = 1.0 - fraction
+	fill.anchor_bottom = 1.0
+	fill.offset_top = 0.0
+	fill.offset_bottom = 0.0
+	fill.offset_left = 0.0
+	fill.offset_right = 0.0
 
 
 func _refresh_hotbar() -> void:
@@ -703,18 +750,6 @@ func show_cast_success(spell: Resource, validation: RefCounted = null) -> void:
 	mic_level_bar.visible = false
 
 
-func show_spell_active(spell_id: String, duration_sec: float) -> void:
-	if duration_sec <= 0.0:
-		return
-	_ensure_active_row(spell_id)
-	var row: Dictionary = _active_rows[spell_id]
-	var now := Time.get_ticks_msec() / 1000.0
-	row["total_sec"] = duration_sec
-	row["active_until"] = now + duration_sec
-	_refresh_active_row(spell_id)
-	_active_strip.visible = true
-
-
 func update_tome_coaching_countdown(seconds_left: float) -> void:
 	if not _from_tome or not casting_panel.visible:
 		return
@@ -750,7 +785,7 @@ func _on_spell_learned(spell_id: String) -> void:
 
 func _process(_delta: float) -> void:
 	_update_aim_cursor_visibility()
-	_update_active_strip()
+	_refresh_spell_hotbar()
 
 
 func _update_aim_cursor_visibility() -> void:
@@ -796,84 +831,3 @@ func _sync_objective_lines_from_scene() -> void:
 		_objective_lines = objective.get_status_lines()
 	else:
 		_objective_lines = PackedStringArray()
-
-
-func _setup_active_strip() -> void:
-	_active_strip = VBoxContainer.new()
-	_active_strip.name = "ActiveEffectStrip"
-	_active_strip.add_theme_constant_override("separation", 4)
-	add_child(_active_strip)
-	_active_strip.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_active_strip.offset_left = -220.0
-	_active_strip.offset_top = 12.0
-	_active_strip.offset_right = -16.0
-	_active_strip.offset_bottom = 12.0
-	_active_strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_active_strip.visible = false
-
-
-func _ensure_active_row(spell_id: String) -> void:
-	if _active_rows.has(spell_id):
-		return
-	var container := HBoxContainer.new()
-	container.add_theme_constant_override("separation", 8)
-	var label := Label.new()
-	label.custom_minimum_size = Vector2(96, 0)
-	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1))
-	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(120, 14)
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.show_percentage = false
-	container.add_child(label)
-	container.add_child(bar)
-	_active_strip.add_child(container)
-	_active_rows[spell_id] = {
-		"container": container,
-		"label": label,
-		"bar": bar,
-		"total_sec": 1.0,
-	}
-
-
-func _refresh_active_row(spell_id: String) -> void:
-	if not _active_rows.has(spell_id):
-		return
-	var row: Dictionary = _active_rows[spell_id]
-	var display_name: String = spell_id
-	if _loadout != null:
-		var spell: Resource = _loadout.get_spell_definition(spell_id)
-		var def := spell as SpellDefinitionScript
-		if def != null:
-			display_name = def.display_name
-	var remaining: float = maxf(
-		0.0,
-		float(row.get("active_until", 0.0)) - Time.get_ticks_msec() / 1000.0
-	)
-	var total: float = maxf(float(row.get("total_sec", 1.0)), 0.001)
-	row["label"].text = "%s %.1fs" % [display_name, remaining]
-	row["bar"].value = clampf(remaining / total, 0.0, 1.0)
-
-
-func _remove_active_row(spell_id: String) -> void:
-	if not _active_rows.has(spell_id):
-		return
-	var row: Dictionary = _active_rows[spell_id]
-	row["container"].queue_free()
-	_active_rows.erase(spell_id)
-	_active_strip.visible = not _active_rows.is_empty()
-
-
-func _update_active_strip() -> void:
-	for spell_id in _active_rows.keys():
-		var row: Dictionary = _active_rows[spell_id]
-		var remaining: float = maxf(
-			0.0,
-			float(row.get("active_until", 0.0)) - Time.get_ticks_msec() / 1000.0
-		)
-		if remaining <= 0.0:
-			_remove_active_row(spell_id)
-			continue
-		_refresh_active_row(spell_id)
-	_active_strip.visible = not _active_rows.is_empty()

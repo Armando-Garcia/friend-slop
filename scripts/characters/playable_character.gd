@@ -27,7 +27,6 @@ const PlayableCharacterPreviewScript := preload(
 	"res://scripts/characters/playable_character_preview.gd"
 )
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
-const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 
 @export var player_index: int = 0
@@ -79,6 +78,7 @@ var _armed_spell: SpellDefinition
 var _mana: float = SpellManaScript.MANA_MAX
 var _speed_boost_multiplier: float = 1.0
 var _speed_boost_timer: float = 0.0
+var _haste_aura: OmniLight3D
 var _wand: PlayerWand
 var _wand_raised := false
 var _spell_fire_charging := false
@@ -268,6 +268,26 @@ func _confirm_fake_wall_placement(spell: SpellDefinition, params: Dictionary) ->
 func apply_speed_boost(duration: float, multiplier: float) -> void:
 	_speed_boost_multiplier = multiplier
 	_speed_boost_timer = duration
+	_sync_haste_visual()
+
+
+func _sync_haste_visual() -> void:
+	var boosting := _speed_boost_timer > 0.0 and _speed_boost_multiplier > 1.01
+	if not boosting:
+		if _haste_aura != null:
+			_haste_aura.visible = false
+		return
+	if _haste_aura == null:
+		_haste_aura = OmniLight3D.new()
+		_haste_aura.name = "HasteAura"
+		_haste_aura.light_color = Color(1.0, 0.82, 0.32)
+		_haste_aura.omni_range = 2.6
+		_haste_aura.shadow_enabled = false
+		_haste_aura.light_volumetric_fog_energy = 0.0
+		_haste_aura.position = Vector3(0.0, 1.15, 0.0)
+		add_child(_haste_aura)
+	_haste_aura.visible = true
+	_haste_aura.light_energy = 0.22 + 0.55 * clampf(_speed_boost_timer / 0.5, 0.0, 1.0)
 
 
 func set_flashlight_enabled(active: bool) -> void:
@@ -654,14 +674,10 @@ func _fire_armed_spell() -> void:
 		_spell_fire_releasing = false
 		_cancel_slot_cast()
 		return
-	var params := SpellEffectSyncScript.build_params(spell, self)
-	var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
 	if _effect_applier.has_method("cast_spell"):
 		_effect_applier.cast_spell(self, spell)
-	if spell.id == "clone" and _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
+	if _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
 		_spell_loadout.start_cooldown(spell.id)
-	if effect_duration > 0.0 and _game_hud != null and _game_hud.has_method("show_spell_active"):
-		_game_hud.call("show_spell_active", spell.id, effect_duration)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
 	_spend_mana(cost)
@@ -913,13 +929,16 @@ func _sync_body_yaw_to_head() -> void:
 
 func _physics_process(delta: float) -> void:
 	_sync_body_yaw_to_head()
-	if not _uses_local_view():
-		_refresh_broom_visual()
-		return
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
+		_sync_haste_visual()
+	elif _haste_aura != null and _haste_aura.visible:
+		_sync_haste_visual()
+	if not _uses_local_view():
+		_refresh_broom_visual()
+		return
 	if is_stunned():
 		var stun := get_node("Stun")
 		stun.call("tick_physics", self, delta, gravity)

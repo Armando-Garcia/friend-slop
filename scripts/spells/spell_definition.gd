@@ -219,7 +219,7 @@ func get_codex_effect_detail() -> String:
 			text = (
 				"Say \"ward\" to cast a translucent blue 1/3-sphere shield toward "
 				+ "your crosshair. It lasts 1 second and blocks one fireball. "
-				+ "1.5 second cooldown."
+				+ "0.8 second cooldown."
 			)
 		"flashlight_toggle":
 			text = (
