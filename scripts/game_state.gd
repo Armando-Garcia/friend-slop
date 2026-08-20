@@ -9,7 +9,7 @@ enum PlayerForm {
 
 enum PlayerRole {
 	APPRENTICE,
-	WARDEN,
+	HEADMASTER,
 }
 
 const SNAIL_COLORS: Array[Color] = [
@@ -68,6 +68,13 @@ func get_role_for_peer(peer_id: int) -> PlayerRole:
 	if peer_roles.has(peer_id):
 		return int(peer_roles[peer_id]) as PlayerRole
 	return PlayerRole.APPRENTICE
+
+
+## Apprentice team for spawn clustering; headmaster is not on a team (-1).
+func get_team_for_peer(peer_id: int) -> int:
+	if get_role_for_peer(peer_id) == PlayerRole.HEADMASTER:
+		return -1
+	return get_character_config_for_peer(peer_id).team_id
 
 
 func get_character_config_for_peer(peer_id: int) -> PlayerCharacterConfig:

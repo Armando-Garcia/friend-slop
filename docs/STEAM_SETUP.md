@@ -6,7 +6,7 @@ FriendSlop uses **GodotSteam** with **`SteamMultiplayerPeer`** for all online pl
 
 1. Install **Steam** and sign in.
 2. Run **`make setup-steam`** (downloads the pinned GDExtension; ~27 MB first run).
-3. Use the pinned **GodotSteam editor** on Windows (optional) or stock Godot + GDExtension.
+3. Use the pinned **GodotSteam editor** in `tools/versions.env`, **or** stock Godot 4.6.3 + `make setup-steam` — not both loading Steam at once. If you use the GodotSteam editor, run `make restore-voice` once so the GDExtension manifest is disabled (the editor already includes Steam).
 4. Keep `steam_appid.txt` next to the game executable (repo root for editor dev uses App ID **480**).
 5. Run the game from the editor or export — host/join from the menu lobby.
 
@@ -81,7 +81,7 @@ make release-ci   # ubuntu:24.04 container — Godot + GodotSteam + Linux export
 | “GodotSteam not installed” in tests | Not required for `make test` — tests run offline. Use `make verify-steam` before export. |
 | “GodotSteam not loaded” in game | Re-run `make setup-steam`, restart Godot |
 | “Steam is not running” | Launch Steam client |
-| Host + client both connect as host | Ensure client uses `connect_to_lobby`, not host path on join |
+| GodotSteam "already registered" spam in Output | You are on the **GodotSteam editor** with `addons/godotsteam/godotsteam.gdextension` also enabled. Run `make restore-voice` (syncs extensions) and restart Godot — the GDExtension is disabled automatically for the GodotSteam editor. Use stock Godot + `make setup-steam` if you prefer the GDExtension instead. |
 | CI fails on GodotSteam download | Check Codeberg availability; cache key uses `tools/versions.env` |
 
 See also `docs/adr/002-steam-p2p-transport.md`.

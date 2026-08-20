@@ -8,7 +8,8 @@ var index: int = 0
 var base_position: Vector3 = Vector3.ZERO
 var velocity: Vector3 = Vector3.ZERO
 var radius: float = 1.0
-var puff_seed: int = 0
+## Index into CloudSystem's fixed mesh pool.
+var mesh_index: int = 0
 var arc_amplitude: float = 0.0
 var arc_wavelength: float = 1.0
 var arc_phase: float = 0.0

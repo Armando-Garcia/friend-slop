@@ -1,2 +1,0 @@
-godot-steam-voice @ d967be6
-synced from https://github.com/iamemilio/godot-steam-voice.git

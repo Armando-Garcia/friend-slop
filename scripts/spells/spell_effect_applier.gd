@@ -25,8 +25,33 @@ func cast_spell(player: CharacterBody3D, spell: SpellDefinition) -> void:
 	if params.is_empty():
 		push_warning("SpellEffectApplier: cannot cast unsupported spell '%s'" % spell.id)
 		return
+	_dispatch_cast(player, spell, params)
+
+
+func cast_spell_with_params(
+	player: CharacterBody3D,
+	spell: SpellDefinition,
+	params: Dictionary
+) -> void:
+	if spell == null or player == null or params.is_empty():
+		return
+	if player is PlayableCharacter and (player as PlayableCharacter).is_carrying_relic():
+		return
+	var resolved := params.duplicate(true)
+	if str(resolved.get("effect_id", "")) != spell.effect_id:
+		resolved["effect_id"] = spell.effect_id
+	_dispatch_cast(player, spell, resolved)
+
+
+func _dispatch_cast(
+	player: CharacterBody3D,
+	spell: SpellDefinition,
+	params: Dictionary
+) -> void:
 	if not GameState.is_multiplayer:
 		SyncScript.apply(player, params)
+		return
+	if not MatchStateManager.allows_gameplay_actions():
 		return
 	var wire_params := SyncScript.pack_for_network(params)
 	if wire_params.is_empty():

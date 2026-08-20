@@ -1,87 +1,148 @@
 class_name PlayableCharacter
-extends CharacterBody3D
+extends Character
 
-## Base playable character: movement, camera, spells, and optional wand/trail in derived scenes.
-
-## Player body/head render layer — wand lights use a world-only mask and skip this layer.
-const PLAYER_SELF_VISUAL_LAYER := WorldVisualLayers.PLAYER_SELF
-
-const WALK_SPEED := 3.0
-const SPRINT_SPEED := 5.0
+const DEFAULT_WALK_SPEED := 5.0
+const DEFAULT_MOVE_FRICTION := 50.0
+const WALK_SPEED := DEFAULT_WALK_SPEED
+const SPRINT_SPEED := DEFAULT_WALK_SPEED
 const JUMP_VELOCITY := 2.5
 const MOUSE_SENSITIVITY := 0.002
-const THIRD_PERSON_DISTANCE := 3.5
-const THIRD_PERSON_HEIGHT := 2.0
-const THIRD_PERSON_LOOK_AHEAD := 4.0
-const THIRD_PERSON_WALL_PADDING := 0.35
 const INTERACT_RANGE_SQ := 9.0
 const PLAYER_MIN_SEPARATION := 0.55
-const BODY_RADIUS := 0.20
-const HEAD_RADIUS := 0.16
-const BODY_CENTER_Y := BODY_RADIUS
-const HEAD_CENTER_Y := BODY_RADIUS * 2.0 + HEAD_RADIUS
-const COLLISION_WALL_PADDING := 0.08
-const BODY_COLLISION_RADIUS := BODY_RADIUS + COLLISION_WALL_PADDING
+const AIM_RAY_LENGTH := 200.0
 
-const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
-const WorldVisualLayers := preload("res://scripts/world_visual_layers.gd")
+const GameWorldScript := preload("res://scripts/game_world.gd")
+const NetworkManagerScript := preload("res://scripts/network/network_manager.gd")
+const TargetHighlightScript := preload("res://scripts/spells/target_highlight.gd")
+const TargetedObjectControlScript := preload("res://scripts/spells/targeted_object_control.gd")
+const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
+const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
+const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
+const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
+const PlayableCharacterPreviewScript := preload(
+	"res://scripts/characters/playable_character_preview.gd"
+)
+const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
+const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
+const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
+const PlayerEmberBurnScript := preload("res://scripts/characters/player_ember_burn.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+@export var is_alive: bool = true
 
-var _third_person: bool = false
-var _character_color: Color = Color.WHITE
+@export_group("Movement")
+## Ground foot speed (WASD on floor). Scaled by spell haste/slow effects.
+@export_range(1.0, 20.0, 0.1, "suffix:m/s") var move_speed: float = DEFAULT_WALK_SPEED
+## Deceleration when grounded with no WASD (m/s²). Not scaled by haste/slow.
+@export_range(0.1, 200.0, 0.5) var move_friction: float = DEFAULT_MOVE_FRICTION
+
+@export_group("Dash")
+## Tuning reference only — not applied by code. Match dash_speed × dash_duration for ~this far.
+@export_range(0.5, 24.0, 0.1, "suffix:m") var dash_distance: float = 3.0
+## Seconds walk input is locked after a dash; velocity stays at dash_speed for this window.
+@export_range(0.05, 1.0, 0.01, "suffix:s") var dash_duration: float = 0.15
+## Seconds before Shift can dash again (still requires a held move direction).
+@export_range(0.5, 30.0, 0.1, "suffix:s") var dash_cooldown_sec: float = 3.0
+## Horizontal speed set instantly on dash (Shift + direction). Works on ground and in air.
+@export_range(1.0, 40.0, 0.5, "suffix:m/s") var dash_speed: float = 20.0
+
+@export_group("Crouch")
+## Max foot speed while holding C on the ground. Also caps steering during a crouch slide.
+@export_range(0.5, 10.0, 0.1, "suffix:m/s") var crouch_speed: float = 2.5
+## Start a crouch slide when horizontal speed exceeds this (m/s). Not scaled by haste.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_threshold: float = 0.5
+## End the slide below this speed, then recovery eases into crouch walk.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_exit_speed: float = 1.0
+## After a dash, crouch within dash duration + this grace still starts a slide above exit speed.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var crouch_slide_dash_grace_sec: float = 0.6
+## After slide ends, blend back to normal crouch movement for this long (or until slow enough).
+@export_range(0.0, 1.5, 0.01, "suffix:s") var crouch_slide_recovery_sec: float = 0.3
+## Slide friction at high speed (0–100 % of move_friction). Lower = longer dash-slide carry.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction_start: float = 12.0
+## Slide friction near exit speed (0–100). Higher = snappier finish before recovery.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction: float = 35.0
+
+var broom_active := false:
+	set(value):
+		broom_active = value
+		_refresh_broom_visual()
+
 var _spell_loadout: Node
 var _casting_session: SpellCastingSession
 var _game_hud: CanvasLayer
 var _effect_applier: Node
+var _armed_spell: SpellDefinition
+var _mana: float = SpellManaScript.MANA_MAX
 var _speed_boost_multiplier: float = 1.0
 var _speed_boost_timer: float = 0.0
 var _wand: PlayerWand
-var _casting_lmb_held := false
+var _wand_raised := false
+var _spell_fire_charging := false
+var _spell_fire_releasing := false
+var _spell_fire_cancel_token := 0
+var _fake_wall_placement: Node
+var _knockback_vel := Vector3.ZERO
+var _knockback_timer := 0.0
+var _broom_active_visual := false
 
-@onready var head: Node3D = %Head
 @onready var camera_pivot: Node3D = %CameraPivot
-@onready var first_person_camera: Camera3D = %FirstPersonCamera
-@onready var third_person_rig: Node3D = %ThirdPersonRig
-@onready var third_person_camera: Camera3D = %ThirdPersonCamera
 @onready var spell_loadout: Node = %CharacterSpellLoadout
 @onready var casting_session: SpellCastingSession = %SpellCastingSession
 @onready var effect_applier: Node = %SpellEffectApplier
-@onready var _body_mesh: MeshInstance3D = %Body
-@onready var _head_mesh: MeshInstance3D = %HeadMesh
-@onready var _body_collision: CollisionShape3D = %CollisionShape3D
+@onready var _view_camera: Camera3D = %FirstPersonCamera
 
 
 func _ready() -> void:
+	if PlayableCharacterPreviewScript.should_use_preview_mode(self):
+		PlayableCharacterPreviewScript.enter_editor_preview_mode(self)
+		return
+
 	add_to_group("player")
+	collision_layer = 1
 	floor_block_on_wall = false
 	floor_snap_length = 0.15
 	safe_margin = 0.04
-	_wand = get_node_or_null("Head/CameraPivot/FirstPersonCamera/Wand") as PlayerWand
-	_configure_collision()
+	_wand = get_node_or_null("Head/CameraPivot/Wand") as PlayerWand
+	if _wand == null:
+		_wand = get_node_or_null("Head/CameraPivot/FirstPersonCamera/Wand") as PlayerWand
+	if _wand != null:
+		_wand.cache_idle_transform()
 	_character_color = GameState.get_snail_color(player_index)
 	_apply_character_color(_character_color)
-	_configure_view_camera()
+	_setup_view_camera()
 
 
-func _configure_collision() -> void:
-	var body_capsule := CapsuleShape3D.new()
-	body_capsule.radius = BODY_COLLISION_RADIUS
-	var bottom_y := BODY_CENTER_Y - BODY_RADIUS
-	var top_y := HEAD_CENTER_Y + HEAD_RADIUS
-	var total_height := top_y - bottom_y
-	body_capsule.height = maxf(0.08, total_height - body_capsule.radius * 2.0)
-	_body_collision.shape = body_capsule
-	_body_collision.position.y = bottom_y + body_capsule.radius + body_capsule.height * 0.5
+func _exit_tree() -> void:
+	NetworkManagerScript.disable_player_sync(self)
 
 
-func _configure_view_camera() -> void:
-	if _is_view_owner():
-		_third_person = SettingsManager.start_third_person
+func _setup_view_camera() -> void:
+	var local_view := _uses_local_view()
+	if local_view:
+		_view_camera.current = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	_sync_view_camera()
+	else:
+		_view_camera.queue_free()
+	TomeDebug.log(
+		"PlayableCharacter",
+		"'%s' view=%s authority=%d local_peer=%d"
+		% [
+			name,
+			"local" if local_view else "remote",
+			get_multiplayer_authority(),
+			multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0,
+		]
+	)
+
+
+func _uses_local_view() -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	return is_multiplayer_authority()
 
 
 func initialize_player(index: int) -> void:
@@ -114,6 +175,8 @@ func configure_interaction(
 			_casting_session.cast_succeeded.connect(_on_wand_cast_succeeded)
 		if not _casting_session.cast_failed.is_connected(_on_wand_cast_failed):
 			_casting_session.cast_failed.connect(_on_wand_cast_failed)
+		if not _casting_session.spell_selected.is_connected(_on_wand_spell_selected):
+			_casting_session.spell_selected.connect(_on_wand_spell_selected)
 
 
 func get_spell_loadout() -> Node:
@@ -128,9 +191,86 @@ func get_effect_applier() -> Node:
 	return effect_applier
 
 
+func _begin_fake_wall_placement(spell: SpellDefinition) -> bool:
+	if spell == null or _spell_loadout == null:
+		return false
+	if _spell_loadout.has_method("is_on_cooldown") and _spell_loadout.is_on_cooldown(spell.id):
+		return false
+	if _fake_wall_placement == null:
+		_fake_wall_placement = FakeWallPlacementScript.new()
+		_fake_wall_placement.name = "FakeWallPlacement"
+		add_child(_fake_wall_placement)
+		_fake_wall_placement.configure(self)
+	return _fake_wall_placement.begin(spell)
+
+
+func _is_fake_wall_placing() -> bool:
+	return _fake_wall_placement != null and _fake_wall_placement.is_active()
+
+
+func _monster_book() -> Node:
+	return get_node_or_null("MonsterBook")
+
+
+func _is_monster_book_busy() -> bool:
+	var book := _monster_book()
+	return book != null and book.has_method("is_busy") and bool(book.call("is_busy"))
+
+
+func _is_spellbook_open() -> bool:
+	return (
+		_game_hud != null
+		and _game_hud.has_method("is_spellbook_open")
+		and bool(_game_hud.call("is_spellbook_open"))
+	)
+
+
+func _is_player_menu_open() -> bool:
+	return (
+		_game_hud != null
+		and _game_hud.has_method("is_player_menu_open")
+		and bool(_game_hud.call("is_player_menu_open"))
+	)
+
+
+func _wand_controls_blocked() -> bool:
+	return (
+		is_stunned()
+		or _is_spellbook_open()
+		or _is_player_menu_open()
+		or _is_monster_book_busy()
+		or get_tree().paused
+	)
+
+
+func is_stunned() -> bool:
+	var stun := get_node_or_null("Stun")
+	return stun != null and stun.has_method("is_stunned") and bool(stun.call("is_stunned"))
+
+
+func _confirm_fake_wall_placement(spell: SpellDefinition, params: Dictionary) -> void:
+	if spell == null or params.is_empty():
+		return
+	var applier: Node = _effect_applier
+	if applier == null:
+		applier = get_effect_applier()
+	if applier == null:
+		return
+	if _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
+		_spell_loadout.start_cooldown(spell.id)
+	if applier.has_method("cast_spell_with_params"):
+		applier.cast_spell_with_params(self, spell, params)
+	elif applier.has_method("cast_spell"):
+		applier.cast_spell(self, spell)
+
+
 func apply_speed_boost(duration: float, multiplier: float) -> void:
 	_speed_boost_multiplier = multiplier
 	_speed_boost_timer = duration
+
+
+func apply_ember_trail_burn(dps: float, slow_multiplier: float, refresh_sec: float) -> void:
+	PlayerEmberBurnScript.apply(self, dps, slow_multiplier, refresh_sec)
 
 
 func set_flashlight_enabled(active: bool) -> void:
@@ -138,20 +278,19 @@ func set_flashlight_enabled(active: bool) -> void:
 		_wand.set_flashlight_enabled(active)
 
 
+func is_flashlight_enabled() -> bool:
+	if _wand == null:
+		return false
+	return _wand.is_flashlight_active()
+
+
+func toggle_flashlight() -> void:
+	set_flashlight_enabled(not is_flashlight_enabled())
+
+
 func set_flame_glow_enabled(active: bool) -> void:
 	if _wand != null:
 		_wand.set_flame_glow_enabled(active)
-
-
-func launch_fireball() -> void:
-	launch_fireball_from_params(_aim_fireball_origin(), _aim_fireball_direction())
-
-
-func launch_fireball_from_params(origin: Vector3, direction: Vector3) -> void:
-	var world := get_tree().current_scene
-	if world == null:
-		world = get_parent()
-	FireballProjectileScript.spawn(world, origin, direction.normalized())
 
 
 func get_wand_cast_origin() -> Vector3:
@@ -161,13 +300,21 @@ func get_wand_cast_origin() -> Vector3:
 
 
 func get_wand_cast_direction() -> Vector3:
-	if _wand != null:
-		return _wand.get_cast_direction()
+	return _aim_direction_from_origin(get_wand_cast_origin())
+
+
+func get_view_camera() -> Camera3D:
+	return _view_camera
+
+
+func get_view_direction() -> Vector3:
 	return _camera_aim_direction()
 
 
-func get_snail_color() -> Color:
-	return _character_color
+func get_view_origin() -> Vector3:
+	if _view_camera != null:
+		return _view_camera.global_position
+	return head.global_position
 
 
 func _camera_aim_direction() -> Vector3:
@@ -178,32 +325,49 @@ func _head_aim_origin() -> Vector3:
 	return head.global_position + _camera_aim_direction() * 0.6 + Vector3(0.0, 0.1, 0.0)
 
 
-func _aim_fireball_direction() -> Vector3:
-	return get_wand_cast_direction()
+func _aim_direction_from_origin(origin: Vector3) -> Vector3:
+	var to_aim := _crosshair_world_point() - origin
+	if to_aim.length_squared() < 0.0001:
+		return _camera_aim_direction()
+	return to_aim.normalized()
 
 
-func _aim_fireball_origin() -> Vector3:
-	return get_wand_cast_origin()
+func _crosshair_world_point() -> Vector3:
+	var look := _camera_aim_direction()
+	var cam_origin := get_view_origin()
+	var far_point := cam_origin + look * AIM_RAY_LENGTH
+	var world_3d := get_world_3d()
+	if world_3d == null or world_3d.direct_space_state == null:
+		return far_point
+	var ray := PhysicsRayQueryParameters3D.create(cam_origin, far_point)
+	ray.collide_with_areas = false
+	ray.exclude = [get_rid()]
+	var hit := world_3d.direct_space_state.intersect_ray(ray)
+	if hit.is_empty():
+		return far_point
+	return hit.position
+
+
+func _input(event: InputEvent) -> void:
+	if not _uses_local_view():
+		return
+	if event.is_action_pressed("ui_cancel") and _wand_raised and not _wand_controls_blocked():
+		_lower_wand(true)
+		get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	if not _uses_local_view():
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		head.rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
-		if not _third_person:
-			camera_pivot.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
-			camera_pivot.rotation.x = clampf(
-				camera_pivot.rotation.x,
-				deg_to_rad(-70.0),
-				deg_to_rad(70.0)
-			)
-
-	if event.is_action_pressed("toggle_camera"):
-		_third_person = not _third_person
-		if _third_person:
-			camera_pivot.rotation.x = 0.0
-		_sync_view_camera()
+		camera_pivot.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
+		camera_pivot.rotation.x = clampf(
+			camera_pivot.rotation.x,
+			deg_to_rad(-70.0),
+			deg_to_rad(70.0)
+		)
+		_sync_body_yaw_to_head()
 
 	if event.is_action_pressed("spellbook"):
 		if _casting_session != null \
@@ -215,29 +379,50 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact"):
 		_try_interact()
 
-	if event is InputEventMouseButton \
-			and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_on_wand_button_pressed()
-		else:
-			_on_wand_button_released()
+	if event.is_action_pressed("wand_raise"):
+		if _try_toggle_wand_raise():
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("spell_fire"):
+		if _try_begin_spell_fire():
+			get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_released("spell_fire"):
+		if _try_release_spell_fire():
+			get_viewport().set_input_as_handled()
 
 
 func _on_cast_session_state_changed(state: String, _spell: SpellDefinition) -> void:
 	if _wand == null:
 		return
-	var armed := (
-		state == SpellCastingSession.STATE_ARMING
-		or state == SpellCastingSession.STATE_LISTENING
-		or state == SpellCastingSession.STATE_VALIDATING
+	var tip_armed := (
+		_wand_raised
+		and (
+			state == SpellCastingSession.STATE_ARMING
+			or state == SpellCastingSession.STATE_LISTENING
+			or state == SpellCastingSession.STATE_VALIDATING
+		)
 	)
-	_wand.set_armed(armed)
+	_wand.set_armed(tip_armed)
 
 
 func _on_cast_listen_level_changed(level: float) -> void:
 	if _wand != null:
 		_wand.set_listen_level(level)
 
+
+func _on_wand_spell_selected(spell: SpellDefinition) -> void:
+	_armed_spell = spell
+	_refill_mana()
+	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
+		_game_hud.call("reveal_cast_spell", spell)
+	if _wand != null and _wand.has_method("play_spell_recognition"):
+		await _wand.play_spell_recognition(spell)
+	_lower_wand(false)
+	if _wand != null:
+		_wand.play_cast_success(spell, true)
 
 func _on_wand_cast_succeeded(
 	spell: SpellDefinition,
@@ -258,51 +443,9 @@ func _on_wand_cast_failed(
 		return
 	if _casting_session.is_tome_teaching():
 		return
-	_wand.play_fizzle()
-
-
-func _sync_view_camera() -> void:
-	var mine := _is_view_owner()
-	if not mine:
-		first_person_camera.current = false
-		third_person_camera.current = false
+	if _casting_session.is_wand_voice_select() and _wand_raised:
 		return
-	first_person_camera.current = not _third_person
-	third_person_camera.current = _third_person
-	if _third_person:
-		_update_third_person_camera()
-
-
-func refresh_camera_after_spawn() -> void:
-	_sync_view_camera()
-
-
-func _is_view_owner() -> bool:
-	if not multiplayer.has_multiplayer_peer():
-		return true
-	return is_multiplayer_authority()
-
-
-func _update_third_person_camera() -> void:
-	var local_offset := Vector3(0.0, THIRD_PERSON_HEIGHT, THIRD_PERSON_DISTANCE)
-	var origin := third_person_rig.global_position
-	var desired := third_person_rig.to_global(local_offset)
-
-	var space_state := get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(origin, desired)
-	query.exclude = [get_rid()]
-	var hit := space_state.intersect_ray(query)
-
-	var resolved := desired
-	if not hit.is_empty():
-		var direction := (desired - origin).normalized()
-		resolved = hit.position - direction * THIRD_PERSON_WALL_PADDING
-
-	third_person_camera.position = third_person_rig.to_local(resolved)
-	var look_at_point := third_person_rig.to_global(
-		Vector3(0.0, 0.0, -THIRD_PERSON_LOOK_AHEAD)
-	)
-	third_person_camera.look_at(look_at_point, Vector3.UP)
+	_wand.play_fizzle()
 
 
 func _separate_from_players() -> void:
@@ -321,26 +464,11 @@ func _separate_from_players() -> void:
 		global_position += away.normalized() * (PLAYER_MIN_SEPARATION - distance)
 
 
-func _apply_character_color(color: Color) -> void:
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.55
-	material.emission_enabled = true
-	material.emission = color * 0.25
-	material.emission_energy_multiplier = 0.8
-	_body_mesh.material_override = material
-	_body_mesh.layers = PLAYER_SELF_VISUAL_LAYER
-	_body_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	var head_material := material.duplicate()
-	head_material.albedo_color = color.lightened(0.08)
-	head_material.emission = head_material.albedo_color * 0.25
-	_head_mesh.material_override = head_material
-	_head_mesh.layers = PLAYER_SELF_VISUAL_LAYER
-	_head_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-
 func _try_interact() -> void:
-	TomeDebug.log("Player", "F pressed — try_interact")
+	TomeDebug.log("PlayableCharacter", "interact pressed — try_interact")
+	if _is_fake_wall_placing():
+		_fake_wall_placement.try_confirm()
+		return
 	if _casting_session != null and _casting_session.is_active():
 		return
 
@@ -356,7 +484,7 @@ func _try_interact() -> void:
 		interactable.interact(self)
 		return
 
-	TomeDebug.log("Player", "no interactable in range")
+	TomeDebug.log("PlayableCharacter", "no interactable in range")
 
 
 func is_carrying_relic() -> bool:
@@ -371,41 +499,185 @@ func stop_casting_for_relic_carry() -> void:
 		_casting_session.end_tome_teaching()
 	elif _casting_session.is_active():
 		_casting_session.cancel()
-	_casting_lmb_held = false
+	_lower_wand(true)
 	if _game_hud != null and _game_hud.has_method("hide_casting"):
 		_game_hud.hide_casting()
 
 
-func _on_wand_button_pressed() -> void:
-	if not is_multiplayer_authority():
-		return
+func _try_toggle_wand_raise() -> bool:
+	if not _uses_local_view():
+		return false
+	if _wand_controls_blocked():
+		return false
 	if is_carrying_relic():
 		stop_casting_for_relic_carry()
-		return
+		return true
 	if _casting_session != null and _casting_session.is_tome_teaching():
-		return
-	_casting_lmb_held = true
-	if _casting_session != null and _casting_session.is_active():
+		return false
+	if _wand_raised:
+		_lower_wand(true)
+		return true
+	return _raise_wand_and_listen()
+
+
+func _raise_wand_and_listen() -> bool:
+	if _spell_loadout == null or _casting_session == null:
+		return false
+	var candidates: Array[SpellDefinition] = _filter_free_cast_candidates(
+		_spell_loadout.get_known_spells()
+	)
+	if candidates.is_empty():
+		return false
+	_cancel_spell_fire_charge(true)
+	_wand_raised = true
+	if _wand != null:
+		_wand.set_raised(true)
+		_wand.set_armed(true)
+	_casting_session.start_wand_voice_select(candidates)
+	return true
+
+func _lower_wand(cancel_listen: bool) -> void:
+	_wand_raised = false
+	if cancel_listen and _casting_session != null and _casting_session.is_wand_voice_select():
 		_casting_session.cancel()
-		return
-	_try_free_cast()
+	if _wand != null:
+		_wand.set_raised(false)
+		_wand.set_armed(false)
 
 
-func _on_wand_button_released() -> void:
-	if not is_multiplayer_authority():
-		return
-	if is_carrying_relic():
-		return
-	if not _casting_lmb_held:
-		return
-	_casting_lmb_held = false
-	if _casting_session == null:
-		return
-	if not _casting_session.is_free_cast() or not _casting_session.is_active():
-		return
-	_casting_session.release_wand_hold()
+func _can_fire_armed_spell() -> bool:
+	if not (
+		_uses_local_view()
+		and not _wand_controls_blocked()
+		and not _wand_raised
+		and not is_carrying_relic()
+		and _armed_spell != null
+		and _effect_applier != null
+		and (_casting_session == null or not _casting_session.is_tome_teaching())
+	):
+		return false
+	if _mana <= 0.0:
+		return false
+	var one: Array[SpellDefinition] = []
+	one.append(_armed_spell)
+	return not _filter_free_cast_candidates(one).is_empty()
+func _try_begin_spell_fire() -> bool:
+	if _spell_fire_charging or _spell_fire_releasing:
+		return false
+	if not _can_fire_armed_spell():
+		return false
+	_spell_fire_charging = true
+	if _wand != null:
+		_wand.begin_cast_charge(_armed_spell)
+	return true
 
+func _try_release_spell_fire() -> bool:
+	if not _spell_fire_charging:
+		return false
+	_spell_fire_charging = false
+	if _wand == null or not _wand.is_cast_charge_ready():
+		if _wand != null:
+			_wand.cancel_cast_charge()
+		return false
+	if not _can_fire_armed_spell():
+		_wand.fizzle_cast_charge()
+		return false
+	_spell_fire_releasing = true
+	_fire_armed_spell()
+	return true
+func _cancel_spell_fire_charge(instant: bool = false) -> void:
+	if instant:
+		_spell_fire_cancel_token += 1
+		_spell_fire_releasing = false
+	if _spell_fire_charging:
+		_spell_fire_charging = false
+		if _wand != null:
+			_wand.cancel_cast_charge(instant)
+	elif instant and _wand != null:
+		_wand.cancel_cast_charge(true)
+func _fire_armed_spell() -> void:
+	var cost := SpellManaScript.cast_cost(_armed_spell)
+	var spell := _armed_spell
+	var fire_token := _spell_fire_cancel_token
+	if _wand != null:
+		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
+			_wand.return_from_cast_charge()
+		else:
+			await _wand.return_from_cast_charge()
+	if fire_token != _spell_fire_cancel_token:
+		return
+	if not is_instance_valid(self) or spell == null:
+		_spell_fire_releasing = false
+		return
+	if _armed_spell != spell or _mana <= 0.0:
+		_spell_fire_releasing = false
+		return
+	if spell.effect_id == "fake_wall":
+		if _begin_fake_wall_placement(spell):
+			if _wand != null:
+				_wand.play_cast_success(spell, true)
+			_spend_mana(cost)
+		_spell_fire_releasing = false
+		return
+	var params := SpellEffectSyncScript.build_params(spell, self)
+	var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
+	if _effect_applier.has_method("cast_spell"):
+		_effect_applier.cast_spell(self, spell)
+	if spell.id == "clone" and _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
+		_spell_loadout.start_cooldown(spell.id)
+	if effect_duration > 0.0 and _game_hud != null and _game_hud.has_method("show_spell_active"):
+		_game_hud.call("show_spell_active", spell.id, effect_duration)
+	if _wand != null:
+		_wand.play_cast_success(spell, true)
+	_spend_mana(cost)
+	_spell_fire_releasing = false
 
+func _refill_mana() -> void:
+	_mana = SpellManaScript.MANA_MAX
+	_sync_mana_hud()
+
+func _spend_mana(amount: float) -> void:
+	if amount <= 0.0:
+		_sync_mana_hud()
+		return
+	_mana = maxf(0.0, _mana - amount)
+	if _mana <= 0.001:
+		_deplete_mana()
+	else:
+		_sync_mana_hud()
+
+func _deplete_mana() -> void:
+	_mana = 0.0
+	_cancel_spell_fire_charge(true)
+	_armed_spell = null
+	if _game_hud != null:
+		if _game_hud.has_method("hide_mana"):
+			_game_hud.call("hide_mana")
+		if _game_hud.has_method("clear_spell_word"):
+			_game_hud.call("clear_spell_word")
+
+func _sync_mana_hud() -> void:
+	if _game_hud == null:
+		return
+	if _armed_spell == null or _mana <= 0.001:
+		if _game_hud.has_method("hide_mana"):
+			_game_hud.call("hide_mana")
+		return
+	var bar_color := _armed_spell.get_display_color()
+	if _game_hud.has_method("show_mana"):
+		_game_hud.call("show_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
+	elif _game_hud.has_method("set_mana"):
+		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
+func _tick_mana_drain(delta: float) -> void:
+	if not _uses_local_view():
+		return
+	if _armed_spell == null or _mana <= 0.0:
+		return
+	_mana = maxf(0.0, _mana - SpellManaScript.drain_rate(_armed_spell) * delta)
+	if _mana <= 0.001:
+		_deplete_mana()
+	else:
+		_sync_mana_hud()
 func _try_tome_teaching_interact() -> bool:
 	if _casting_session == null or not _casting_session.is_tome_teaching():
 		return false
@@ -416,16 +688,28 @@ func _try_tome_teaching_interact() -> bool:
 	return true
 
 
-func _try_free_cast() -> bool:
-	if is_carrying_relic():
-		return false
-	if _spell_loadout == null or _casting_session == null:
-		return false
-	var candidates: Array[SpellDefinition] = _spell_loadout.get_known_spells()
-	if candidates.is_empty():
-		return false
-	_casting_session.start_free_cast(candidates)
-	return true
+func _filter_free_cast_candidates(known: Array[SpellDefinition]) -> Array[SpellDefinition]:
+	var filtered: Array[SpellDefinition] = []
+	var tree := get_tree()
+	var target_active := TargetHighlightScript.has_active_highlights(tree)
+	for spell in known:
+		if spell == null:
+			continue
+		if (
+			_spell_loadout != null
+			and _spell_loadout.has_method("is_on_cooldown")
+			and _spell_loadout.is_on_cooldown(spell.id)
+		):
+			continue
+		match spell.id:
+			"pull", "follow":
+				if not target_active:
+					continue
+			"dispell", "clone":
+				if not target_active:
+					continue
+		filtered.append(spell)
+	return filtered
 
 
 func _find_nearest_interactable() -> Interactable:
@@ -470,60 +754,223 @@ func _find_delivery_objective() -> DeliveryObjective:
 func _update_interaction_prompt() -> void:
 	if _game_hud == null or not _game_hud.has_method("set_interaction_prompt"):
 		return
+	_game_hud.set_interaction_prompt(_resolve_interaction_prompt())
+
+
+func _resolve_interaction_prompt() -> String:
+	if _is_monster_book_busy():
+		var book := _monster_book()
+		if book != null and book.has_method("get_prompt"):
+			var book_prompt := str(book.call("get_prompt"))
+			if not book_prompt.is_empty():
+				return book_prompt
+	if _is_fake_wall_placing():
+		return _fake_wall_placement.get_prompt()
+	var flight := _get_broom_flight()
+	if (
+		flight != null
+		and flight.has_method("is_active")
+		and bool(flight.call("is_active"))
+		and flight.has_method("get_prompt")
+	):
+		return str(flight.call("get_prompt"))
 	if _casting_session != null and _casting_session.is_tome_teaching():
-		_game_hud.set_interaction_prompt(
-			InputPromptScript.with_action("interact", "Leave tome")
-		)
-		return
+		return InputPromptScript.with_action("interact", "Leave tome")
 	if _casting_session != null and _casting_session.is_active():
-		_game_hud.set_interaction_prompt("")
-		return
+		return ""
+	var prompt := ""
 	var objective := _find_delivery_objective()
 	if objective != null:
-		var objective_prompt := objective.get_interaction_prompt(self)
-		if not objective_prompt.is_empty():
-			_game_hud.set_interaction_prompt(objective_prompt)
-			return
-	var interactable: Interactable = _find_nearest_interactable()
-	if interactable != null:
-		_game_hud.set_interaction_prompt(interactable.get_prompt())
-		return
-	_game_hud.set_interaction_prompt(_default_cast_prompt())
+		prompt = objective.get_interaction_prompt(self)
+	if prompt.is_empty():
+		var maze: Node = null
+		var match_root: Node = GameWorldScript.find_match_root(get_tree())
+		if match_root != null:
+			maze = match_root.get_node_or_null("MazeGenerator")
+		if maze != null and maze.has_method("get_exit_approach_prompt"):
+			prompt = str(maze.call("get_exit_approach_prompt", self))
+	if prompt.is_empty():
+		var interactable: Interactable = _find_nearest_interactable()
+		if interactable != null:
+			prompt = interactable.get_prompt()
+	if prompt.is_empty() and flight != null and flight.has_method("get_prompt"):
+		prompt = str(flight.call("get_prompt"))
+	if prompt.is_empty():
+		prompt = _default_cast_prompt()
+	return prompt
 
 
 func _default_cast_prompt() -> String:
+	var flight := _get_broom_flight()
+	if flight != null and flight.has_method("get_prompt"):
+		var broom_prompt := str(flight.call("get_prompt"))
+		if not broom_prompt.is_empty():
+			return broom_prompt
 	return ""
 
 
-func _physics_process(delta: float) -> void:
-	if not is_multiplayer_authority():
+func apply_fireball_knockback(fireball_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
+	var impulse := BroomLocomotionScript.knockback_impulse(fireball_dir)
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", fireball_dir)
+	_knockback_vel = impulse
+	_knockback_timer = 0.35
+	velocity += impulse
+
+
+func apply_ember_halo_jump_pad() -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	velocity.y = EmberHaloFlightScript.jump_pad_velocity(gravity)
+
+
+func apply_ember_halo_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	## Rim hit: displacement only — no HP damage.
+	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
+	var flat := Vector3(hit_dir.x, 0.0, hit_dir.z)
+	if flat.length_squared() > 0.0001:
+		flat = flat.normalized()
+		var impulse := flat * EmberHaloFlightScript.HIT_KNOCKBACK_SPEED
+		_knockback_vel = impulse
+		_knockback_timer = 0.25
+		velocity.x += impulse.x
+		velocity.z += impulse.z
+	apply_speed_boost(
+		EmberHaloFlightScript.SLOW_DURATION_SEC,
+		EmberHaloFlightScript.SLOW_MULTIPLIER
+	)
+
+
+func apply_wretch_command_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 6.0 + Vector3.UP * 1.5
+	_knockback_vel = impulse
+	_knockback_timer = 0.28
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(2.0, 0.1)
+
+
+func apply_rat_explode_hit(hit_dir: Vector3) -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	var dir := hit_dir
+	if dir.length_squared() < 0.0001:
+		dir = -global_transform.basis.z
+	else:
+		dir = dir.normalized()
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length_squared() < 0.0001:
+		flat = Vector3.FORWARD
+	else:
+		flat = flat.normalized()
+	var impulse := flat * 14.0 + Vector3.UP * 4.0
+	_knockback_vel = impulse
+	_knockback_timer = 0.5
+	velocity += impulse
+	if broom_active:
+		var flight := _get_broom_flight()
+		if flight != null and flight.has_method("knock_off"):
+			flight.call("knock_off", flat)
+	apply_speed_boost(0.75, 0.25)
+
+
+func _get_broom_flight() -> Node:
+	return get_node_or_null("BroomFlight")
+
+
+func _refresh_broom_visual() -> void:
+	if _broom_active_visual == broom_active:
+		return
+	_broom_active_visual = broom_active
+	var flight := _get_broom_flight()
+	if flight == null and broom_active:
+		flight = BroomFlightScript.ensure_on(self, false)
+	if flight != null and flight.has_method("set_active_visual"):
+		flight.call("set_active_visual", broom_active)
+
+
+func _sync_body_yaw_to_head() -> void:
+	var body := get_node_or_null("Body") as Node3D
+	if body == null or head == null:
+		return
+	body.rotation.y = head.rotation.y
+
+
+func _physics_process(delta: float) -> void:
+	_sync_body_yaw_to_head()
+	if not _uses_local_view():
+		_refresh_broom_visual()
+		return
+	_tick_mana_drain(delta)
+	PlayerEmberBurnScript.tick(self, delta)
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
+	if is_stunned():
+		var stun := get_node("Stun")
+		stun.call("tick_physics", self, delta, gravity)
+		SlideSurfaceScript.prepare(self)
+		move_and_slide()
+		stun.call("after_slide", self)
+		_separate_from_players()
+		_update_interaction_prompt()
+		return
 
-	if not is_on_floor():
-		velocity.y -= gravity * delta
+	var flight := _get_broom_flight()
+	if flight != null and flight.has_method("is_active") and bool(flight.call("is_active")):
+		flight.call("apply_locomotion", self, delta, _speed_boost_multiplier)
+		_apply_knockback_bleed(delta)
+		move_and_slide()
+		_separate_from_players()
+		_update_interaction_prompt()
+		return
 
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = JUMP_VELOCITY
-
-	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := (head.transform.basis * Vector3(input_dir.x, 0.0, input_dir.y)).normalized()
-
-	var speed := (SPRINT_SPEED if Input.is_action_pressed("sprint") else WALK_SPEED)
-	speed *= _speed_boost_multiplier
-	if direction:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
-	else:
-		velocity.x = move_toward(velocity.x, 0.0, speed)
-		velocity.z = move_toward(velocity.z, 0.0, speed)
+	PlayerDashScript.tick_and_try(self, head, delta)
+	PlayerCrouchScript.tick(self)
+	var dash_active := PlayerDashScript.is_active(self)
+	var crouch_coasting := PlayerCrouchScript.is_coasting(self)
+	SlideSurfaceScript.apply_ground_move(
+		self,
+		head,
+		gravity,
+		delta,
+		_speed_boost_multiplier,
+		dash_active or crouch_coasting,
+		dash_active
+	)
+	_apply_knockback_bleed(delta)
 
 	move_and_slide()
 	_separate_from_players()
 	_update_interaction_prompt()
 
-	if _third_person:
-		_update_third_person_camera()
+
+func _apply_knockback_bleed(delta: float) -> void:
+	if _knockback_timer <= 0.0:
+		return
+	_knockback_timer -= delta
+	velocity.x += _knockback_vel.x * 0.35
+	velocity.z += _knockback_vel.z * 0.35
+	_knockback_vel = _knockback_vel.move_toward(Vector3.ZERO, 28.0 * delta)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cursor stop hook: run lint + unit tests before the agent finishes."""
+"""Cursor stop hook: run lint, GDScript warnings, and unit tests before the agent finishes."""
 
 from __future__ import annotations
 
@@ -96,8 +96,9 @@ def main() -> int:
             text = text[:MAX_OUTPUT_CHARS] + "\n... (output truncated)"
 
         followup = (
-            f"Pre-finish checks failed (exit {exit_code}). "
-            "Fix lint and/or unit test failures, then finish again.\n\n"
+            f"Heads up: pre-finish checks didn't pass (exit {exit_code}). "
+            "If you're wrapping up code changes, you may want to look at "
+            "lint, GDScript warning, or unit test output below.\n\n"
             f"{text}"
         )
         _emit({"followup_message": followup})

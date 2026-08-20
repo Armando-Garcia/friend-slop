@@ -106,17 +106,3 @@ fi
 
 ci_log "All tests passed"
 ci_step_end "godot_unit_tests"
-
-ci_step_start "godot_steam_voice_tests"
-export GODOT_PATH="$GODOT_BIN"
-if [[ ! -f "$ROOT/vendor/godot-steam-voice/tools/run_tests.py" ]]; then
-	ci_log "Cloning godot-steam-voice for library tests..."
-	python3 "$ROOT/tools/sync_godot_steam_voice.py" --clone
-fi
-if [[ -f "$ROOT/vendor/godot-steam-voice/tools/run_tests.py" ]]; then
-	python3 "$ROOT/vendor/godot-steam-voice/tools/run_tests.py" --tests-only
-	ci_log "godot-steam-voice tests passed"
-else
-	ci_log "vendor/godot-steam-voice missing — skipping library tests"
-fi
-ci_step_end "godot_steam_voice_tests"

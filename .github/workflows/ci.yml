@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -38,18 +38,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Cache Godot binary
         id: godot-bin-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/godot
           key: godot-bin-${{ env.GODOT_VERSION }}-${{ hashFiles('tools/versions.env') }}
 
       - name: Cache Godot import data
         id: godot-import-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .godot
           key: godot-import-${{ env.GODOT_VERSION }}-${{ hashFiles('project.godot', '**/*.import') }}
@@ -58,7 +58,7 @@ jobs:
 
       - name: Restore GodotSteam cache
         id: steam-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .cache/steam-setup
@@ -83,6 +83,13 @@ jobs:
 
       - name: Import project assets
         run: bash tools/run_godot_import.sh
+
+      - name: Check GDScript analyzer warnings
+        run: |
+          source tools/load_versions.sh
+          load_versions tools/versions.env
+          export GODOT_PATH="${GODOT_PATH:-$PWD/.cache/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64}"
+          python3 tools/run_checks.py --warnings-only --require-godot-warnings
 
       - name: Run unit tests
         run: bash tools/run_godot_tests.sh

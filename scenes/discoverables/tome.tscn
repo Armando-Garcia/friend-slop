@@ -1,6 +1,6 @@
-[gd_scene load_steps=4 format=3 uid="uid://ctome001"]
+[gd_scene format=3 uid="uid://ctome001"]
 
-[ext_resource type="Script" path="res://scripts/discoverables/tome_interactable.gd" id="1_tome"]
+[ext_resource type="Script" uid="uid://inyw5ys4rwcu" path="res://scripts/discoverables/tome_interactable.gd" id="1_tome"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_tome"]
 size = Vector3(0.7, 0.9, 0.25)
@@ -8,18 +8,17 @@ size = Vector3(0.7, 0.9, 0.25)
 [sub_resource type="BoxShape3D" id="BoxShape_tome"]
 size = Vector3(1.2, 1.4, 1.2)
 
-[node name="Tome" type="Area3D"]
+[node name="Tome" type="Area3D" unique_id=739180795]
 collision_layer = 0
-collision_mask = 1
 script = ExtResource("1_tome")
 
-[node name="Mesh" type="MeshInstance3D" parent="."]
+[node name="Mesh" type="MeshInstance3D" parent="." unique_id=1408905959]
 mesh = SubResource("BoxMesh_tome")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=929706569]
 shape = SubResource("BoxShape_tome")
 
-[node name="OmniLight3D" type="OmniLight3D" parent="."]
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=688977811]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 light_color = Color(0.85, 0.65, 1, 1)
 light_energy = 1.2

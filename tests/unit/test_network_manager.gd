@@ -103,10 +103,10 @@ func _test_disconnect_session_delegates_to_transport() -> int:
 
 func _test_normalize_lobby_roles() -> int:
 	var normalized := LobbyMatchStateScript.normalize_roles({
-		"1": GameStateScript.PlayerRole.WARDEN,
+		"1": GameStateScript.PlayerRole.HEADMASTER,
 		2: GameStateScript.PlayerRole.APPRENTICE,
 	})
-	if int(normalized[1]) != GameStateScript.PlayerRole.WARDEN:
+	if int(normalized[1]) != GameStateScript.PlayerRole.HEADMASTER:
 		push_error("Expected normalized roles to coerce string keys to int")
 		return 1
 	if int(normalized[2]) != GameStateScript.PlayerRole.APPRENTICE:
@@ -117,7 +117,7 @@ func _test_normalize_lobby_roles() -> int:
 
 func _test_pack_roles_for_peers() -> int:
 	var roles := {
-		1: GameStateScript.PlayerRole.WARDEN,
+		1: GameStateScript.PlayerRole.HEADMASTER,
 		2: GameStateScript.PlayerRole.APPRENTICE,
 		99: GameStateScript.PlayerRole.APPRENTICE,
 	}
@@ -126,8 +126,8 @@ func _test_pack_roles_for_peers() -> int:
 	if packed.size() != 2:
 		push_error("Expected packed roles to include only connected peers")
 		return 1
-	if int(packed[1]) != GameStateScript.PlayerRole.WARDEN:
-		push_error("Expected packed roles to include Warden for peer 1")
+	if int(packed[1]) != GameStateScript.PlayerRole.HEADMASTER:
+		push_error("Expected packed roles to include Headmaster for peer 1")
 		return 1
 	return 0
 

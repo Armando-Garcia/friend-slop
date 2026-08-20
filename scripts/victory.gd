@@ -7,4 +7,5 @@ func _ready() -> void:
 
 
 func _on_menu_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/menu.tscn")
+	NetworkManager.disconnect_session()
+	get_tree().change_scene_to_file("res://scenes/game_app.tscn")

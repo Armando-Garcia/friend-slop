@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://cp6nppmbqrage"]
+
+[ext_resource type="PackedScene" uid="uid://bplayable001" path="res://scenes/characters/playable_character.tscn" id="1_base"]
+[ext_resource type="Script" uid="uid://bkiwi53jjvbur" path="res://scripts/characters/headmaster.gd" id="2_headmaster"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_headmaster"]
+radius = 0.27441406
+height = 0.8107129
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+resource_local_to_scene = true
+albedo_color = Color(0.55, 0.2, 0.7, 1)
+metallic = 0.05
+roughness = 0.62
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_head"]
+resource_local_to_scene = true
+albedo_color = Color(0.62, 0.28, 0.78, 1)
+metallic = 0.05
+roughness = 0.62
+
+[node name="Headmaster" unique_id=1493913747 instance=ExtResource("1_base")]
+editor_description = "Edit Headmaster Body / Head / CollisionShape3D here. Wand mesh = player_wand.tscn; held pose = playable_character.tscn. Broom also on playable_character."
+script = ExtResource("2_headmaster")
+player_index = 0
+
+[node name="CollisionShape3D" parent="." index="0" unique_id=294740946]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.39127442, 0)
+shape = SubResource("CapsuleShape3D_headmaster")
+
+[node name="Body" parent="." index="1" unique_id=73058391]
+transform = Transform3D(1.08, 0, 0, 0, 1.08, 0, 0, 0, 1.08, 0, 0.2, 0)
+surface_material_override/0 = SubResource("StandardMaterial3D_body")
+
+[node name="Head" parent="." index="2" unique_id=1186111743]
+transform = Transform3D(1.05, 0, 0, 0, 1.05, 0, 0, 0, 1.05, 0, 0.62, 0)
+
+[node name="HeadMesh" parent="Head" index="0" unique_id=1294118041]
+surface_material_override/0 = SubResource("StandardMaterial3D_head")
+
+[node name="PlayerInventory" parent="." index="8"]
+starting_items = Array[String](["broom", "spellbook", "book"])

@@ -5,8 +5,6 @@ build/
 
 # Large voice recognition assets (~500 MB; one-time setup via make setup-voice)
 .cache/
-vendor/godot-steam-voice/
-addons/steam_proximity_voice/
 addons/gdvosk/
 
 # GodotSteam native libs (install via tools/setup_godotsteam.* — see docs/STEAM_SETUP.md)

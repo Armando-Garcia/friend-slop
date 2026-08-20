@@ -1,0 +1,248 @@
+[gd_scene format=3 uid="uid://cmain001"]
+
+[ext_resource type="Script" uid="uid://divchbbi8rx6x" path="res://scripts/match_scene.gd" id="1_match"]
+[ext_resource type="PackedScene" uid="uid://cmoon001" path="res://scenes/environment/moon.tscn" id="1_moon"]
+[ext_resource type="Script" uid="uid://dciapcbn1y4t4" path="res://scripts/smoke_trail_manager.gd" id="1_smoke_trails"]
+[ext_resource type="Script" uid="uid://cyuldhmjq2gxm" path="res://scripts/environment/cloud_system.gd" id="2_clouds"]
+[ext_resource type="Script" uid="uid://dvm6473ovmcmk" path="res://scripts/maze_generator.gd" id="2_maze"]
+[ext_resource type="Script" uid="uid://dgeo1cql2kx4k" path="res://scripts/discoverables/discoverable_spawner.gd" id="4_spawner"]
+[ext_resource type="Resource" uid="uid://cyg7o8wvlijw5" path="res://resources/discoverables/default_run_config.tres" id="5_run_cfg"]
+[ext_resource type="Script" uid="uid://dwdwxw8dalcmm" path="res://scripts/spells/spell_definition.gd" id="6_eb6dy"]
+[ext_resource type="Script" uid="uid://bkvka4fuy7rl2" path="res://scripts/spells/spell_registry.gd" id="6_registry"]
+[ext_resource type="Resource" uid="uid://dpu5p57msg8yx" path="res://resources/spells/show_me.tres" id="7_show_me"]
+[ext_resource type="Resource" uid="uid://678bsder6qrs" path="res://resources/spells/haste.tres" id="8_haste"]
+[ext_resource type="Script" uid="uid://bfnrfxnwjg02y" path="res://scripts/ui/aim_cursor.gd" id="9_aim"]
+[ext_resource type="Script" uid="uid://crdov1cq8kly5" path="res://scripts/ui/game_hud.gd" id="9_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/player_menu.tscn" id="9_player_menu"]
+[ext_resource type="Script" uid="uid://c3khbmmmkw14b" path="res://scripts/ui/spell_word_banner.gd" id="9_spell_word"]
+[ext_resource type="Script" uid="uid://dnyy0kwsw60ow" path="res://scripts/objectives/delivery_objective.gd" id="10_objective"]
+[ext_resource type="Script" uid="uid://yf2yi73fbs6o" path="res://scripts/spells/voice_spell_validator.gd" id="10_validator"]
+[ext_resource type="Script" uid="uid://cgo2lkhlxtcky" path="res://scripts/spells/spell_validation_runner.gd" id="11_runner"]
+[ext_resource type="PackedScene" uid="uid://cpausemenu001" path="res://scenes/ui/pause_menu.tscn" id="14_pause"]
+[ext_resource type="Resource" uid="uid://dud80ue7p23rt" path="res://resources/spells/fireball.tres" id="15_fireball"]
+[ext_resource type="Resource" uid="uid://djvkxthosghuf" path="res://resources/spells/headmaster/fake_wall.tres" id="24_fake_wall"]
+[ext_resource type="Resource" uid="uid://dqc3frk775rdr" path="res://resources/spells/light.tres" id="25_light"]
+[ext_resource type="Resource" uid="uid://yhkf2aamt6r7" path="res://resources/spells/light_ball.tres" id="26_light_ball"]
+[ext_resource type="Resource" uid="uid://dex1n2eif1prk" path="res://resources/spells/target.tres" id="27_target"]
+[ext_resource type="Script" uid="uid://cjpjlfd2a3wsx" path="res://scripts/player_spawn_slot.gd" id="28_spawn_slot"]
+[ext_resource type="Resource" uid="uid://cnbmfykshgjy" path="res://resources/spells/pull.tres" id="29_pull"]
+[ext_resource type="Resource" uid="uid://b2tj23aicq5ks" path="res://resources/spells/follow.tres" id="30_follow"]
+[ext_resource type="Resource" uid="uid://dm0b3twvh1yuv" path="res://resources/spells/dispell.tres" id="31_dispell"]
+[ext_resource type="Resource" uid="uid://bsynwwje1gvsy" path="res://resources/spells/headmaster/clone.tres" id="32_clone"]
+[ext_resource type="Resource" uid="uid://c300xtr2mgchs" path="res://resources/spells/flare.tres" id="33_flare"]
+[ext_resource type="Resource" uid="uid://uuo4bgv3b66" path="res://resources/spells/stop.tres" id="34_stop"]
+[ext_resource type="Resource" uid="uid://djudlmjak0msk" path="res://resources/spells/ward.tres" id="35_ward"]
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 1
+background_color = Color(0.015, 0.018, 0.035, 1)
+ambient_light_color = Color(0.7730558, 0.7674407, 0.83066744, 1)
+ambient_light_energy = 0.37
+tonemap_mode = 2
+tonemap_exposure = 1.12
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.04
+volumetric_fog_albedo = Color(0.5168059, 0.5571699, 0.61370206, 1)
+volumetric_fog_emission_energy = 0.0
+volumetric_fog_anisotropy = 0.3
+volumetric_fog_length = 60.0
+volumetric_fog_ambient_inject = 0.25
+volumetric_fog_sky_affect = 0.01
+
+[node name="Match" type="Node3D" unique_id=94019496]
+script = ExtResource("1_match")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=478717332]
+environment = SubResource("Environment_main")
+
+[node name="Moon" parent="." unique_id=2089265695 instance=ExtResource("1_moon")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 700, 5)
+show_light_arrow = false
+
+[node name="CloudSystem" type="Node3D" parent="." unique_id=1526258183]
+script = ExtResource("2_clouds")
+spawn_size = Vector3(1500, 40, 1500)
+sky_coverage = 0.09
+wind_speed = 1.0
+wind_direction = 40.0
+
+[node name="SmokeTrails" type="Node3D" parent="." unique_id=1526258182]
+script = ExtResource("1_smoke_trails")
+
+[node name="MazeGenerator" type="Node3D" parent="." unique_id=2059492572]
+script = ExtResource("2_maze")
+maze_width = 50
+maze_height = 50
+cell_size = 4.0
+wall_height = 5.0
+mean_corridor_length = 2.5
+corridor_length_variance = 3
+clearing_count = 3
+clearing_size = 1.5
+clearing_separation = 10.0
+spire_clearing_size = 4.5
+
+[node name="DiscoverableSpawner" type="Node3D" parent="." unique_id=234557342]
+script = ExtResource("4_spawner")
+run_config = ExtResource("5_run_cfg")
+
+[node name="SpellRegistry" type="Node" parent="." unique_id=1904759634]
+script = ExtResource("6_registry")
+spells = Array[ExtResource("6_eb6dy")]([ExtResource("7_show_me"), ExtResource("8_haste"), ExtResource("15_fireball"), ExtResource("33_flare"), ExtResource("35_ward"), ExtResource("25_light"), ExtResource("26_light_ball"), ExtResource("27_target"), ExtResource("29_pull"), ExtResource("30_follow"), ExtResource("34_stop"), ExtResource("31_dispell"), ExtResource("24_fake_wall"), ExtResource("32_clone")])
+
+[node name="VoiceSpellValidator" type="Node" parent="." unique_id=1384260685]
+script = ExtResource("10_validator")
+
+[node name="SpellValidationRunner" type="Node" parent="VoiceSpellValidator" unique_id=1629603056]
+script = ExtResource("11_runner")
+
+[node name="DeliveryObjective" type="Node3D" parent="." unique_id=747476849]
+script = ExtResource("10_objective")
+
+[node name="Players" type="Node3D" parent="." unique_id=1027486205]
+editor_description = "Horror roster spawn slots. ApprenticeSpawn_* index matches team_id — same-team apprentices cluster at one marker."
+
+[node name="HeadmasterSpawn" type="Marker3D" parent="Players" unique_id=1172483910]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0.5, -22)
+script = ExtResource("28_spawn_slot")
+role = 1
+auto_place = false
+spawn_cell = Vector2i(22, 22)
+
+[node name="ApprenticeSpawn_0" type="Marker3D" parent="Players" unique_id=45769250]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -198, 0.5, -198)
+script = ExtResource("28_spawn_slot")
+auto_place = false
+
+[node name="ApprenticeSpawn_1" type="Marker3D" parent="Players" unique_id=142476161]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 154, 0.5, -198)
+script = ExtResource("28_spawn_slot")
+auto_place = false
+spawn_cell = Vector2i(44, 0)
+spawn_slot_index = 1
+
+[node name="ApprenticeSpawn_2" type="Marker3D" parent="Players" unique_id=1264272098]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -198, 0.5, 154)
+script = ExtResource("28_spawn_slot")
+auto_place = false
+spawn_cell = Vector2i(0, 44)
+spawn_slot_index = 2
+
+[node name="GameHUD" type="CanvasLayer" parent="." unique_id=1905588477]
+script = ExtResource("9_hud")
+
+[node name="AimCursor" type="Control" parent="GameHUD" unique_id=881728474]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_aim")
+
+[node name="PlayerMenu" parent="GameHUD" unique_id=1872042120 instance=ExtResource("9_player_menu")]
+
+[node name="MarginContainer" type="MarginContainer" parent="GameHUD" unique_id=271343968]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 48.0
+grow_horizontal = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+
+[node name="PromptLabel" type="Label" parent="GameHUD/MarginContainer" unique_id=1186047128]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.88, 1, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="SpellWordBanner" type="Control" parent="GameHUD" unique_id=2124345854]
+z_index = 64
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -420.0
+offset_top = 136.0
+offset_right = 420.0
+offset_bottom = 224.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_spell_word")
+
+[node name="SpellWordLabel" type="Label" parent="GameHUD/SpellWordBanner" unique_id=83925261]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 68
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CastingPanel" type="PanelContainer" parent="GameHUD" unique_id=1360674168]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -250.0
+offset_right = 260.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="GameHUD/CastingPanel" unique_id=548900735]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="GameHUD/CastingPanel/MarginContainer" unique_id=2143781008]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TitleLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=1914180845]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Casting"
+
+[node name="WordsLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=1093459444]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+
+[node name="GuideLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=102228914]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.82, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 2
+
+[node name="StatusLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=527049912]
+layout_mode = 2
+
+[node name="MicLevelBar" type="ProgressBar" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=588333007]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+show_percentage = false
+
+[node name="FeedbackLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=1318710168]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.75, 0.45, 1)
+autowrap_mode = 2
+
+[node name="DetailLabel" type="Label" parent="GameHUD/CastingPanel/MarginContainer/VBox" unique_id=900309823]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 2
+
+[node name="PauseMenu" parent="." unique_id=1606684371 instance=ExtResource("14_pause")]

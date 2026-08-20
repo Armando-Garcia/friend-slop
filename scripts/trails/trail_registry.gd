@@ -54,7 +54,9 @@ func submit_sample(seq: int, x: float, z: float) -> void:
 		_host_accept_sample(1, seq, x, z)
 		return
 	if not multiplayer.is_server():
-		NetworkManager.submit_trail_sample.rpc_id(1, seq, x, z)
+		if not MatchStateManager.allows_gameplay_actions():
+			return
+		NetworkManager._submit_trail_sample.rpc_id(1, seq, x, z)
 		return
 	_host_accept_sample(multiplayer.get_unique_id(), seq, x, z)
 
@@ -77,7 +79,7 @@ func _host_accept_sample(peer_id: int, seq: int, x: float, z: float) -> void:
 	var time_msec := Time.get_ticks_msec()
 	_append_sample(peer_id, seq, x, z, time_msec)
 	if GameState.is_multiplayer:
-		NetworkManager.broadcast_trail_sample.rpc(peer_id, seq, x, z, time_msec)
+		NetworkManager._broadcast_trail_sample.rpc(peer_id, seq, x, z, time_msec)
 
 
 func _validate_sample(peer_id: int, seq: int, x: float, z: float) -> bool:

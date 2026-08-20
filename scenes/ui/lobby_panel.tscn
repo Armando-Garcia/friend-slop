@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cd4v6kvl3kiuq"]
 
 [ext_resource type="Script" path="res://scripts/ui/lobby_panel.gd" id="1_lobby"]
+[ext_resource type="Script" path="res://scripts/ui/menu_toggle_switch.gd" id="2_toggle"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.12, 0.09, 0.18, 0.96)
@@ -41,9 +42,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -280.0
-offset_top = -310.0
+offset_top = -340.0
 offset_right = 280.0
-offset_bottom = 310.0
+offset_bottom = 340.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
@@ -63,7 +64,7 @@ theme_override_constants/separation = 12
 layout_mode = 2
 theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
 theme_override_font_sizes/font_size = 28
-text = "Host Game"
+text = "Host"
 horizontal_alignment = 1
 
 [node name="RoomCodeHostRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
@@ -103,6 +104,25 @@ visible = false
 layout_mode = 2
 placeholder_text = "Paste Steam lobby ID"
 
+[node name="LobbyVoiceRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+text = "Lobby Voice"
+
+[node name="LobbyVoiceSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
+custom_minimum_size = Vector2(48, 28)
+layout_mode = 2
+scale = Vector2(1.5, 1.5)
+tooltip_text = "Talk with others in this lobby before the match."
+text = ""
+script = ExtResource("2_toggle")
+
 [node name="PlayersSection" type="VBoxContainer" parent="Panel/MarginContainer/VBox"]
 visible = false
 layout_mode = 2
@@ -135,6 +155,12 @@ text = "Enter the host's Steam lobby ID or accept a Steam invite."
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 text = "Start Game"
+
+[node name="SettingsButton" type="Button" parent="Panel/MarginContainer/VBox"]
+visible = false
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+text = "Settings"
 
 [node name="BackButton" type="Button" parent="Panel/MarginContainer/VBox"]
 custom_minimum_size = Vector2(0, 40)

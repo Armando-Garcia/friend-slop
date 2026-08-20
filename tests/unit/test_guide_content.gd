@@ -14,6 +14,8 @@ func run() -> int:
 	failures += _test_objective_formatting()
 	failures += _test_build_view_includes_all_sections()
 	failures += _test_codex_row_label()
+	failures += _test_codex_row_label_with_cooldown()
+	failures += _test_spell_detail_includes_active_cooldown()
 	failures += _test_codex_spell_ids_from_loadout()
 	failures += _test_spell_detail_includes_effect()
 	failures += _test_objective_state_status_lines()
@@ -53,6 +55,40 @@ func _test_codex_row_label() -> int:
 	var label := GuideContentScript.codex_row_label(spell, "fireball")
 	if label != "Fireball — \"fireball\"":
 		push_error("Expected codex row label to match spellbook format")
+		return 1
+	return 0
+
+
+func _test_codex_row_label_with_cooldown() -> int:
+	var spell := SpellDefinitionScript.new()
+	spell.id = "fake_wall"
+	spell.display_name = "Fake Wall"
+	spell.incantation_words = PackedStringArray(["fake", "wall"])
+	var idle := GuideContentScript.codex_row_label(spell, "fake_wall", 0.0)
+	if idle.contains("Cooldown"):
+		push_error("Expected idle codex row to omit cooldown countdown")
+		return 1
+	var active := GuideContentScript.codex_row_label(spell, "fake_wall", 12.34)
+	if not active.contains("Cooldown — 12.3s"):
+		push_error("Expected active codex row to show cooldown countdown")
+		return 1
+	return 0
+
+
+func _test_spell_detail_includes_active_cooldown() -> int:
+	var spell := SpellDefinitionScript.new()
+	spell.id = "fake_wall"
+	spell.display_name = "Fake Wall"
+	spell.incantation_words = PackedStringArray(["fake", "wall"])
+	spell.effect_id = "fake_wall"
+	var idle := GuideContentScript.build_spell_detail(spell, 0.0)
+	if str(idle.get("body", "")).contains("Cooldown"):
+		push_error("Expected idle spell detail to omit cooldown countdown")
+		return 1
+	var active := GuideContentScript.build_spell_detail(spell, 7.0)
+	var body := str(active.get("body", ""))
+	if not body.begins_with("Cooldown — 7.0s"):
+		push_error("Expected active spell detail to lead with cooldown countdown")
 		return 1
 	return 0
 

@@ -1,0 +1,28 @@
+---
+description: Scene tree is the source of truth for system entrypoints and wiring
+alwaysApply: true
+---
+
+# Scene tree as source of truth
+
+Prefer Godot scene hierarchy over invisible script-only wiring. Someone should be able to click a node in the dock and understand where a system starts.
+
+## Do
+
+- Put **real entrypoints** on authored scene nodes (script + children that own the work).
+- Nest collaborators under that node so the tree shows the pipeline (e.g. `VoiceSpellValidator` → `SpellValidationRunner`).
+- Keep **one** owner per job — no mirror/copy nodes that duplicate the same listener or service.
+- Use child nodes for **session contracts / settings** when they are the authored truth (e.g. `VoiceSession/Listeners/Chat`), and update those nodes in place for live status.
+
+## Don't
+
+- Add empty stub nodes that only hold a flag while all logic lives elsewhere.
+- Spawn runtime mirror trees (e.g. `Listening/*` clones of `Listeners/*`).
+- Hide primary call chains only in autoloads/match scripts when a Match/GameApp node should own them.
+
+## Examples in this project
+
+- Good: `Match/VoiceSpellValidator` owns STT prepare + `start_validation`; runner is its child.
+- Good: `GameApp/.../VoiceSession/Listeners/Chat|Spellcasting` are the only listener nodes; broker updates them in place.
+- Bad: a node whose script is only `var use_stub := false` with no API.
+- Bad: broker creating parallel `Listening/Chat` copies of authored listeners.

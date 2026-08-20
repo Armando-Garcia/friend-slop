@@ -19,7 +19,7 @@ Adopt **GodotSteam** (4.17+) with **`SteamMultiplayerPeer`** as the **only** onl
 
 ## Non-goals (this ADR)
 
-- **Proximity voice** is NOT Steam lobby voice chat. Game voice uses **[godot-steam-voice](https://github.com/iamemilio/godot-steam-voice)** (ADR 001), packaged at **`addons/godot-steam-voice/`**, on a **dedicated P2P virtual port**. **`SteamMultiplayerPeer` channel 0** carries game RPCs only.
+- **Proximity voice** is NOT Steam lobby voice chat. Game voice is Friend Slop’s Godot-mic + Steam P2P stack (ADR 001) on a **dedicated P2P virtual port**. **`SteamMultiplayerPeer` channel 0** carries game RPCs only.
 - **Dedicated servers** — P2P host-authoritative only for v1.
 
 ## Implementation sketch

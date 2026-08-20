@@ -1,0 +1,8 @@
+res://tests/unit/test_spell_validation_runner.gd
+res://tests/unit/test_spell_validation_async.gd
+res://tests/unit/test_spell_pipeline.gd
+res://tests/unit/test_flare_effect.gd
+res://tests/unit/test_fireball_flight.gd
+res://tests/integration/test_spell_casting_session.gd
+res://tests/unit/test_book_panels.gd
+res://tests/unit/test_player_spawn_authority.gd

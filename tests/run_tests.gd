@@ -5,56 +5,8 @@ extends SceneTree
 ## Offline only — no live Steam client or Steamworks session required.
 
 const TestEnvScript := preload("res://scripts/test/test_env.gd")
-
-const TEST_SUITES: Array[String] = [
-	"res://tests/unit/test_maze_carver.gd",
-	"res://tests/unit/test_maze_wall_mesh.gd",
-	"res://tests/unit/test_discoverable_spawn_plan.gd",
-	"res://tests/unit/test_voice_spell_validator.gd",
-	"res://tests/unit/test_incantation_matcher.gd",
-	"res://tests/unit/test_spell_grammar_builder.gd",
-	"res://tests/unit/test_spell_cast_validator.gd",
-	"res://tests/unit/test_character_spell_loadout.gd",
-	"res://tests/unit/test_gdvosk_adapter.gd",
-	"res://tests/unit/test_spell_validation_codec.gd",
-	"res://tests/unit/test_game_state.gd",
-	"res://tests/unit/test_multiplayer_transport.gd",
-	"res://tests/unit/test_steam_transport.gd",
-	"res://tests/unit/test_network_manager.gd",
-	"res://tests/unit/test_match_state.gd",
-	"res://tests/unit/test_role_assignment.gd",
-	"res://tests/unit/test_player_character_config.gd",
-	"res://tests/unit/test_role_loadout.gd",
-	"res://tests/unit/test_objective_placement.gd",
-	"res://tests/unit/test_delivery_objective_state.gd",
-	"res://tests/unit/test_delivery_objective_audio.gd",
-	"res://tests/unit/test_delivery_objective_sync.gd",
-	"res://tests/unit/test_input_prompt.gd",
-	"res://tests/unit/test_display_resolution_presets.gd",
-	"res://tests/unit/test_ui_scale.gd",
-	"res://tests/unit/test_moon.gd",
-	"res://tests/unit/test_cloud_system.gd",
-	"res://tests/unit/test_trail_registry.gd",
-	"res://tests/unit/test_player_spawn_layout.gd",
-	"res://tests/unit/test_spell_log.gd",
-	"res://tests/unit/test_spell_effect_sync.gd",
-	"res://tests/unit/test_guide_content.gd",
-	"res://tests/unit/test_spell_codex.gd",
-	"res://tests/unit/test_voice_capture_worker.gd",
-	"res://tests/unit/test_gdvosk_extension_config.gd",
-	"res://tests/unit/test_spell_stt_config.gd",
-	"res://tests/integration/test_gdvosk_runtime.gd",
-]
-
-const TREE_TEST_SUITES: Array[String] = [
-	"res://tests/unit/test_spell_validation_runner.gd",
-	"res://tests/unit/test_spell_validation_async.gd",
-	"res://tests/unit/test_spell_pipeline.gd",
-	"res://tests/unit/test_fireball_sky_flare.gd",
-	"res://tests/unit/test_fireball_flight.gd",
-	"res://tests/integration/test_spell_casting_session.gd",
-	"res://tests/unit/test_playable_character_wand.gd",
-]
+const UNIT_LIST_PATH := "res://tests/test_suites.unit.txt"
+const TREE_LIST_PATH := "res://tests/test_suites.tree.txt"
 
 
 func _init() -> void:
@@ -75,10 +27,8 @@ func _run_tests() -> void:
 		return
 
 	var failures := 0
-	for path in TEST_SUITES:
-		failures += _run_suite(path)
-	for path in TREE_TEST_SUITES:
-		failures += _run_suite(path, true)
+	failures += _run_suite_file(UNIT_LIST_PATH, false)
+	failures += _run_suite_file(TREE_LIST_PATH, true)
 
 	if failures == 0:
 		print("All tests passed.")
@@ -86,6 +36,21 @@ func _run_tests() -> void:
 	else:
 		push_error("%d test(s) failed." % failures)
 		_finish(1)
+
+
+func _run_suite_file(list_path: String, needs_tree: bool) -> int:
+	var file := FileAccess.open(list_path, FileAccess.READ)
+	if file == null:
+		push_error("Failed to open suite list: %s" % list_path)
+		return 1
+
+	var failures := 0
+	while file.get_position() < file.get_length():
+		var line := file.get_line().strip_edges()
+		if line.is_empty() or line.begins_with("#"):
+			continue
+		failures += _run_suite(line, needs_tree)
+	return failures
 
 
 func _run_suite(path: String, needs_tree: bool = false) -> int:
@@ -119,14 +84,16 @@ func _finish(exit_code: int) -> void:
 
 func _prepare_exit() -> void:
 	for child in root.get_children():
-		if child is SpellValidationRunner:
-			(child as SpellValidationRunner).shutdown()
+		if child.name == "SpellValidationRunner" and child.has_method("shutdown"):
+			child.shutdown()
 		elif child is CharacterBody3D:
 			child.free()
 	var steam_service := get_root().get_node_or_null("SteamService")
 	if steam_service != null and steam_service.has_method("shutdown"):
 		steam_service.shutdown()
 	SpellValidationWorker.force_stt_in_tests = false
+	if TestEnvScript.is_active():
+		return
 	GdvoskAdapter.unload_model()
 
 

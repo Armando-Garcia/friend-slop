@@ -42,9 +42,9 @@ static func run(work: Dictionary) -> Dictionary:
 				% [raw_samples.size(), samples.size(), sample_rate]
 			)
 		if should_transcribe:
-			var grammar_json := _grammar_json_for_work(work)
+			var grammar_phrases := _grammar_phrases_for_work(work)
 			var stt := _transcribe_for_validation(
-				raw_samples, samples, sample_rate, grammar_json
+				raw_samples, samples, sample_rate, grammar_phrases
 			)
 			var words: Variant = stt.get("words")
 			var starts: Variant = stt.get("starts")
@@ -61,14 +61,14 @@ static func run(work: Dictionary) -> Dictionary:
 						samples.size(),
 						sample_rate,
 						str(GdvoskAdapterScript.is_model_loaded()),
-						not grammar_json.is_empty(),
+						not grammar_phrases.is_empty(),
 					]
 				)
 			else:
 				SpellLogScript.debug(
 					"CastSession",
 					'stt transcript="%s" grammar=%s'
-					% [" ".join(transcript_words), not grammar_json.is_empty()]
+					% [" ".join(transcript_words), not grammar_phrases.is_empty()]
 				)
 
 	if str(work.get("mode", "")) == "free_cast":
@@ -91,7 +91,7 @@ static func run(work: Dictionary) -> Dictionary:
 	)
 
 
-static func _grammar_json_for_work(work: Dictionary) -> String:
+static func _grammar_phrases_for_work(work: Dictionary) -> PackedStringArray:
 	var spell_dicts: Array = work.get("grammar_spells", [])
 	if spell_dicts.is_empty():
 		if str(work.get("mode", "")) == "free_cast":
@@ -100,24 +100,24 @@ static func _grammar_json_for_work(work: Dictionary) -> String:
 			var spell: Variant = work.get("spell", {})
 			if spell is Dictionary and not spell.is_empty():
 				spell_dicts = [spell]
-	return SpellGrammarBuilderScript.build_json_from_spell_dicts(spell_dicts)
+	return SpellGrammarBuilderScript.build_phrases_from_spell_dicts(spell_dicts)
 
 
 static func _transcribe_for_validation(
 	samples: PackedFloat32Array,
 	trimmed: PackedFloat32Array,
 	sample_rate: int,
-	grammar_json: String
+	grammar_phrases: PackedStringArray
 ) -> Dictionary:
 	var stt := GdvoskAdapterScript.transcribe_samples(
-		samples, sample_rate, grammar_json
+		samples, sample_rate, grammar_phrases
 	)
 	var words: Variant = stt.get("words")
 	if words is PackedStringArray and not words.is_empty():
 		return stt
 	if trimmed.is_empty() or trimmed.size() == samples.size():
 		return stt
-	return GdvoskAdapterScript.transcribe_samples(trimmed, sample_rate, grammar_json)
+	return GdvoskAdapterScript.transcribe_samples(trimmed, sample_rate, grammar_phrases)
 
 
 static func _build_targeted_response(

@@ -1,0 +1,59 @@
+[gd_scene format=3 uid="uid://cflarews001"]
+
+[ext_resource type="Script" uid="uid://c0xg8tdso30ll" path="res://scripts/spells/flare_workspace.gd" id="1_workspace"]
+[ext_resource type="PackedScene" uid="uid://cflare001" path="res://scenes/spells/flare.tscn" id="2_flare"]
+[ext_resource type="PackedScene" uid="uid://bplayerwand1" path="res://scenes/characters/player_wand.tscn" id="4_wand"]
+
+[sub_resource type="Environment" id="Environment_studio"]
+background_mode = 1
+background_color = Color(0.02, 0.025, 0.045, 1)
+ambient_light_color = Color(0.28, 0.3, 0.4, 1)
+ambient_light_energy = 0.35
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_floor"]
+size = Vector2(8, 8)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+albedo_color = Color(0.1, 0.11, 0.14, 1)
+roughness = 0.92
+
+[node name="FlareWorkspace" type="Node3D" unique_id=1058162536]
+process_mode = 3
+editor_description = "Flare look-dev. Authored Flare instance for burn preview; Launch Flare spawns a live rocket."
+script = ExtResource("1_workspace")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=140880010]
+environment = SubResource("Environment_studio")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1540756787]
+transform = Transform3D(0.92, -0.12, 0.37, 0, 0.95, 0.31, -0.39, -0.285, 0.875, 2.4, 2.4, 5)
+current = true
+fov = 48.0
+
+[node name="KeyLight" type="DirectionalLight3D" parent="." unique_id=613099754]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 4, 0)
+light_energy = 0.7
+
+[node name="FillLight" type="OmniLight3D" parent="." unique_id=891475988]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.6, 1.4, 1)
+light_color = Color(0.55, 0.65, 0.95, 1)
+light_energy = 0.4
+omni_range = 8.0
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=91847822]
+mesh = SubResource("PlaneMesh_floor")
+surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+
+[node name="Wand" parent="." unique_id=1960301303 instance=ExtResource("4_wand")]
+transform = Transform3D(1, 0, 0, 0, 0.97, -0.24, 0, 0.24, 0.97, 0.18, 1.02, 1.25)
+
+[node name="LaunchPreview" type="Node3D" parent="." unique_id=718042997]
+process_mode = 3
+editor_description = "Runtime launch previews spawn here."
+
+[node name="Flare" parent="." unique_id=406840540 instance=ExtResource("2_flare")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0.2)
+light_peak_energy = 36.0
+light_range = 320.0
+duration_sec = 15.0
+preview_loop = true

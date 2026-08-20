@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help setup setup-dev setup-voice setup-steam sync-voice-addon lint test test-voice test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap
+.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= python
@@ -30,13 +30,13 @@ help:
 	@echo "  make setup-dev             pip install -r requirements-dev.txt (uses .venv)"
 	@echo "  make setup-voice           gdvosk + Vosk model (~500 MB first run)"
 	@echo "  make setup-steam           GodotSteam GDExtension (~27 MB first run)"
-	@echo "  make lint                  gdlint via tools/run_checks.py"
-	@echo "  make test                  Godot unit tests (game + godot-steam-voice library)"
-	@echo "  make test-voice              godot-steam-voice library tests only"
-	@echo "  make sync-voice-addon        Package vendor/godot-steam-voice into addons/"
+	@echo "  make lint                  gdlint + GDScript analyzer warnings"
+	@echo "  make warnings              GDScript analyzer warning probe only (requires Godot)"
+	@echo "  make test                  Godot unit tests"
 	@echo "  make test-ci               smoke-test the GitHub Actions test job locally"
 	@echo "  make release-ci            smoke-test the GitHub Actions release export (Linux)"
-	@echo "  make check                 lint + test"
+	@echo "  make check                 lint + warnings + test"
+	@echo "  make install-hooks         Install git pre-commit (lint + warnings)"
 	@echo "  make import                godot --headless --import"
 	@echo "  make verify-pinned-versions  CI guard: workflows match tools/versions.env"
 	@echo "  make verify-voice          quick file check for gdvosk install"
@@ -74,20 +74,26 @@ endif
 lint:
 	$(RUN_PYTHON) tools/run_checks.py --lint-only
 
+warnings:
+	$(RUN_PYTHON) tools/run_checks.py --warnings-only --require-godot-warnings
+
+install-hooks:
+	@mkdir -p .git/hooks
+	@cp tools/git-hooks/pre-commit .git/hooks/pre-commit
+ifeq ($(OS),Windows_NT)
+	@echo "Installed .git/hooks/pre-commit (runs make lint / run_checks --lint-only)"
+else
+	@chmod +x .git/hooks/pre-commit
+	@echo "Installed .git/hooks/pre-commit (runs make lint / run_checks --lint-only)"
+endif
+
 ifeq ($(OS),Windows_NT)
 test:
 	$(RUN_PYTHON) tools/run_checks.py --tests-only
-test-voice:
-	$(RUN_PYTHON) vendor/godot-steam-voice/tools/run_tests.py --tests-only
 else
 test:
 	GODOT_PATH="$(GODOT)" $(RUN_PYTHON) tools/run_checks.py --tests-only
-test-voice:
-	GODOT_PATH="$(GODOT)" $(RUN_PYTHON) vendor/godot-steam-voice/tools/run_tests.py --tests-only
 endif
-
-sync-voice-addon:
-	$(RUN_PYTHON) tools/sync_godot_steam_voice.py --clone
 
 test-ci:
 	bash tools/ci_smoke_test_job.sh

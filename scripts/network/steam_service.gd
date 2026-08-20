@@ -15,16 +15,25 @@ const LOBBY_ENTER_OK := 1
 const LOBBY_TYPE_FRIENDS_ONLY := 1
 const DEFAULT_APP_ID := 480
 
+const SteamMultiplayerPeerAdapterScript := preload(
+	"res://scripts/network/steam_multiplayer_peer_adapter.gd"
+)
+
 var initialized: bool = false
 var current_lobby_id: int = 0
 
 var _signals_bound: bool = false
+var _p2p_peers: Dictionary = {}
+var _quit_started: bool = false
+var _teardown_in_progress: bool = false
 
 
 func _ready() -> void:
 	if TestEnvScript.is_active():
 		set_process(false)
 		return
+	get_tree().set_auto_accept_quit(false)
+	_bind_window_close()
 	if not is_api_available():
 		TomeDebug.log("SteamService", "GodotSteam not loaded — install via docs/STEAM_SETUP.md")
 		api_initialized.emit(false)
@@ -36,6 +45,16 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if initialized:
 		_steam_call("run_callbacks")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		request_app_quit()
+	elif what == NOTIFICATION_PREDELETE:
+		# Editor Stop / abrupt tree teardown when quit path did not run.
+		# Skip when Steam never started (unit tests) or already shut down.
+		if initialized:
+			teardown_steam_session(false)
 
 
 func is_api_available() -> bool:
@@ -89,16 +108,42 @@ func leave_lobby() -> void:
 	current_lobby_id = 0
 
 
-func shutdown() -> void:
-	set_process(false)
-	leave_lobby()
-	if not initialized or not is_api_available():
-		initialized = false
+## Ordered cleanup for Exit / window close so Steam does not keep "Playing Spacewar".
+func request_app_quit() -> void:
+	if _quit_started:
 		return
-	var steam := _get_steam_object()
-	if steam != null and steam.has_method("steamShutdown"):
-		_steam_call("steamShutdown")
-	initialized = false
+	_quit_started = true
+	teardown_steam_session(true)
+	var tree := get_tree()
+	if tree != null:
+		tree.quit()
+
+
+func teardown_steam_session(stop_network: bool = true) -> void:
+	## Stop voice → close P2P (while lobby known) → multiplayer/lobby → steamShutdown.
+	if _teardown_in_progress:
+		return
+	_teardown_in_progress = true
+	set_process(false)
+	var hub: Node = null
+	if is_inside_tree():
+		hub = get_node_or_null("/root/SteamProximityVoiceHub")
+	if hub != null and hub.has_method("stop_session"):
+		hub.call("stop_session")
+	# Close P2P before leaveLobby so lobby membership is still enumerable.
+	_close_tracked_p2p_sessions()
+	if stop_network and is_inside_tree():
+		var network := get_node_or_null("/root/NetworkManager")
+		if network != null and network.has_method("disconnect_session"):
+			network.call("disconnect_session")
+	leave_lobby()
+	_steam_shutdown_api()
+	_teardown_in_progress = false
+
+
+func shutdown() -> void:
+	## Full Steam teardown without quitting the process (tests, etc.).
+	teardown_steam_session(true)
 
 
 func allow_p2p_relay() -> void:
@@ -131,6 +176,17 @@ func get_lobby_member_by_index(index: int, lobby_id: int = 0) -> int:
 	if not is_ready() or id == 0:
 		return 0
 	return int(_steam_call("getLobbyMemberByIndex", [id, index]))
+
+
+func _steam_shutdown_api() -> void:
+	if not initialized:
+		return
+	if is_api_available():
+		var steam := _get_steam_object()
+		if steam != null and steam.has_method("steamShutdown"):
+			_steam_call("steamShutdown")
+			TomeDebug.log("SteamService", "Steam shut down")
+	initialized = false
 
 
 func _initialize_api() -> void:
@@ -172,6 +228,17 @@ func _read_app_id() -> int:
 	return DEFAULT_APP_ID
 
 
+func _bind_window_close() -> void:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return
+	var window := tree.root
+	if window is Window:
+		var win := window as Window
+		if not win.close_requested.is_connected(request_app_quit):
+			win.close_requested.connect(request_app_quit)
+
+
 func _bind_steam_signals() -> void:
 	if _signals_bound:
 		return
@@ -183,6 +250,8 @@ func _bind_steam_signals() -> void:
 	steam.lobby_chat_update.connect(_on_lobby_chat_update)
 	if steam.has_signal("game_lobby_join_requested"):
 		steam.game_lobby_join_requested.connect(_on_game_lobby_join_requested)
+	if steam.has_signal("p2p_session_request"):
+		steam.p2p_session_request.connect(_on_p2p_session_request)
 	_signals_bound = true
 
 
@@ -200,6 +269,46 @@ func _steam_call(method: String, args: Array = []) -> Variant:
 		push_error("SteamService: Steam.%s is not available" % method)
 		return null
 	return steam.callv(method, args)
+
+
+func _track_p2p_peer(steam_id: int) -> void:
+	if steam_id == 0 or steam_id == get_steam_id():
+		return
+	_p2p_peers[steam_id] = true
+
+
+func _close_tracked_p2p_sessions() -> void:
+	if not is_api_available():
+		_p2p_peers.clear()
+		return
+	for steam_id in _collect_known_remote_steam_ids():
+		_track_p2p_peer(steam_id)
+	var steam := _get_steam_object()
+	var can_close := steam != null and steam.has_method("closeP2PSessionWithUser")
+	for steam_id in _p2p_peers.keys():
+		var id := int(steam_id)
+		if id == 0 or not can_close:
+			continue
+		_steam_call("closeP2PSessionWithUser", [id])
+	_p2p_peers.clear()
+
+
+func _collect_known_remote_steam_ids() -> Array[int]:
+	var ids: Array[int] = []
+	if current_lobby_id != 0:
+		for index in range(get_lobby_member_count()):
+			var member_id := get_lobby_member_by_index(index)
+			if member_id != 0 and member_id != get_steam_id() and not ids.has(member_id):
+				ids.append(member_id)
+	var tree := get_tree() if is_inside_tree() else null
+	if tree != null:
+		var mp := tree.get_multiplayer()
+		if mp != null:
+			for session_id in SteamMultiplayerPeerAdapterScript.collect_session_steam_ids(mp):
+				var id := int(session_id)
+				if id != 0 and id != get_steam_id() and not ids.has(id):
+					ids.append(id)
+	return ids
 
 
 func _on_lobby_created(result_code: int, lobby_id: int) -> void:
@@ -223,6 +332,32 @@ func _on_game_lobby_join_requested(lobby_id: int, _friend_id: int) -> void:
 	lobby_invite_received.emit(lobby_id)
 
 
+func _on_p2p_session_request(remote_steam_id: int) -> void:
+	if not is_ready() or remote_steam_id == 0:
+		return
+	if not _is_known_session_steam_id(remote_steam_id):
+		return
+	_steam_call("acceptP2PSessionWithUser", [remote_steam_id])
+	_track_p2p_peer(remote_steam_id)
+
+
+func _is_known_session_steam_id(steam_id: int) -> bool:
+	if steam_id == get_steam_id():
+		return true
+	if current_lobby_id != 0:
+		for index in range(get_lobby_member_count()):
+			if get_lobby_member_by_index(index) == steam_id:
+				return true
+	var tree := get_tree() if is_inside_tree() else null
+	if tree != null:
+		var mp := tree.get_multiplayer()
+		if mp != null:
+			for session_id in SteamMultiplayerPeerAdapterScript.collect_session_steam_ids(mp):
+				if int(session_id) == steam_id:
+					return true
+	return false
+
+
 func _on_lobby_chat_update(
 	_lobby_id: int,
 	change_id: int,
@@ -233,6 +368,9 @@ func _on_lobby_chat_update(
 		return
 	if change_id == 0:
 		return
+	if is_ready():
+		_steam_call("acceptP2PSessionWithUser", [change_id])
+		_track_p2p_peer(change_id)
 	lobby_member_joined.emit(change_id)
 
 

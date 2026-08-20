@@ -1,0 +1,112 @@
+[gd_scene format=3 uid="uid://csmokews001"]
+
+[ext_resource type="Script" uid="uid://cecvhqyqvndud" path="res://scripts/spells/smoke_workspace.gd" id="1_workspace"]
+[ext_resource type="PackedScene" uid="uid://cstreaksmoke1" path="res://scenes/spells/streak_smoke.tscn" id="2_smoke"]
+
+[sub_resource type="Environment" id="Environment_studio"]
+background_mode = 1
+background_color = Color(0.015, 0.018, 0.03, 1)
+ambient_light_color = Color(0.25, 0.28, 0.38, 1)
+ambient_light_energy = 0.4
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_floor"]
+size = Vector2(10, 10)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_floor"]
+albedo_color = Color(0.09, 0.1, 0.13, 1)
+roughness = 0.92
+
+[sub_resource type="SphereMesh" id="SphereMesh_tip"]
+radius = 0.05
+height = 0.1
+radial_segments = 12
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tip"]
+shading_mode = 0
+albedo_color = Color(1, 0.92, 0.75, 1)
+
+[sub_resource type="SphereMesh" id="SphereMesh_tip_core"]
+radius = 0.025
+height = 0.05
+radial_segments = 10
+rings = 5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tip_core"]
+shading_mode = 0
+albedo_color = Color(1, 0.98, 0.92, 1)
+
+[node name="SmokeWorkspace" type="Node3D" unique_id=52300803]
+process_mode = 3
+editor_description = "Streak smoke look-dev only. Play Trail Path / Play Rising Plumes from the inspector. Not wired to Flare."
+script = ExtResource("1_workspace")
+trail_path_radius = 2.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1454125582]
+environment = SubResource("Environment_studio")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1705112820]
+transform = Transform3D(0.866025, -0.2, 0.458, 0, 0.916, 0.401, -0.5, -0.347, 0.793, 2.4, 2, 4)
+current = true
+fov = 42.0
+
+[node name="KeyLight" type="DirectionalLight3D" parent="." unique_id=1191383281]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 4, 0)
+light_energy = 0.55
+
+[node name="FillLight" type="OmniLight3D" parent="." unique_id=1591056841]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4, 1.6, 1.2)
+light_color = Color(0.55, 0.65, 0.95, 1)
+light_energy = 0.35
+omni_range = 9.0
+
+[node name="TipLight" type="OmniLight3D" parent="." unique_id=794059931]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+light_color = Color(1, 0.35, 0.12, 1)
+light_energy = 4.0
+light_volumetric_fog_energy = 0.0
+omni_range = 6.0
+
+[node name="Floor" type="MeshInstance3D" parent="." unique_id=1737277650]
+mesh = SubResource("PlaneMesh_floor")
+surface_material_override/0 = SubResource("StandardMaterial3D_floor")
+
+[node name="DummyTip" type="Node3D" parent="." unique_id=721224605]
+editor_description = "Emitter tip sampled by StreakSmoke."
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.35, 0)
+
+[node name="Glow" type="MeshInstance3D" parent="DummyTip" unique_id=536042144]
+cast_shadow = 0
+mesh = SubResource("SphereMesh_tip")
+surface_material_override/0 = SubResource("StandardMaterial3D_tip")
+
+[node name="Core" type="MeshInstance3D" parent="DummyTip" unique_id=1402522610]
+cast_shadow = 0
+mesh = SubResource("SphereMesh_tip_core")
+surface_material_override/0 = SubResource("StandardMaterial3D_tip_core")
+
+[node name="StreakSmoke" parent="." unique_id=830096641 instance=ExtResource("2_smoke")]
+process_mode = 3
+trail_sample_spacing = 0.08
+trail_tube_radius = 0.03
+trail_radius_grow = 3.0
+trail_point_lifetime = 10.0
+trail_fade_start = 0.35
+trail_early_life_scale = 0.55
+trail_late_life_scale = 1.0
+trail_life_ramp_sec = 2.5
+trail_max_points = 1024
+trail_oscillation_amplitude = 0.0
+trail_oscillation_frequency = 0.05
+rising_rise_speed = 1.0
+rising_emit_spacing = 0.2
+rising_tube_radius = 0.03
+rising_point_lifetime = 6.0
+rising_linger_start = 0.3
+rising_linger_expand = 2.2
+rising_max_points = 256
+rising_oscillation_amplitude = 0.1
+rising_oscillation_frequency = 1.2
+rising_spread_start_height = 0.2
+rising_spread_distance = 1.0
+rising_spread_amount = 3.0

@@ -18,7 +18,9 @@ var carrier: Node = null
 func try_pickup(player: Node, player_pos: Vector3, item_pos: Vector3, range_sq: float) -> bool:
 	if phase != Phase.SEEK_ITEM:
 		return false
-	if player_pos.distance_squared_to(item_pos) > range_sq:
+	var dx := player_pos.x - item_pos.x
+	var dz := player_pos.z - item_pos.z
+	if dx * dx + dz * dz > range_sq:
 		return false
 	phase = Phase.CARRIED
 	carrier = player
@@ -28,7 +30,9 @@ func try_pickup(player: Node, player_pos: Vector3, item_pos: Vector3, range_sq: 
 func try_deliver(player: Node, player_pos: Vector3, turn_in_pos: Vector3, range_sq: float) -> bool:
 	if phase != Phase.CARRIED or carrier != player:
 		return false
-	if player_pos.distance_squared_to(turn_in_pos) > range_sq:
+	var dx := player_pos.x - turn_in_pos.x
+	var dz := player_pos.z - turn_in_pos.z
+	if dx * dx + dz * dz > range_sq:
 		return false
 	phase = Phase.COMPLETE
 	carrier = null

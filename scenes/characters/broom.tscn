@@ -1,0 +1,74 @@
+[gd_scene format=3 uid="uid://cxhdm10j1ei3m"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_handle"]
+albedo_color = Color(0.42, 0.28, 0.14, 1)
+roughness = 0.85
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_handle"]
+top_radius = 0.02
+bottom_radius = 0.02
+height = 0.8
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wrap"]
+albedo_color = Color(0.08, 0.08, 0.09, 1)
+metallic = 0.85
+roughness = 0.35
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_wrap"]
+top_radius = 0.035
+bottom_radius = 0.035
+height = 0.025
+
+[sub_resource type="Gradient" id="Gradient_straw"]
+offsets = PackedFloat32Array(0, 0.35, 0.65, 1)
+colors = PackedColorArray(0.45, 0.32, 0.12, 1, 0.72, 0.55, 0.22, 1, 0.88, 0.72, 0.38, 1, 0.62, 0.48, 0.18, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_straw"]
+noise_type = 2
+frequency = 0.12
+fractal_type = 2
+fractal_octaves = 4
+fractal_lacunarity = 2.5
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_straw"]
+width = 128
+height = 256
+noise = SubResource("FastNoiseLite_straw")
+color_ramp = SubResource("Gradient_straw")
+seamless = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bristles"]
+albedo_color = Color(0.92, 0.82, 0.55, 1)
+albedo_texture = SubResource("NoiseTexture2D_straw")
+roughness = 0.92
+uv1_scale = Vector3(14, 1.5, 1)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_bristles"]
+top_radius = 0.055
+bottom_radius = 0.025
+height = 0.2
+radial_segments = 16
+
+[node name="Broom" type="Node3D" unique_id=2138536751]
+editor_description = "Simple broom: Handle + Wrap + Bristles cone with NoiseTexture2D. Edit mesh radii/height and material UV scale."
+
+[node name="Handle" type="MeshInstance3D" parent="." unique_id=1542298786]
+transform = Transform3D(0, 0, 1, -1, 0, 0, 0, 1, 0, 0, 0, 0.06485818)
+layers = 3
+material_override = SubResource("StandardMaterial3D_handle")
+mesh = SubResource("CylinderMesh_handle")
+
+[node name="Bristles" type="Node3D" parent="." unique_id=1906415662]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.48)
+
+[node name="Wrap" type="MeshInstance3D" parent="Bristles" unique_id=428419945]
+transform = Transform3D(0, 0, 1, -1, 0, 0, 0, 1, 0, 0, 0, 0)
+layers = 3
+material_override = SubResource("StandardMaterial3D_wrap")
+mesh = SubResource("CylinderMesh_wrap")
+
+[node name="Brush" type="MeshInstance3D" parent="Bristles" unique_id=1169706654]
+transform = Transform3D(0, 0, 1, -1, 0, 0, 0, 1, 0, 0, 0, 0.110694855)
+layers = 3
+material_override = SubResource("StandardMaterial3D_bristles")
+mesh = SubResource("CylinderMesh_bristles")

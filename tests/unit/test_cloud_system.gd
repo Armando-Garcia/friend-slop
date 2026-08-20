@@ -9,8 +9,9 @@ var failures: int = 0
 
 func run() -> int:
 	test_deterministic_positions()
-	test_count_scales_with_span()
-	test_horizon_travel_span()
+	test_count_scales_with_coverage()
+	test_fixed_spawn_area()
+	test_wind_speed_drives_velocity()
 	test_clouds_cast_shadows()
 	test_clouds_spawn_within_bounds()
 	test_wrap_around()
@@ -39,44 +40,96 @@ func test_deterministic_positions() -> void:
 		var pos_a := state_a.position_at(elapsed, bounds_min, bounds_max)
 		var pos_b := state_b.position_at(elapsed, bounds_min, bounds_max)
 		_assert_eq(pos_a, pos_b, "same seed should produce same cloud positions")
+		_assert_eq(
+			state_a.mesh_index,
+			state_b.mesh_index,
+			"same seed should pick the same pool mesh"
+		)
 
 	_free_system(system_a)
 	_free_system(system_b)
 
 
-func test_count_scales_with_span() -> void:
-	var small := _make_system(
-		Vector3(-50.0, 80.0, -50.0), Vector3(50.0, 120.0, 50.0), 1234
-	)
-	var large := _make_system(
-		Vector3(-300.0, 80.0, -300.0), Vector3(300.0, 120.0, 300.0), 1234
-	)
+func test_count_scales_with_coverage() -> void:
+	var sparse := CloudSystemScript.new()
+	sparse.spawn_size = Vector3(680.0, 40.0, 680.0)
+	sparse.sky_coverage = 0.1
+	var dense := CloudSystemScript.new()
+	dense.spawn_size = Vector3(680.0, 40.0, 680.0)
+	dense.sky_coverage = 0.8
+
+	var root := Node3D.new()
+	root.add_child(sparse)
+	root.add_child(dense)
+	sparse.configure_from_spawn_area(1234, 1000)
+	dense.configure_from_spawn_area(1234, 1000)
 
 	_assert_true(
-		large.get_cloud_count() > small.get_cloud_count(),
-		"larger bounds should produce more clouds"
+		dense.get_cloud_count() > sparse.get_cloud_count(),
+		"higher sky coverage should produce more clouds"
 	)
 
-	_free_system(small)
-	_free_system(large)
+	root.queue_free()
 
 
-func test_horizon_travel_span() -> void:
+func test_fixed_spawn_area() -> void:
 	var root := Node3D.new()
 	var system: CloudSystem = CloudSystemScript.new()
+	system.spawn_size = Vector3(500.0, 30.0, 400.0)
+	system.spawn_center_y = 110.0
 	root.add_child(system)
-	system.configure_for_maze(45, 45, 3.0, 200.0, 1234, 1000)
-
-	var maze_span := 91.0 * 3.0
-	var expected_span := maze_span * CloudSystemScript.TRAVEL_SPAN_FACTOR
+	# Maze dims must not change the fixed spawn box.
+	system.configure_for_maze(15, 15, 3.0, 200.0, 1234, 1000)
+	var size := system.get_bounds_max() - system.get_bounds_min()
 	_assert_true(
-		is_equal_approx(system.get_travel_span(), expected_span),
-		"cloud travel span should be at least 2.5x maze span"
+		is_equal_approx(size.x, 500.0) and is_equal_approx(size.z, 400.0),
+		"spawn bounds should match fixed spawn_size, not maze size"
 	)
-	var bounds_size := system.get_bounds_max().x - system.get_bounds_min().x
 	_assert_true(
-		bounds_size >= expected_span - 0.01,
-		"cloud bounds should cover the full travel span"
+		is_equal_approx(size.y, 30.0),
+		"spawn band thickness should match spawn_size.y"
+	)
+	_assert_true(
+		is_equal_approx(system.get_travel_span(), 500.0),
+		"travel span should be the larger horizontal spawn axis"
+	)
+
+	system.configure_for_maze(45, 45, 3.0, 200.0, 1234, 1000)
+	var size_large_maze := system.get_bounds_max() - system.get_bounds_min()
+	_assert_eq(size_large_maze, size, "maze size changes should not alter cloud spawn box")
+
+	root.queue_free()
+
+
+func test_wind_speed_drives_velocity() -> void:
+	var root := Node3D.new()
+	var system: CloudSystem = CloudSystemScript.new()
+	system.spawn_size = Vector3(200.0, 20.0, 200.0)
+	system.sky_coverage = 0.2
+	system.wind_direction = 0.0
+	system.wind_speed = 12.0
+	root.add_child(system)
+	system.configure_from_spawn_area(99, 1000)
+
+	var drift := system.get_shared_drift_velocity()
+	_assert_true(
+		is_equal_approx(drift.length(), 12.0),
+		"shared drift speed should match wind_speed"
+	)
+	_assert_true(
+		system.get_cloud_count() > 0,
+		"expected clouds for wind speed check"
+	)
+	var state: CloudState = system.get_cloud_state(0)
+	_assert_true(
+		is_equal_approx(state.velocity.length(), 12.0),
+		"each cloud velocity should match wind_speed"
+	)
+
+	system.wind_speed = 3.0
+	_assert_true(
+		is_equal_approx(system.get_shared_drift_velocity().length(), 3.0),
+		"updating wind_speed should update live drift velocity"
 	)
 
 	root.queue_free()
@@ -90,11 +143,20 @@ func test_clouds_cast_shadows() -> void:
 	_assert_true(holder.get_child_count() > 0, "cloud holder should have children")
 
 	for child in holder.get_children():
-		var mesh: MeshInstance3D = child as MeshInstance3D
-		_assert_true(mesh != null, "cloud child should be MeshInstance3D")
+		var root: Node3D = child as Node3D
+		_assert_true(root != null, "cloud child should be a Node3D scene instance")
+		var mesh: MeshInstance3D = root.get_node_or_null("Mesh") as MeshInstance3D
+		_assert_true(mesh != null, "cloud should have a Mesh child")
+		_assert_true(mesh.mesh != null, "cloud should use a pool mesh")
+		var shadow: MeshInstance3D = root.get_node_or_null("ShadowCaster") as MeshInstance3D
+		_assert_true(shadow != null, "cloud should have an opaque shadow caster")
 		_assert_true(
-			mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_ON,
-			"cloud mesh should cast shadows on the maze"
+			shadow.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+			"cloud shadow proxy should cast shadows only"
+		)
+		_assert_true(
+			shadow.mesh is BoxMesh or shadow.mesh is SphereMesh,
+			"cloud shadow proxy should use a simple box/sphere mesh"
 		)
 
 	_free_system(system)

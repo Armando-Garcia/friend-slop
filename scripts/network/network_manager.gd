@@ -13,13 +13,16 @@ signal lobby_roles_changed
 signal lobby_character_configs_changed
 signal session_ended(reason: String)
 signal steam_lobby_invite_received(lobby_id: int)
+signal players_spawned
 
 const APPRENTICE_SCENE := preload("res://scenes/characters/apprentice.tscn")
-const WARDEN_SCENE := preload("res://scenes/characters/warden.tscn")
+const HEADMASTER_SCENE := preload("res://scenes/characters/headmaster.tscn")
 const DEFAULT_HORROR_CONFIG := preload("res://resources/match/default_horror_config.tres")
 
 const SteamTransportScript := preload("res://scripts/network/steam_transport.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
+const GameWorldScript := preload("res://scripts/game_world.gd")
+const DroppedBroomScript := preload("res://scripts/headmaster/dropped_broom.gd")
 
 var transport: MultiplayerTransport
 var is_session_active: bool = false
@@ -36,8 +39,6 @@ func _ready() -> void:
 	if SteamService.lobby_invite_received.is_connected(_on_steam_lobby_invite_received):
 		SteamService.lobby_invite_received.disconnect(_on_steam_lobby_invite_received)
 	SteamService.lobby_invite_received.connect(_on_steam_lobby_invite_received)
-	SteamService.lobby_member_joined.connect(_on_steam_lobby_member_joined)
-	became_host.connect(_on_became_host_sync_steam_peers)
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -143,10 +144,15 @@ func host_session(options: Dictionary = {}) -> Error:
 		return ERR_UNCONFIGURED
 	disconnect_session()
 
+	@warning_ignore("redundant_await")
 	var err: Error = await transport.host(options)
 	if err != OK:
-		connection_failed.emit("Hosting failed.")
-		return err
+		# Solo / offline preview: local OfflineMultiplayerPeer lobby (no Steam required).
+		err = _host_offline_local_session()
+		if err != OK:
+			connection_failed.emit("Hosting failed.")
+			return err
+		return OK
 
 	is_session_active = true
 	lobby.reset()
@@ -154,6 +160,22 @@ func host_session(options: Dictionary = {}) -> Error:
 	_broadcast_lobby_state()
 	became_host.emit(get_room_code())
 	_notify_lobby_roster_changed()
+	return OK
+
+
+func _host_offline_local_session() -> Error:
+	# One-player lobby without Steam — same start_game path as multiplayer.
+	disconnect_session()
+	var peer := OfflineMultiplayerPeer.new()
+	multiplayer.multiplayer_peer = peer
+	is_session_active = true
+	lobby.reset()
+	lobby.set_default_roles([1])
+	lobby.apply_role(1, SettingsManager.dev_solo_role)
+	_broadcast_lobby_state()
+	became_host.emit("local")
+	_notify_lobby_roster_changed()
+	status_changed.emit("Local lobby ready. Start alone, or host online to invite friends.")
 	return OK
 
 
@@ -165,6 +187,7 @@ func join_session(room_code: String, options: Dictionary = {}) -> Error:
 	var join_options := options.duplicate()
 	join_options["room_code"] = room_code
 
+	@warning_ignore("redundant_await")
 	var err: Error = await transport.join(join_options)
 	if err != OK:
 		connection_failed.emit("Join failed.")
@@ -206,6 +229,9 @@ func disconnect_session() -> void:
 	lobby.reset()
 	MatchStateManager.reset()
 	TrailRegistry.reset()
+	# Autoload lookup needs an active tree (unit tests instantiate this off-tree).
+	if is_inside_tree():
+		SteamProximityVoiceHub.stop_session()
 	if transport != null:
 		transport.disconnect_session()
 
@@ -214,8 +240,7 @@ func spawn_players(
 	players_root: Node3D,
 	configure_local_player: Callable
 ) -> void:
-	for child in players_root.get_children():
-		child.queue_free()
+	_clear_player_nodes(players_root)
 
 	if not GameState.is_multiplayer:
 		var solo_player := _instantiate_player_for_peer(1)
@@ -223,10 +248,32 @@ func spawn_players(
 		players_root.add_child(solo_player)
 		solo_player.initialize_player(0)
 		configure_local_player.call(solo_player)
+		players_spawned.emit()
 		return
 
+	call_deferred("_spawn_multiplayer_players", players_root, configure_local_player)
+
+
+func _clear_player_nodes(players_root: Node3D) -> void:
+	## Keep PlayerSpawnSlot roster markers; only remove live character instances.
+	var to_free: Array[Node] = []
+	for child in players_root.get_children():
+		if child is PlayerSpawnSlot:
+			continue
+		to_free.append(child)
+	for child in to_free:
+		set_player_sync_enabled(child, false)
+		players_root.remove_child(child)
+		child.queue_free()
+
+
+func _spawn_multiplayer_players(
+	players_root: Node3D,
+	configure_local_player: Callable
+) -> void:
 	for peer_id in get_lobby_peer_ids():
 		spawn_player_for_peer(peer_id, players_root, configure_local_player)
+	players_spawned.emit()
 
 
 func spawn_player_for_peer(
@@ -239,10 +286,25 @@ func spawn_player_for_peer(
 
 	var player := _instantiate_player_for_peer(peer_id)
 	player.name = str(peer_id)
+	# Authority must be set before enter-tree: PlayableCharacter._ready() decides
+	# camera ownership from is_multiplayer_authority(), and MultiplayerSynchronizer
+	# registers against the authority it sees when it enters the tree. Assigning it
+	# afterwards let every peer claim the first-person view of every body.
 	player.set_multiplayer_authority(peer_id)
-	players_root.add_child(player)
+	players_root.add_child(player, true)
 	player.initialize_player(get_player_index_for_peer(peer_id))
-	if peer_id == multiplayer.get_unique_id():
+	var is_local := peer_id == multiplayer.get_unique_id()
+	TomeDebug.log(
+		"NetworkManager",
+		"spawned peer=%d role=%s authority=%d local=%s"
+		% [
+			peer_id,
+			RoleAssignment.role_label(GameState.get_role_for_peer(peer_id)),
+			player.get_multiplayer_authority(),
+			is_local,
+		]
+	)
+	if is_local:
 		configure_local_player.call(player)
 
 
@@ -258,6 +320,8 @@ func _rpc_start_game(
 		"Start game RPC received (peer_id=%s, seed=%s)"
 		% [multiplayer.get_unique_id(), run_seed]
 	)
+	# Every peer (host + clients) must drop lobby chat before loading the match.
+	SteamProximityVoiceHub.set_mode(SteamProximityVoiceHub.Mode.OFF)
 	MatchStateManager.reset()
 	GameState.prepare_match(run_seed, roles, character_configs)
 	## Synchronize the deterministic clock used by clouds and other time-driven effects.
@@ -265,7 +329,11 @@ func _rpc_start_game(
 	if not match_snapshot.is_empty():
 		MatchStateManager.apply_snapshot(match_snapshot)
 	MatchStateManager.log_summary()
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	var app := get_tree().get_first_node_in_group("game_app")
+	if app != null and app.has_method("enter_match"):
+		app.call("enter_match")
+	else:
+		get_tree().change_scene_to_file("res://scenes/match.tscn")
 
 
 func sync_match_phase(next: int) -> void:
@@ -319,7 +387,7 @@ func request_spell_cast(spell_id: String, params: Dictionary) -> void:
 
 
 func broadcast_spell_cast(caster_peer_id: int, spell_id: String, params: Dictionary) -> void:
-	if not GameState.is_multiplayer:
+	if not GameState.is_multiplayer or not MatchStateManager.allows_gameplay_actions():
 		return
 	if multiplayer.is_server():
 		var wire_params := _prepare_spell_cast_wire(caster_peer_id, spell_id, params)
@@ -335,7 +403,7 @@ func _prepare_spell_cast_wire(
 	spell_id: String,
 	params: Dictionary
 ) -> Dictionary:
-	var main := get_tree().current_scene
+	var main: Node = GameWorldScript.find_match_root(get_tree())
 	if main != null and main.has_method("prepare_spell_cast_wire"):
 		return main.prepare_spell_cast_wire(caster_peer_id, spell_id, params)
 	return SpellEffectSyncScript.pack_for_network(SpellEffectSyncScript.normalize_params(params))
@@ -343,20 +411,163 @@ func _prepare_spell_cast_wire(
 
 @rpc("authority", "call_local", "reliable")
 func _execute_spell_cast(caster_peer_id: int, spell_id: String, params: Dictionary) -> void:
-	var main := get_tree().current_scene
-	if main != null and main.has_method("apply_synced_spell_cast"):
-		main.apply_synced_spell_cast(caster_peer_id, spell_id, params)
+	_forward_to_main("apply_synced_spell_cast", [caster_peer_id, spell_id, params])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_spell_world_event(
+	kind: String,
+	event: String,
+	object_id: String,
+	pos_x: float,
+	pos_y: float,
+	pos_z: float
+) -> void:
+	if not multiplayer.is_server() or not MatchStateManager.allows_gameplay_actions():
+		return
+	## Host has not applied this event yet (client detected it).
+	_forward_to_main(
+		"apply_spell_world_event",
+		[kind, event, object_id, pos_x, pos_y, pos_z]
+	)
+	_rpc_spell_world_event.rpc(kind, event, object_id, pos_x, pos_y, pos_z)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_spell_world_event(
+	kind: String,
+	event: String,
+	object_id: String,
+	pos_x: float,
+	pos_y: float,
+	pos_z: float
+) -> void:
+	## call_remote: sender already applied locally.
+	_forward_to_main(
+		"apply_spell_world_event",
+		[kind, event, object_id, pos_x, pos_y, pos_z]
+	)
+
+
+func request_match_victory(winner_peer_id: int) -> void:
+	if not MatchStateManager.allows_gameplay_actions():
+		TomeDebug.log("NetworkManager", "Victory blocked — gameplay actions not allowed")
+		_forward_to_main("reset_maze_exit_trigger_from_network", [])
+		return
+	if multiplayer.is_server():
+		_rpc_match_victory.rpc(winner_peer_id)
+	else:
+		_request_match_victory.rpc_id(1, winner_peer_id)
+
+
+func relay_delivery_objective(op: int, payload: Variant = null) -> void:
+	if not MatchStateManager.allows_gameplay_actions():
+		return
+	match op:
+		DeliveryObjectiveSync.NetworkOp.REQUEST_INTERACT:
+			_request_delivery_objective_interact.rpc_id(1, int(payload))
+		DeliveryObjectiveSync.NetworkOp.BROADCAST_STATE:
+			if not multiplayer.is_server():
+				return
+			_rpc_delivery_objective_state.rpc(payload as Dictionary)
+		DeliveryObjectiveSync.NetworkOp.BROADCAST_PING:
+			if not multiplayer.is_server():
+				return
+			_rpc_delivery_objective_ping.rpc()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_delivery_objective_interact(action: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var actor_peer_id := multiplayer.get_remote_sender_id()
+	_forward_to_main(
+		"apply_delivery_objective_network",
+		[DeliveryObjectiveSync.NetworkOp.REQUEST_INTERACT, [actor_peer_id, action]]
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_delivery_objective_state(data: Dictionary) -> void:
+	_forward_to_main(
+		"apply_delivery_objective_network",
+		[DeliveryObjectiveSync.NetworkOp.BROADCAST_STATE, data]
+	)
+
+
+@rpc("authority", "call_local", "unreliable")
+func _rpc_delivery_objective_ping() -> void:
+	_forward_to_main(
+		"apply_delivery_objective_network",
+		[DeliveryObjectiveSync.NetworkOp.BROADCAST_PING, null]
+	)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_match_victory(winner_peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_rpc_match_victory.rpc(winner_peer_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_match_victory(winner_peer_id: int) -> void:
+	_forward_to_main("trigger_match_victory", [winner_peer_id])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_broom_drop(
+	spawn_id: String,
+	pos_x: float,
+	pos_y: float,
+	pos_z: float,
+	vel_x: float,
+	vel_y: float,
+	vel_z: float
+) -> void:
+	if not multiplayer.is_server() or not MatchStateManager.allows_gameplay_actions():
+		return
+	_rpc_broom_drop.rpc(spawn_id, pos_x, pos_y, pos_z, vel_x, vel_y, vel_z)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_broom_drop(
+	spawn_id: String,
+	pos_x: float,
+	pos_y: float,
+	pos_z: float,
+	vel_x: float,
+	vel_y: float,
+	vel_z: float
+) -> void:
+	DroppedBroomScript.spawn_local(
+		spawn_id, Vector3(pos_x, pos_y, pos_z), Vector3(vel_x, vel_y, vel_z)
+	)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_broom_pickup(spawn_id: String, peer_id: int) -> void:
+	if not multiplayer.is_server() or not MatchStateManager.allows_gameplay_actions():
+		return
+	_rpc_broom_pickup.rpc(spawn_id, peer_id)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_broom_pickup(spawn_id: String, peer_id: int) -> void:
+	DroppedBroomScript.apply_pickup(get_tree(), spawn_id, peer_id)
 
 
 @rpc("any_peer", "call_remote", "unreliable")
-func submit_trail_sample(seq: int, x: float, z: float) -> void:
-	if not multiplayer.is_server():
+func _submit_trail_sample(seq: int, x: float, z: float) -> void:
+	if not multiplayer.is_server() or not MatchStateManager.allows_gameplay_actions():
 		return
 	TrailRegistry.host_accept_sample(multiplayer.get_remote_sender_id(), seq, x, z)
 
 
 @rpc("authority", "call_local", "unreliable")
-func broadcast_trail_sample(peer_id: int, seq: int, x: float, z: float, time_msec: int) -> void:
+func _broadcast_trail_sample(peer_id: int, seq: int, x: float, z: float, time_msec: int) -> void:
+	if not MatchStateManager.allows_gameplay_actions():
+		return
 	TrailRegistry.client_apply_sample(peer_id, seq, x, z, time_msec)
 
 
@@ -378,18 +589,6 @@ func _on_steam_lobby_invite_received(lobby_id: int) -> void:
 	steam_lobby_invite_received.emit(lobby_id)
 
 
-func _on_became_host_sync_steam_peers(_room_code: String) -> void:
-	call_deferred("_sync_steam_lobby_peers")
-
-
-func _on_steam_lobby_member_joined(steam_id: int) -> void:
-	if not is_host():
-		return
-	if steam_id == SteamService.get_steam_id():
-		return
-	_try_add_steam_peer(steam_id)
-
-
 func _sync_steam_lobby_peers() -> void:
 	if not is_host():
 		return
@@ -405,14 +604,31 @@ func _sync_steam_lobby_peers() -> void:
 
 
 func _try_add_steam_peer(steam_id: int) -> void:
+	if not is_host() or not is_session_active:
+		return
 	var mp_peer := multiplayer.multiplayer_peer
 	if mp_peer == null or not mp_peer.has_method("add_peer"):
 		TomeDebug.log("NetworkManager", "Cannot add Steam peer %s — multiplayer peer missing" % steam_id)
 		return
+	if _steam_peer_has_mapping(mp_peer, steam_id):
+		return
 	if _steam_peer_already_connected(mp_peer, steam_id):
 		return
 	var err: Error = mp_peer.call("add_peer", steam_id, 0)
-	TomeDebug.log("NetworkManager", "add_peer steam_id=%s err=%s" % [steam_id, err])
+	if err == OK:
+		TomeDebug.log("NetworkManager", "add_peer steam_id=%s err=%s" % [steam_id, err])
+	elif err == ERR_CANT_CREATE:
+		# Client likely has not finished connect_to_lobby yet, or already connected
+		# inbound — a duplicate outbound add_peer is invalid. Skip noisy retries.
+		pass
+	else:
+		TomeDebug.log("NetworkManager", "add_peer steam_id=%s err=%s" % [steam_id, err])
+
+
+func _steam_peer_has_mapping(mp_peer: Object, steam_id: int) -> bool:
+	if not mp_peer.has_method("get_peer_id_for_steam_id"):
+		return false
+	return int(mp_peer.call("get_peer_id_for_steam_id", steam_id)) != 0
 
 
 func _steam_peer_already_connected(mp_peer: Object, steam_id: int) -> bool:
@@ -448,7 +664,7 @@ func _on_connection_failed() -> void:
 
 
 func _on_server_disconnected() -> void:
-	is_session_active = false
+	disconnect_session()
 	session_ended.emit("Host disconnected.")
 	status_changed.emit("Host disconnected.")
 
@@ -492,10 +708,38 @@ func _pack_character_configs_for_current_peers() -> Dictionary:
 	)
 
 
+static func set_player_sync_enabled(player_root: Node, enabled: bool) -> void:
+	var sync := player_root.get_node_or_null("MultiplayerSynchronizer") as MultiplayerSynchronizer
+	if sync != null:
+		sync.public_visibility = enabled
+
+
+static func set_players_sync_enabled(players_root: Node3D, enabled: bool) -> void:
+	for child in players_root.get_children():
+		set_player_sync_enabled(child, enabled)
+
+
+static func disable_player_sync(player_root: Node) -> void:
+	set_player_sync_enabled(player_root, false)
+
+
+func _forward_to_main(method: StringName, args: Array = []) -> void:
+	# Victory / exit-reset must still reach Main even if the match is leaving ACTIVE.
+	var always_forward := (
+		method == &"trigger_match_victory"
+		or method == &"reset_maze_exit_trigger_from_network"
+	)
+	if not always_forward and not MatchStateManager.allows_gameplay_actions():
+		return
+	var main: Node = GameWorldScript.find_match_root(get_tree())
+	if main != null and main.has_method(method):
+		main.callv(method, args)
+
+
 func _instantiate_player_for_peer(peer_id: int) -> CharacterBody3D:
 	var scene := (
-		WARDEN_SCENE
-		if GameState.get_role_for_peer(peer_id) == GameState.PlayerRole.WARDEN
+		HEADMASTER_SCENE
+		if GameState.get_role_for_peer(peer_id) == GameState.PlayerRole.HEADMASTER
 		else APPRENTICE_SCENE
 	)
 	return scene.instantiate() as CharacterBody3D

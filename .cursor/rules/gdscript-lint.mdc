@@ -1,5 +1,5 @@
 ---
-description: Run gdlint after editing GDScript files
+description: Run gdlint and GDScript warnings after editing GDScript files
 globs: **/*.gd
 alwaysApply: false
 ---
@@ -9,10 +9,12 @@ alwaysApply: false
 After editing `.gd` files, run the project checks:
 
 ```powershell
-python tools/run_checks.py
+python tools/run_checks.py --lint-only
 ```
 
-Or use the VS Code task **Run All Checks**.
+Or use the VS Code task **Run All Checks** / `make check`.
+
+`--lint-only` covers gdlint plus Godot analyzer warnings (requires a local Godot binary).
 
 Install the linter if missing: `python -m pip install -r requirements-dev.txt`
 

@@ -26,7 +26,17 @@
     {
       "label": "GDScript: Lint",
       "type": "shell",
-      "command": "powershell -ExecutionPolicy Bypass -File \"${workspaceFolder}/tools/gdlint.ps1\" .",
+      "command": "python \"${workspaceFolder}/tools/run_checks.py\" --lint-only",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "GDScript: Analyzer Warnings",
+      "type": "shell",
+      "command": "python \"${workspaceFolder}/tools/run_checks.py\" --warnings-only --require-godot-warnings",
       "group": "test",
       "presentation": {
         "reveal": "always",

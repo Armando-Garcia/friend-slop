@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="SpellDefinition" load_steps=2 format=3 uid="uid://spell_haste"]
+[gd_resource type="Resource" script_class="SpellDefinition" format=3 uid="uid://678bsder6qrs"]
 
-[ext_resource type="Script" path="res://scripts/spells/spell_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://dwdwxw8dalcmm" path="res://scripts/spells/spell_definition.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
@@ -8,5 +8,8 @@ id = "haste"
 display_name = "Haste"
 incantation_words = PackedStringArray("speed", "up")
 syllable_cadence_ms = PackedInt32Array(0, 450)
+pitch_targets_hz = null
 cooldown_sec = 10.0
 effect_id = "haste"
+color = Color(0.45, 0.78, 1, 1)
+category = 3

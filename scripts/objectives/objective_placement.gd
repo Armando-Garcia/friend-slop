@@ -1,6 +1,8 @@
 class_name ObjectivePlacement
 extends RefCounted
 
+const MazeCarverScript := preload("res://scripts/maze_carver.gd")
+
 const PLACEMENT_SALT := "delivery_objective"
 const MIN_ITEM_DISTANCE_CELLS := 6
 const MIN_TURN_IN_DISTANCE_CELLS := 10
@@ -16,7 +18,8 @@ static func plan(
 	maze_height: int,
 	spawn_cell: Vector2i,
 	run_seed: int,
-	spawn_relic_near_spawn: bool = false
+	spawn_relic_near_spawn: bool = false,
+	spire_clearing_size: float = 0.0
 ) -> Dictionary:
 	var reachable := DiscoverableSpawnPlan.collect_reachable_cells(
 		wall_grid,
@@ -27,29 +30,37 @@ static func plan(
 	if reachable.size() < 2:
 		return {}
 
+	var outside_spire := _cells_outside_spire(
+		reachable, maze_width, maze_height, spire_clearing_size
+	)
+	## Prefer the whole maze only if the spire somehow covers every reachable cell.
+	var pool: Array[Vector2i] = outside_spire if outside_spire.size() >= 2 else reachable
+
 	if spawn_relic_near_spawn:
-		return _plan_near_spawn(reachable, spawn_cell, run_seed)
+		return _plan_near_spawn(
+			pool, spawn_cell, run_seed, maze_width, maze_height, spire_clearing_size
+		)
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = derive_seed(run_seed)
 
 	var item_candidates: Array[Vector2i] = []
-	for cell in reachable:
+	for cell in pool:
 		if cell.distance_to(spawn_cell) >= MIN_ITEM_DISTANCE_CELLS:
 			item_candidates.append(cell)
 	if item_candidates.is_empty():
-		item_candidates = reachable.duplicate()
+		item_candidates = pool.duplicate()
 
 	var item_cell: Vector2i = item_candidates[rng.randi_range(0, item_candidates.size() - 1)]
 
 	var turn_in_candidates: Array[Vector2i] = []
-	for cell in reachable:
+	for cell in pool:
 		if cell == item_cell:
 			continue
 		if cell.distance_to(spawn_cell) >= MIN_TURN_IN_DISTANCE_CELLS:
 			turn_in_candidates.append(cell)
 	if turn_in_candidates.is_empty():
-		for cell in reachable:
+		for cell in pool:
 			if cell != item_cell:
 				turn_in_candidates.append(cell)
 	if turn_in_candidates.is_empty():
@@ -65,20 +76,37 @@ static func plan(
 
 
 static func _plan_near_spawn(
-	reachable: Array[Vector2i],
+	pool: Array[Vector2i],
 	spawn_cell: Vector2i,
-	run_seed: int
+	run_seed: int,
+	maze_width: int,
+	maze_height: int,
+	spire_clearing_size: float
 ) -> Dictionary:
-	var item_cell := _nearest_reachable_cell(reachable, spawn_cell)
+	## Dev shortcut: relic near spawn (spawn is never the spire on normal maps).
+	var item_cell := _nearest_reachable_cell(pool, spawn_cell)
 
 	var turn_in_candidates: Array[Vector2i] = []
-	for cell in reachable:
+	for cell in pool:
 		if cell == item_cell:
+			continue
+		if MazeCarverScript.is_maze_cell_in_spire_clearing(
+			cell, maze_width, maze_height, spire_clearing_size
+		):
 			continue
 		if cell.distance_to(spawn_cell) >= MIN_TURN_IN_DISTANCE_CELLS:
 			turn_in_candidates.append(cell)
 	if turn_in_candidates.is_empty():
-		for cell in reachable:
+		for cell in pool:
+			if cell == item_cell:
+				continue
+			if MazeCarverScript.is_maze_cell_in_spire_clearing(
+				cell, maze_width, maze_height, spire_clearing_size
+			):
+				continue
+			turn_in_candidates.append(cell)
+	if turn_in_candidates.is_empty():
+		for cell in pool:
 			if cell != item_cell:
 				turn_in_candidates.append(cell)
 	if turn_in_candidates.is_empty():
@@ -93,6 +121,22 @@ static func _plan_near_spawn(
 		"item_cell": item_cell,
 		"turn_in_cell": turn_in_cell,
 	}
+
+
+static func _cells_outside_spire(
+	cells: Array[Vector2i],
+	maze_width: int,
+	maze_height: int,
+	spire_clearing_size: float
+) -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for cell in cells:
+		if MazeCarverScript.is_maze_cell_in_spire_clearing(
+			cell, maze_width, maze_height, spire_clearing_size
+		):
+			continue
+		result.append(cell)
+	return result
 
 
 static func _nearest_reachable_cell(

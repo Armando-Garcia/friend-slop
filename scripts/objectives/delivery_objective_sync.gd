@@ -15,6 +15,12 @@ enum Phase {
 	COMPLETE = 2,
 }
 
+enum NetworkOp {
+	REQUEST_INTERACT,
+	BROADCAST_STATE,
+	BROADCAST_PING,
+}
+
 
 static func pack_snapshot(
 	phase: int,
@@ -42,6 +48,12 @@ static func unpack_snapshot(data: Dictionary) -> Dictionary:
 	}
 
 
+static func _in_range_xz(a: Vector3, b: Vector3, range_sq: float) -> bool:
+	var dx := a.x - b.x
+	var dz := a.z - b.z
+	return dx * dx + dz * dz <= range_sq
+
+
 static func apply_host_action(
 	action: int,
 	phase: int,
@@ -57,7 +69,7 @@ static func apply_host_action(
 		Action.PICKUP:
 			if phase != Phase.SEEK_ITEM:
 				return {}
-			if player_pos.distance_squared_to(item_world_pos) > interact_range_sq:
+			if not _in_range_xz(player_pos, item_world_pos, interact_range_sq):
 				return {}
 			return {
 				"phase": Phase.CARRIED,
@@ -77,7 +89,7 @@ static func apply_host_action(
 		Action.DELIVER:
 			if phase != Phase.CARRIED or carrier_peer_id != actor_peer_id:
 				return {}
-			if player_pos.distance_squared_to(turn_in_pos) > interact_range_sq:
+			if not _in_range_xz(player_pos, turn_in_pos, interact_range_sq):
 				return {}
 			return {
 				"phase": Phase.COMPLETE,
@@ -98,12 +110,12 @@ static func resolve_interact_action(
 ) -> int:
 	match phase:
 		Phase.SEEK_ITEM:
-			if player_pos.distance_squared_to(item_world_pos) <= interact_range_sq:
+			if _in_range_xz(player_pos, item_world_pos, interact_range_sq):
 				return Action.PICKUP
 		Phase.CARRIED:
 			if carrier_peer_id != actor_peer_id:
 				return -1
-			if player_pos.distance_squared_to(turn_in_pos) <= interact_range_sq:
+			if _in_range_xz(player_pos, turn_in_pos, interact_range_sq):
 				return Action.DELIVER
 			return Action.DROP
 	return -1

@@ -70,7 +70,7 @@ func initialize(placement: DiscoverablePlacement, definition: DiscoverableDefini
 		)
 	if _spell != null:
 		_update_prompt()
-		_apply_tome_color(_spell_color_for(_spell.id))
+		_apply_tome_color(_spell.get_display_color())
 
 
 func get_prompt() -> String:
@@ -191,20 +191,6 @@ func _apply_tome_color(color: Color) -> void:
 	material.emission_energy_multiplier = 1.8
 	material.roughness = 0.35
 	_mesh.material_override = material
-
-
-func _spell_color_for(spell_id: String) -> Color:
-	match spell_id:
-		"show_me":
-			return Color(0.95, 0.85, 0.35)
-		"haste":
-			return Color(0.35, 0.85, 0.95)
-		"fireball":
-			return Color(1.0, 0.45, 0.12)
-		"flame_on":
-			return Color(0.85, 0.12, 0.06)
-		_:
-			return Color(0.7, 0.45, 0.95)
 
 
 func consume_with_vfx() -> void:

@@ -43,9 +43,26 @@ func _signal_latch() -> Dictionary:
 
 func _pump_session_frame(session: SpellCastingSession) -> void:
 	session._process(0.016)
-	var runner := session.get_node_or_null("SpellValidationRunner") as SpellValidationRunner
-	if runner != null:
-		runner._process(0.0)
+	## Validation runner lives under VoiceSpellValidator (match hierarchy).
+	if session.has_method("poll_validation_progress"):
+		session.poll_validation_progress()
+	else:
+		var runner := session.get_node_or_null("SpellValidationRunner") as SpellValidationRunner
+		if runner != null:
+			runner._process(0.0)
+
+
+func _attach_validator(
+	session: SpellCastingSession,
+	use_stub: bool = true
+) -> VoiceSpellValidator:
+	var validator := VoiceSpellValidator.new()
+	## Must be in-tree so SpellValidationRunner can process.
+	session.add_child(validator)
+	## Set after add_child — _ready syncs from SettingsManager first.
+	validator.use_stub = use_stub
+	session.configure(validator)
+	return validator
 
 
 func _drive_listen_and_validate(
@@ -88,9 +105,7 @@ func _free_session(session: SpellCastingSession) -> void:
 
 func _test_stub_tome_teaching_completes(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	var succeeded := _signal_latch()
 	session.cast_succeeded.connect(func(_spell, _mode, _validation) -> void:
@@ -118,9 +133,7 @@ func _test_stub_tome_teaching_completes(tree: SceneTree) -> int:
 func _test_validation_runs_async_without_blocking_first_poll(tree: SceneTree) -> int:
 	WorkerScript.test_delay_sec = 0.08
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	var succeeded := _signal_latch()
 	session.cast_succeeded.connect(func(_spell, _mode, _validation) -> void:
@@ -140,9 +153,7 @@ func _test_validation_runs_async_without_blocking_first_poll(tree: SceneTree) ->
 		return 1
 
 	session._process(0.0)
-	var runner := session.get_node_or_null("SpellValidationRunner") as SpellValidationRunner
-	if runner != null:
-		runner._process(0.0)
+	session.poll_validation_progress()
 	if bool(succeeded["hit"]):
 		WorkerScript.test_delay_sec = 0.0
 		_free_session(session)
@@ -158,6 +169,8 @@ func _test_validation_runs_async_without_blocking_first_poll(tree: SceneTree) ->
 		_pump_session_frame(session)
 		if session.get_state() == SpellCastingSession.STATE_IDLE:
 			break
+		# Yield wall time so the delayed worker thread can finish.
+		OS.delay_msec(1)
 
 	WorkerScript.test_delay_sec = 0.0
 	_free_session(session)
@@ -170,9 +183,7 @@ func _test_validation_runs_async_without_blocking_first_poll(tree: SceneTree) ->
 
 func _test_cast_fireball_stub_succeeds(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	var outcome := {
 		"spell": null,
@@ -213,9 +224,7 @@ func _test_cast_fireball_heard_transcript_succeeds(tree: SceneTree) -> int:
 		return 0
 
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = false
-	session.configure(validator)
+	var validator := _attach_validator(session, false)
 
 	var outcome := {"spell": null, "validation": null}
 	session.cast_succeeded.connect(
@@ -250,9 +259,7 @@ func _test_cast_fireball_wrong_words_fails(tree: SceneTree) -> int:
 		return 0
 
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = false
-	session.configure(validator)
+	var validator := _attach_validator(session, false)
 
 	var failure := {"hit": false, "reason": ""}
 	session.cast_failed.connect(func(_spell, reason, _partial) -> void:
@@ -276,9 +283,7 @@ func _test_cast_fireball_wrong_words_fails(tree: SceneTree) -> int:
 
 func _test_offline_session_runs_process(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	var multiplayer_api := tree.root.get_multiplayer()
 	var prev_peer: MultiplayerPeer = multiplayer_api.multiplayer_peer
@@ -313,9 +318,7 @@ func _pump_to_listening(session: SpellCastingSession) -> void:
 
 func _test_free_cast_hold_blocks_silence_auto_commit(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	session.start_free_cast([FireballSpell])
 	_pump_to_listening(session)
@@ -336,9 +339,7 @@ func _test_free_cast_hold_blocks_silence_auto_commit(tree: SceneTree) -> int:
 
 func _test_free_cast_release_commits(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	var succeeded := _signal_latch()
 	session.cast_succeeded.connect(func(_spell, _mode, _validation) -> void:
@@ -371,8 +372,8 @@ func _test_grammar_spells_come_from_player_loadout(tree: SceneTree) -> int:
 	loadout.learn_spell("fireball", "test")
 	loadout.learn_spell("haste", "test")
 
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
+	var validator := _attach_validator(session, true)
+	## Re-configure with loadout after attach.
 	session.configure(validator, loadout)
 
 	# Pass a different candidate list; grammar must still use the loadout.
@@ -404,9 +405,7 @@ func _test_grammar_spells_come_from_player_loadout(tree: SceneTree) -> int:
 
 func _test_free_cast_returns_idle_after_success(tree: SceneTree) -> int:
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = true
-	session.configure(validator)
+	var validator := _attach_validator(session, true)
 
 	session.start_free_cast([FireballSpell])
 	_pump_to_listening(session)
@@ -432,9 +431,7 @@ func _test_non_stub_fails_before_validation_when_stt_unavailable(tree: SceneTree
 		return 0
 
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = false
-	session.configure(validator)
+	var validator := _attach_validator(session, false)
 
 	var failure := {"reason": ""}
 	session.cast_failed.connect(func(_spell, reason, _partial) -> void:
@@ -475,9 +472,7 @@ func _test_cast_preflight_surfaces_editor_stt_guidance(tree: SceneTree) -> int:
 
 	var expected := SpellSttConfigScript.get_extension_load_issue(true)
 	var session := _make_session(tree)
-	var validator := VoiceSpellValidator.new()
-	validator.use_stub = false
-	session.configure(validator)
+	var validator := _attach_validator(session, false)
 
 	var fail_reason := ""
 	session.cast_failed.connect(func(_spell, reason, _partial) -> void:

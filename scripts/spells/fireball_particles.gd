@@ -64,21 +64,22 @@ static func make_smoke_trail_emitter() -> CPUParticles3D:
 	var particles := CPUParticles3D.new()
 	particles.name = "FireballSmokeTrail"
 	particles.emitting = true
-	particles.amount = 72
-	particles.lifetime = 2.0
-	particles.lifetime_randomness = 0.25
+	particles.amount = 48
+	particles.lifetime = 1.6
+	particles.lifetime_randomness = 0.3
 	particles.explosiveness = 0.0
 	particles.local_coords = false
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	particles.emission_sphere_radius = 0.14
-	particles.direction = Vector3(0.0, 0.15, 0.0)
-	particles.spread = 42.0
-	particles.initial_velocity_min = 0.35
-	particles.initial_velocity_max = 1.4
-	particles.gravity = Vector3(0.0, 0.25, 0.0)
-	particles.scale_amount_min = 0.35
-	particles.scale_amount_max = 0.85
-	particles.color = Color(0.72, 0.68, 0.62, 0.82)
+	particles.emission_sphere_radius = 0.1
+	particles.direction = Vector3(0.0, 0.2, 0.0)
+	particles.spread = 38.0
+	particles.initial_velocity_min = 0.25
+	particles.initial_velocity_max = 0.95
+	particles.gravity = Vector3(0.0, 0.35, 0.0)
+	## Soft mist puffs — keep scale modest so quads never read as hard boxes.
+	particles.scale_amount_min = 0.18
+	particles.scale_amount_max = 0.42
+	particles.color = Color(0.78, 0.72, 0.66, 0.45)
 	particles.color_ramp = _make_smoke_color_ramp()
 	apply_render_setup(particles, "smoke_trail")
 	return particles
@@ -88,21 +89,22 @@ static func make_comet_spark_emitter() -> CPUParticles3D:
 	var particles := CPUParticles3D.new()
 	particles.name = "FireballCometSparks"
 	particles.emitting = true
-	particles.amount = 48
-	particles.lifetime = 0.55
-	particles.lifetime_randomness = 0.35
+	particles.amount = 64
+	particles.lifetime = 0.45
+	particles.lifetime_randomness = 0.4
 	particles.explosiveness = 0.0
 	particles.local_coords = false
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	particles.emission_sphere_radius = 0.08
 	particles.direction = Vector3.UP
-	particles.spread = 28.0
-	particles.initial_velocity_min = 0.8
-	particles.initial_velocity_max = 2.8
-	particles.gravity = Vector3(0.0, -1.5, 0.0)
-	particles.scale_amount_min = 0.08
-	particles.scale_amount_max = 0.18
-	particles.color = Color(1.0, 0.78, 0.35, 0.95)
+	particles.spread = 32.0
+	particles.initial_velocity_min = 0.9
+	particles.initial_velocity_max = 2.6
+	particles.gravity = Vector3(0.0, -1.8, 0.0)
+	## Tiny scales — soft spark texture keeps them reading as embers, not quads.
+	particles.scale_amount_min = 0.02
+	particles.scale_amount_max = 0.055
+	particles.color = Color(1.0, 0.82, 0.4, 1.0)
 	apply_render_setup(particles, "spark")
 	return particles
 
@@ -148,9 +150,9 @@ static func make_signal_smoke_column() -> CPUParticles3D:
 	particles.initial_velocity_min = 1.2
 	particles.initial_velocity_max = 2.8
 	particles.gravity = Vector3(0.0, -0.15, 0.0)
-	particles.scale_amount_min = 0.45
-	particles.scale_amount_max = 1.1
-	particles.color = Color(0.82, 0.78, 0.72, 0.55)
+	particles.scale_amount_min = 0.28
+	particles.scale_amount_max = 0.65
+	particles.color = Color(0.82, 0.78, 0.72, 0.4)
 	particles.color_ramp = _make_smoke_color_ramp()
 	apply_render_setup(particles, "smoke_trail")
 	return particles
@@ -160,13 +162,18 @@ static func apply_render_setup(particles: CPUParticles3D, preset: String) -> voi
 	var quad := QuadMesh.new()
 	match preset:
 		"smoke_trail":
-			quad.size = Vector2(0.55, 0.55)
+			quad.size = Vector2(0.28, 0.28)
 		"firework":
-			quad.size = Vector2(0.24, 0.24)
-		"ember":
-			quad.size = Vector2(0.12, 0.12)
+			quad.size = Vector2(0.18, 0.18)
+		"streak":
+			## Tall thin quads; pair with particle_flag_align_y for streaming trails.
+			quad.size = Vector2(0.028, 0.28)
+		"streak_long":
+			quad.size = Vector2(0.022, 0.48)
+		"ember", "spark":
+			quad.size = Vector2(0.04, 0.04)
 		_:
-			quad.size = Vector2(0.16, 0.16)
+			quad.size = Vector2(0.1, 0.1)
 
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -175,18 +182,76 @@ static func apply_render_setup(particles: CPUParticles3D, preset: String) -> voi
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.no_depth_write = true
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	## Particles must never cast/receive shadows — solid quads read as black boxes.
+	particles.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	match preset:
 		"smoke_trail":
 			mat.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
-		"firework", "ember":
+			mat.albedo_texture = make_mist_texture()
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		"ember", "spark":
 			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mat.albedo_texture = make_ember_texture()
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		"streak", "streak_long":
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mat.albedo_texture = make_ember_texture()
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			particles.particle_flag_align_y = true
+		"firework":
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mat.albedo_texture = make_ember_texture()
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		_:
 			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mat.albedo_texture = make_ember_texture()
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	particles.mesh = quad
 	particles.material_override = mat
 	particles.visibility_aabb = AABB(Vector3(-8, -8, -8), Vector3(16, 16, 16))
+
+
+static func make_mist_texture() -> GradientTexture2D:
+	## Soft radial falloff so smoke reads as mist, not hard quads.
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.25, 0.6, 1.0])
+	gradient.colors = PackedColorArray(
+		[
+			Color(1.0, 1.0, 1.0, 0.55),
+			Color(1.0, 1.0, 1.0, 0.28),
+			Color(1.0, 1.0, 1.0, 0.08),
+			Color(1.0, 1.0, 1.0, 0.0),
+		]
+	)
+	return _make_radial_texture(gradient, 128)
+
+
+static func make_ember_texture() -> GradientTexture2D:
+	## Tight bright core — reads as a fine spark instead of a square flake.
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.12, 0.4, 1.0])
+	gradient.colors = PackedColorArray(
+		[
+			Color(1.0, 1.0, 1.0, 1.0),
+			Color(1.0, 0.95, 0.75, 0.85),
+			Color(1.0, 0.7, 0.25, 0.2),
+			Color(1.0, 0.4, 0.05, 0.0),
+		]
+	)
+	return _make_radial_texture(gradient, 64)
+
+
+static func _make_radial_texture(gradient: Gradient, size: int) -> GradientTexture2D:
+	var tex := GradientTexture2D.new()
+	tex.gradient = gradient
+	tex.width = size
+	tex.height = size
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, 0.0)
+	return tex
 
 
 static func make_explosion_core_burst() -> CPUParticles3D:
@@ -229,7 +294,7 @@ static func make_explosion_smoke_burst() -> CPUParticles3D:
 	var particles := make_burst(
 		"ExplosionSmoke",
 		36,
-		Color(0.42, 0.38, 0.34, 0.82),
+		Color(0.42, 0.38, 0.34, 0.55),
 		1.8,
 		5.5,
 		1.15,
@@ -237,8 +302,8 @@ static func make_explosion_smoke_burst() -> CPUParticles3D:
 		Vector3(0.0, 2.8, 0.0),
 		"smoke_trail"
 	)
-	particles.scale_amount_min = 0.35
-	particles.scale_amount_max = 0.95
+	particles.scale_amount_min = 0.22
+	particles.scale_amount_max = 0.55
 	particles.color_ramp = _make_smoke_color_ramp()
 	return particles
 
@@ -257,8 +322,8 @@ static func make_explosion_ember_linger() -> CPUParticles3D:
 	particles.initial_velocity_min = 1.4
 	particles.initial_velocity_max = 4.8
 	particles.gravity = Vector3(0.0, -4.5, 0.0)
-	particles.scale_amount_min = 0.06
-	particles.scale_amount_max = 0.16
+	particles.scale_amount_min = 0.02
+	particles.scale_amount_max = 0.06
 	return particles
 
 
@@ -292,9 +357,9 @@ static func smoke_trail_fade_delay_sec(
 
 static func _make_smoke_color_ramp() -> Gradient:
 	var gradient := Gradient.new()
-	gradient.add_point(0.0, Color(0.95, 0.72, 0.38, 0.85))
-	gradient.add_point(0.25, Color(0.62, 0.58, 0.54, 0.72))
-	gradient.add_point(1.0, Color(0.35, 0.33, 0.3, 0.0))
+	gradient.add_point(0.0, Color(0.95, 0.78, 0.48, 0.4))
+	gradient.add_point(0.3, Color(0.7, 0.66, 0.62, 0.28))
+	gradient.add_point(1.0, Color(0.4, 0.38, 0.36, 0.0))
 	return gradient
 
 

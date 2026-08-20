@@ -1,0 +1,106 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" uid="uid://c1k8vrfvkuyln" path="res://scripts/ui/player_menu.gd" id="1_menu"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.08, 0.06, 0.14, 0.92)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.75, 0.95, 0.45)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[node name="PlayerMenu" type="PanelContainer"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -210.0
+offset_right = 320.0
+offset_bottom = 210.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+script = ExtResource("1_menu")
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="VBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1, 1)
+theme_override_font_sizes/font_size = 22
+text = "Guide"
+
+[node name="SubtitleLabel" type="Label" parent="MarginContainer/VBox/Header"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.68, 0.82, 1)
+theme_override_font_sizes/font_size = 13
+text = "Press [Tab] to hide"
+
+[node name="TabBar" type="TabBar" parent="MarginContainer/VBox"]
+layout_mode = 2
+tab_count = 2
+tab_0/title = "Inventory"
+tab_1/title = "Guide"
+current_tab = 1
+
+[node name="InventoryPage" type="VBoxContainer" parent="MarginContainer/VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="InventoryHint" type="Label" parent="MarginContainer/VBox/InventoryPage"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.7, 0.84, 1)
+theme_override_font_sizes/font_size = 13
+text = "Drag items between slots. Slots 1–4 are the hotbar (keys 1–4)."
+autowrap_mode = 3
+
+[node name="InventoryGrid" type="GridContainer" parent="MarginContainer/VBox/InventoryPage"]
+layout_mode = 2
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 5
+
+[node name="GuidePage" type="VBoxContainer" parent="MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HintsLabel" type="Label" parent="MarginContainer/VBox/GuidePage"]
+layout_mode = 2
+custom_minimum_size = Vector2(560, 0)
+theme_override_colors/font_color = Color(0.72, 0.78, 0.92, 1)
+theme_override_font_sizes/font_size = 13
+autowrap_mode = 3
+
+[node name="ObjectiveHeading" type="Label" parent="MarginContainer/VBox/GuidePage"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 17
+text = "Objectives"
+
+[node name="ObjectiveLabel" type="Label" parent="MarginContainer/VBox/GuidePage"]
+layout_mode = 2
+custom_minimum_size = Vector2(560, 0)
+theme_override_colors/font_color = Color(0.82, 0.88, 0.98, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3

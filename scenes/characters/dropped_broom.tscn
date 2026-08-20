@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/headmaster/dropped_broom.gd" id="1_dropped"]
+
+[node name="DroppedBroom" type="Area3D"]
+script = ExtResource("1_dropped")
+prompt_text = "Pick up broom"

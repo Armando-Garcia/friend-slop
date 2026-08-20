@@ -1,5 +1,11 @@
 extends Control
 
+## Main menu screen (Host / Join / Settings / Exit). Navigation is owned by GameApp.
+
+signal host_pressed()
+signal join_pressed()
+signal settings_pressed()
+
 const UiScaleScript := preload("res://scripts/ui/ui_scale.gd")
 
 const TITLE_FONT_BASE := 48
@@ -11,26 +17,26 @@ const VBOX_SEPARATION_BASE := 18
 @onready var _center_container: CenterContainer = $CenterContainer
 @onready var _menu_vbox: VBoxContainer = $CenterContainer/VBoxContainer
 @onready var _title_label: Label = $CenterContainer/VBoxContainer/TitleLabel
-@onready var _start_button: Button = $CenterContainer/VBoxContainer/StartButton
-@onready var _host_button: Button = $CenterContainer/VBoxContainer/HostButton
+@onready var _play_button: Button = $CenterContainer/VBoxContainer/PlayButton
 @onready var _join_button: Button = $CenterContainer/VBoxContainer/JoinButton
 @onready var _settings_button: Button = $CenterContainer/VBoxContainer/SettingsButton
 @onready var _exit_button: Button = $CenterContainer/VBoxContainer/ExitButton
-@onready var _settings_panel: SettingsPanel = $SettingsPanel
-@onready var _lobby_panel: LobbyPanel = $LobbyPanel
 
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_start_button.pressed.connect(_on_solo_pressed)
-	_host_button.pressed.connect(_on_host_pressed)
-	_join_button.pressed.connect(_on_join_pressed)
-	_settings_button.pressed.connect(_on_settings_pressed)
+	_play_button.pressed.connect(func() -> void: host_pressed.emit())
+	_join_button.pressed.connect(func() -> void: join_pressed.emit())
+	_settings_button.pressed.connect(func() -> void: settings_pressed.emit())
 	_exit_button.pressed.connect(_on_exit_pressed)
-	_settings_panel.closed.connect(_on_settings_closed)
-	_lobby_panel.closed.connect(_on_lobby_closed)
 	get_viewport().size_changed.connect(_apply_menu_layout)
 	_apply_menu_layout()
+
+
+func set_menu_visible(show_buttons: bool) -> void:
+	_center_container.visible = show_buttons
+	if show_buttons:
+		_apply_menu_layout()
 
 
 func _apply_menu_layout() -> void:
@@ -44,62 +50,10 @@ func _apply_menu_layout() -> void:
 	_menu_vbox.add_theme_constant_override("separation", separation)
 	_title_label.add_theme_font_size_override("font_size", title_font)
 
-	for button in _menu_buttons():
+	for button in [_play_button, _join_button, _settings_button, _exit_button]:
 		button.add_theme_font_size_override("font_size", button_font)
 		button.custom_minimum_size = Vector2(button_width, button_height)
 
 
-func _menu_buttons() -> Array[Button]:
-	return [
-		_start_button,
-		_host_button,
-		_join_button,
-		_settings_button,
-		_exit_button,
-	]
-
-
-func _on_solo_pressed() -> void:
-	if SpeechSttLoader.is_loading():
-		_start_button.disabled = true
-		await SpeechSttLoader.loading_finished
-		_start_button.disabled = false
-	GameState.reset_for_new_game()
-	SettingsManager.apply_solo_dev_loadout_to_game_state()
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
-
-
-func _on_host_pressed() -> void:
-	_hide_menu()
-	_lobby_panel.open_host()
-
-
-func _on_join_pressed() -> void:
-	_hide_menu()
-	_lobby_panel.open_join()
-
-
-func _on_settings_pressed() -> void:
-	_hide_menu()
-	_settings_panel.open()
-
-
 func _on_exit_pressed() -> void:
-	get_tree().quit()
-
-
-func _on_settings_closed() -> void:
-	_show_menu()
-
-
-func _on_lobby_closed() -> void:
-	_show_menu()
-
-
-func _hide_menu() -> void:
-	_center_container.visible = false
-
-
-func _show_menu() -> void:
-	_center_container.visible = true
-	_apply_menu_layout()
+	SteamService.request_app_quit()

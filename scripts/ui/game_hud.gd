@@ -1,22 +1,33 @@
 class_name GameHud
 extends CanvasLayer
 
-## In-game HUD: spell codex, casting overlay, Tab guide menu.
+## In-game HUD: casting overlay, hotbar, Tab player menu (Inventory / Guide),
+## and the standalone spellbook overlay (B).
 
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
+const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory.gd")
+const SpellbookPanelScene := preload("res://scenes/ui/book/spell/spell_book.tscn")
 
 var _loadout: Node
+var _inventory: Node
 var _selected_spell_id: String = ""
 var _active_spell: Resource
 var _from_tome := false
 var _coaching_countdown := 0.0
 var _active_strip: VBoxContainer
 var _active_rows: Dictionary = {}
-var _guide_open := false
+var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
+var _hotbar_row: HBoxContainer
+var _hotbar_labels: Array[Label] = []
+var _mana_root: Control
+var _mana_fill: ColorRect
+## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
+var _spellbook_panel: Control
 
-@onready var guide_panel: GuidePanel = $GuidePanel
+@onready var player_menu: Node = $PlayerMenu
+@onready var aim_cursor: Control = $AimCursor
 
 @onready var prompt_label: Label = $MarginContainer/PromptLabel
 @onready var casting_panel: PanelContainer = $CastingPanel
@@ -27,6 +38,7 @@ var _objective_lines: PackedStringArray = PackedStringArray()
 @onready var mic_level_bar: ProgressBar = $CastingPanel/MarginContainer/VBox/MicLevelBar
 @onready var casting_feedback: Label = $CastingPanel/MarginContainer/VBox/FeedbackLabel
 @onready var casting_detail: Label = $CastingPanel/MarginContainer/VBox/DetailLabel
+@onready var spell_word_banner: Control = $SpellWordBanner
 
 
 func _ready() -> void:
@@ -38,47 +50,83 @@ func _ready() -> void:
 	mic_level_bar.min_value = 0.0
 	mic_level_bar.max_value = 1.0
 	mic_level_bar.value = 0.0
-	guide_panel.spell_selected.connect(_on_codex_spell_selected)
+	_setup_spellbook_panel()
 	_setup_active_strip()
+	_setup_hotbar()
+	_setup_mana_bar()
+	_update_aim_cursor_visibility()
+
+
+func _input(event: InputEvent) -> void:
+	## While open, catch Tab/Esc before TabBar or pause can claim them.
+	if not _player_menu_open:
+		return
+	if event.is_action_pressed("guide_menu") or event.is_action_pressed("ui_cancel"):
+		close_player_menu()
+		get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _player_menu_open:
+		return
 	if not event.is_action_pressed("guide_menu"):
 		return
-	toggle_guide_menu()
+	_open_player_menu()
 	get_viewport().set_input_as_handled()
 
 
-func toggle_guide_menu() -> void:
-	if _guide_open:
-		close_guide_menu()
+func toggle_player_menu() -> void:
+	if _player_menu_open:
+		close_player_menu()
 	else:
-		_open_guide(GuidePanel.Page.MAIN)
+		_open_player_menu()
 
 
-func _open_guide(page: GuidePanel.Page = GuidePanel.Page.MAIN) -> void:
-	_guide_open = true
-	guide_panel.visible = true
-	guide_panel.configure_loadout(_loadout)
-	guide_panel.set_selected_spell_id(_selected_spell_id)
-	if page == GuidePanel.Page.CODEX:
-		guide_panel.open_codex()
-	else:
-		guide_panel.reset_to_main()
-	_refresh_guide_content()
+func _open_player_menu() -> void:
+	if is_spellbook_open():
+		close_spellbook()
+	_player_menu_open = true
+	player_menu.visible = true
+	if _inventory != null and player_menu.has_method("configure_inventory"):
+		player_menu.configure_inventory(_inventory)
+	if player_menu.has_method("reset_to_main"):
+		player_menu.reset_to_main()
+	_refresh_player_menu_content()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-func is_guide_open() -> bool:
-	return _guide_open
+func is_player_menu_open() -> bool:
+	return _player_menu_open
 
 
-func close_guide_menu() -> void:
-	if not _guide_open:
+func is_monster_book_open() -> bool:
+	var tree := get_tree()
+	if tree == null:
+		return false
+	for node in tree.get_nodes_in_group("player"):
+		var book := node.get_node_or_null("MonsterBook")
+		if book != null and book.has_method("is_book_open") and bool(book.call("is_book_open")):
+			return true
+	return false
+
+
+func close_monster_book() -> void:
+	var tree := get_tree()
+	if tree == null:
 		return
-	_guide_open = false
-	guide_panel.visible = false
-	guide_panel.reset_to_main()
+	for node in tree.get_nodes_in_group("player"):
+		var book := node.get_node_or_null("MonsterBook")
+		if book != null and book.has_method("cancel_all"):
+			book.call("cancel_all")
+
+
+func close_player_menu() -> void:
+	if not _player_menu_open:
+		return
+	_player_menu_open = false
+	player_menu.visible = false
+	if player_menu.has_method("reset_to_main"):
+		player_menu.reset_to_main()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
@@ -99,11 +147,26 @@ func configure(loadout: Node, casting_session: Node = null) -> void:
 	if _loadout != null and _loadout.has_signal("loadout_changed"):
 		_loadout.loadout_changed.connect(_on_loadout_changed)
 	if casting_session != null and casting_session.has_signal("listen_level_changed"):
-		casting_session.listen_level_changed.connect(update_listen_level)
+		casting_session.listen_level_changed.connect(_update_listen_level)
 	if casting_session != null and casting_session.has_signal("listen_coaching_changed"):
-		casting_session.listen_coaching_changed.connect(update_listen_coaching)
+		casting_session.listen_coaching_changed.connect(_update_listen_coaching)
 	if casting_session != null and casting_session.has_signal("tome_retry_tick"):
 		casting_session.tome_retry_tick.connect(update_tome_coaching_countdown)
+
+
+func configure_inventory(inventory: Node) -> void:
+	if (
+		_inventory != null
+		and _inventory.has_signal("inventory_changed")
+		and _inventory.inventory_changed.is_connected(_refresh_hotbar)
+	):
+		_inventory.inventory_changed.disconnect(_refresh_hotbar)
+	_inventory = inventory
+	if _inventory != null and _inventory.has_signal("inventory_changed"):
+		_inventory.inventory_changed.connect(_refresh_hotbar)
+	if player_menu != null and player_menu.has_method("configure_inventory"):
+		player_menu.configure_inventory(_inventory)
+	_refresh_hotbar()
 
 
 func set_interaction_prompt(text: String) -> void:
@@ -116,27 +179,209 @@ func set_interaction_prompt(text: String) -> void:
 
 
 func toggle_spellbook() -> void:
-	if _guide_open and guide_panel.is_codex_view():
-		close_guide_menu()
-	elif _guide_open:
-		guide_panel.open_codex()
-		guide_panel.set_selected_spell_id(_selected_spell_id)
-		_refresh_guide_content()
-	else:
-		_open_guide(GuidePanel.Page.CODEX)
+	if _spellbook_panel == null:
+		return
+	if is_spellbook_open():
+		close_spellbook()
+		return
+	if _player_menu_open:
+		close_player_menu()
+	if _spellbook_panel.has_method("configure_loadout"):
+		_spellbook_panel.call("configure_loadout", _loadout)
+	if _spellbook_panel.has_method("set_selected_spell_id"):
+		_spellbook_panel.call("set_selected_spell_id", _selected_spell_id)
+	_spellbook_panel.call("open_book")
 
 
 func close_spellbook() -> void:
-	if _guide_open and guide_panel.is_codex_view():
-		close_guide_menu()
+	if is_spellbook_open():
+		_spellbook_panel.call("close_book")
 
 
 func is_spellbook_open() -> bool:
-	return _guide_open and guide_panel.is_codex_view()
+	return (
+		_spellbook_panel != null
+		and _spellbook_panel.has_method("is_open")
+		and bool(_spellbook_panel.call("is_open"))
+	)
+
+
+func _setup_spellbook_panel() -> void:
+	_spellbook_panel = SpellbookPanelScene.instantiate()
+	_spellbook_panel.name = "SpellbookPanel"
+	add_child(_spellbook_panel)
+	if _spellbook_panel.has_signal("spell_selected"):
+		_spellbook_panel.spell_selected.connect(_on_codex_spell_selected)
+	if _spellbook_panel.has_signal("closed"):
+		_spellbook_panel.closed.connect(_on_spellbook_closed)
+
+
+func _on_spellbook_closed() -> void:
+	if _player_menu_open or get_tree().paused:
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func get_selected_spell_id() -> String:
 	return _selected_spell_id
+
+
+func reveal_cast_spell(spell: Resource, color: Color = Color(1, 1, 1, 1)) -> void:
+	## Typewriter the spell display name above the hotbar (box invisible; glyphs only).
+	if spell_word_banner == null or not spell_word_banner.has_method("reveal"):
+		return
+	var def := spell as SpellDefinitionScript
+	if def == null:
+		return
+	var word := def.display_name.strip_edges()
+	if word.is_empty():
+		word = def.id.capitalize()
+	## Category color from the spell; optional override when caller passes non-white.
+	var ink := def.get_word_display_color()
+	if not color.is_equal_approx(Color(1, 1, 1, 1)):
+		ink = color
+	spell_word_banner.call("reveal", word, ink)
+
+
+func clear_spell_word() -> void:
+	if spell_word_banner != null and spell_word_banner.has_method("clear"):
+		spell_word_banner.call("clear")
+
+
+func show_mana(
+	current: float,
+	maximum: float = 100.0,
+	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+) -> void:
+	if _mana_root == null:
+		return
+	_mana_root.visible = true
+	set_mana(current, maximum, fill_color)
+
+
+func set_mana(
+	current: float,
+	maximum: float = 100.0,
+	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+) -> void:
+	if _mana_fill == null:
+		return
+	_mana_fill.color = fill_color
+	var max_v := maxf(maximum, 0.001)
+	var ratio := clampf(current / max_v, 0.0, 1.0)
+	## Fill stays on the left; empty grows from the right.
+	_mana_fill.anchor_left = 0.0
+	_mana_fill.anchor_right = ratio
+	_mana_fill.offset_left = 0.0
+	_mana_fill.offset_right = 0.0
+
+
+func hide_mana() -> void:
+	if _mana_root != null:
+		_mana_root.visible = false
+
+
+func _setup_mana_bar() -> void:
+	## Between spell-word band and hotbar (hotbar top ≈ -96 from bottom).
+	var anchor := MarginContainer.new()
+	anchor.name = "ManaBarMargin"
+	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	anchor.offset_left = -160.0
+	anchor.offset_top = -128.0
+	anchor.offset_right = 160.0
+	anchor.offset_bottom = -108.0
+	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.visible = false
+	add_child(anchor)
+	_mana_root = anchor
+
+	var track := PanelContainer.new()
+	track.name = "ManaTrack"
+	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var track_style := StyleBoxFlat.new()
+	track_style.bg_color = Color(0.08, 0.06, 0.12, 0.92)
+	track_style.set_border_width_all(1)
+	track_style.border_color = Color(0.18, 0.12, 0.22, 0.9)
+	track_style.set_corner_radius_all(4)
+	track_style.content_margin_left = 2.0
+	track_style.content_margin_top = 2.0
+	track_style.content_margin_right = 2.0
+	track_style.content_margin_bottom = 2.0
+	track.add_theme_stylebox_override("panel", track_style)
+	anchor.add_child(track)
+
+	var fill_host := Control.new()
+	fill_host.name = "ManaFillHost"
+	fill_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fill_host.custom_minimum_size = Vector2(0.0, 12.0)
+	track.add_child(fill_host)
+
+	_mana_fill = ColorRect.new()
+	_mana_fill.name = "ManaFill"
+	_mana_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mana_fill.color = Color(0.35, 0.14, 0.32, 1.0)
+	_mana_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fill_host.add_child(_mana_fill)
+	set_mana(100.0, 100.0)
+
+
+func _setup_hotbar() -> void:
+	var anchor := MarginContainer.new()
+	anchor.name = "HotbarMargin"
+	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	anchor.offset_left = -220.0
+	anchor.offset_top = -96.0
+	anchor.offset_right = 220.0
+	anchor.offset_bottom = -16.0
+	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(anchor)
+
+	_hotbar_row = HBoxContainer.new()
+	_hotbar_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hotbar_row.add_theme_constant_override("separation", 8)
+	_hotbar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.add_child(_hotbar_row)
+
+	_hotbar_labels.clear()
+	for i in PlayerInventoryScript.HOTBAR_COUNT:
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = Vector2(96, 64)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.08, 0.06, 0.14, 0.82)
+		style.set_border_width_all(1)
+		style.border_color = Color(0.45, 0.75, 0.95, 0.4)
+		style.set_corner_radius_all(8)
+		cell.add_theme_stylebox_override("panel", style)
+		var label := Label.new()
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", Color(0.9, 0.94, 1, 1))
+		label.text = "%d\n—" % (i + 1)
+		cell.add_child(label)
+		_hotbar_row.add_child(cell)
+		_hotbar_labels.append(label)
+	_refresh_hotbar()
+
+
+func _refresh_hotbar() -> void:
+	if _hotbar_labels.is_empty():
+		return
+	for i in _hotbar_labels.size():
+		var item_id := ""
+		if _inventory != null and _inventory.has_method("get_slot"):
+			item_id = str(_inventory.call("get_slot", i))
+		var item_name := ""
+		if _inventory != null and _inventory.has_method("display_name"):
+			item_name = str(_inventory.call("display_name", item_id))
+		elif not item_id.is_empty():
+			item_name = item_id.capitalize()
+		if item_name.is_empty():
+			_hotbar_labels[i].text = "%d\n—" % (i + 1)
+		else:
+			_hotbar_labels[i].text = "%d\n%s" % [i + 1, item_name]
 
 
 func show_casting_state(
@@ -245,13 +490,13 @@ func _format_known_incantations() -> String:
 	return "Known: " + ", ".join(parts)
 
 
-func update_listen_level(level: float) -> void:
+func _update_listen_level(level: float) -> void:
 	if not casting_panel.visible:
 		return
 	mic_level_bar.value = clampf(level / 0.08, 0.0, 1.0)
 
 
-func update_listen_coaching(message: String) -> void:
+func _update_listen_coaching(message: String) -> void:
 	if not casting_panel.visible or message.is_empty():
 		return
 	if _from_tome:
@@ -366,41 +611,54 @@ func _on_codex_spell_selected(spell_id: String) -> void:
 
 func _on_spell_learned(spell_id: String) -> void:
 	_selected_spell_id = spell_id
-	if _guide_open:
-		guide_panel.set_selected_spell_id(spell_id)
-		_refresh_guide_content()
+	if _spellbook_panel == null:
+		return
+	if _spellbook_panel.has_method("set_selected_spell_id"):
+		_spellbook_panel.call("set_selected_spell_id", spell_id)
+	if is_spellbook_open() and _spellbook_panel.has_method("refresh_pages"):
+		_spellbook_panel.call("refresh_pages")
 
 
 func _process(_delta: float) -> void:
+	_update_aim_cursor_visibility()
 	_update_active_strip()
 
 
-func _refresh_guide_content() -> void:
-	guide_panel.refresh(_objective_lines)
+func _update_aim_cursor_visibility() -> void:
+	if aim_cursor == null:
+		return
+	# Matches FPS aim: captured mouse uses the screen-center crosshair.
+	aim_cursor.visible = Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+
+
+func _refresh_player_menu_content() -> void:
+	if player_menu != null and player_menu.has_method("refresh"):
+		player_menu.refresh(_objective_lines)
 
 
 func _on_loadout_changed() -> void:
-	if _guide_open:
-		guide_panel.configure_loadout(_loadout)
-		_refresh_guide_content()
+	if is_spellbook_open() and _spellbook_panel.has_method("refresh_pages"):
+		_spellbook_panel.call("refresh_pages")
+	if _player_menu_open:
+		_refresh_player_menu_content()
 
 
 func _on_objective_phase_changed(_phase: int) -> void:
 	_sync_objective_lines_from_scene()
-	if _guide_open:
-		_refresh_guide_content()
+	if _player_menu_open:
+		_refresh_player_menu_content()
 
 
 func _on_objective_completed() -> void:
 	_sync_objective_lines_from_scene()
-	if _guide_open:
-		_refresh_guide_content()
+	if _player_menu_open:
+		_refresh_player_menu_content()
 
 
 func _refresh_objective_lines(objective: DeliveryObjective) -> void:
 	_objective_lines = objective.get_status_lines()
-	if _guide_open:
-		_refresh_guide_content()
+	if _player_menu_open:
+		_refresh_player_menu_content()
 
 
 func _sync_objective_lines_from_scene() -> void:

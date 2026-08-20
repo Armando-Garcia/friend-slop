@@ -1,6 +1,13 @@
 class_name SpellDefinition
 extends Resource
 
+## Drives LMB cast wand flourish (offensive jab, defensive guard, etc.).
+enum Category { OFFENSIVE, DEFENSIVE, UTILITY, BUFF }
+## CAST charges while LMB held; CHANNEL is instantly ready (mana drain while armed).
+enum CastMode { CAST, CHANNEL }
+## Wand flourish used while charging / releasing an armed spell.
+enum WandFxKind { P_SHAPED, SHAKE, LIFT_DEFENSIVE }
+
 const DEFAULT_ONE_WORD_DURATION_MS := 700
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 
@@ -12,6 +19,38 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export var require_rhythm: bool = false
 @export var cooldown_sec: float = 8.0
 @export var effect_id: String = ""
+## Shared hue for mana bar, spell-word HUD, and cast / recognition FX.
+@export var color: Color = Color(0.55, 0.28, 0.72, 1.0)
+@export var category: Category = Category.UTILITY
+@export var cast_mode: CastMode = CastMode.CAST
+## LMB hold time before CAST spells are ready (CHANNEL uses 0).
+@export_range(0.0, 10.0, 0.05) var charge_time_sec: float = 1.0
+
+
+func get_display_color() -> Color:
+	return color
+
+
+func get_word_display_color() -> Color:
+	return color
+
+
+func is_channelled() -> bool:
+	return cast_mode == CastMode.CHANNEL
+
+
+func get_wand_fx_kind() -> WandFxKind:
+	if is_channelled():
+		return WandFxKind.SHAKE
+	if category == Category.DEFENSIVE:
+		return WandFxKind.LIFT_DEFENSIVE
+	return WandFxKind.P_SHAPED
+
+
+func get_charge_time_sec() -> float:
+	if is_channelled():
+		return 0.0
+	return maxf(charge_time_sec, 0.0)
 
 
 func get_incantation_text() -> String:
@@ -122,12 +161,31 @@ func get_cast_success_text() -> String:
 			text = "You surge forward — movement speed increased!"
 		"fireball":
 			text = "A blazing fireball launches from your wand!"
-		"flame_on":
-			text = "Your wand tip flares with a deep red glow!"
-		"flashlight_on":
-			text = "A steady beam of light shines from your wand."
-		"flashlight_off":
-			text = "The wand light clicks off."
+		"flare":
+			text = "A signal flare streaks toward your aim and bursts into a lasting beacon!"
+		"ward":
+			text = "A blue ward blooms ahead — ready to catch a spell."
+		"flashlight_toggle":
+			text = "Your wand light toggles."
+		"light_ball":
+			text = "An orb of light hangs in the air, then slowly fades."
+		"target":
+			text = "One object near your aim gains a dashed green outline."
+		"pull":
+			text = "The outlined object flies toward your gaze."
+		"follow":
+			text = "The outlined object drifts toward you along open paths."
+		"stop":
+			text = "Follow, Pull, and Target outlines dissolve for everyone."
+		"dispell":
+			text = "Target outlines, Follow, light balls, and fake walls dissolve."
+		"fake_wall":
+			text = "A corridor decoy wall waits for your Interact confirm."
+		"clone":
+			text = (
+				"A duplicate of the targeted light ball or relic appears beside it. "
+				+ "Each object can be cloned only once."
+			)
 	return text
 
 
@@ -150,17 +208,71 @@ func get_codex_effect_detail() -> String:
 		"fireball":
 			text = (
 				"Launches a blazing fireball from your wand. "
-				+ "Shots explode on impact with sparks and smoke."
+				+ "Shots explode on impact and knock players back."
 			)
-		"flame_on":
-			text = "Ignites the wand tip with a steady deep-red glow."
-		"flashlight_on":
+		"flare":
 			text = (
-				"Projects a focused beam from your wand until you cast Light Off. "
-				+ "Illuminates the maze ahead of you."
+				"Say \"flare\" to form a red cone at your wand tip. A tiny spark "
+				+ "rockets toward your crosshair and bursts into a lasting signal flare."
 			)
-		"flashlight_off":
-			text = "Extinguishes your wand flashlight beam."
+		"ward":
+			text = (
+				"Say \"ward\" to cast a translucent blue 1/3-sphere shield toward "
+				+ "your crosshair. It lasts 1 second and blocks one fireball. "
+				+ "1.5 second cooldown."
+			)
+		"flashlight_toggle":
+			text = (
+				"Say \"light\" to turn your wand beam on or off. "
+				+ "Cast again to flip the current state."
+			)
+		"light_ball":
+			text = (
+				"Say \"light ball\" to leave a glowing orb toward your crosshair. "
+				+ "It fades away after %.0f seconds."
+				% SpellEffectSyncScript.DEFAULT_LIGHT_BALL_DURATION
+			)
+		"target":
+			text = (
+				"Say \"target\" to outline the light orb, relic, fake wall, or "
+				+ "relic clone closest to your aim for %.0f seconds."
+				% SpellEffectSyncScript.DEFAULT_TARGET_DURATION
+			)
+		"pull":
+			text = (
+				"While Target outlines are active, say \"pull\" to yank the "
+				+ "object nearest your aim along the ground toward you — fast "
+				+ "at first, then easing to a stop. Requires clear line of sight."
+			)
+		"follow":
+			text = (
+				"While Target outlines are active, say \"follow\" to send the "
+				+ "looked-at object toward you along open maze paths at a brisk "
+				+ "pace until Stop or Dispell."
+			)
+		"stop":
+			text = (
+				"Say \"stop\" to end Follow/Pull for all players and clear "
+				+ "Target outlines. Does not destroy light balls or fake walls."
+			)
+		"dispell":
+			text = (
+				"While Target outlines are active, say \"dispel\" to clear them, "
+				+ "end Follow/Pull, and destroy a targeted light ball, fake wall, "
+				+ "or relic clone."
+			)
+		"fake_wall":
+			text = (
+				"Preview an open corridor, then confirm with Interact to place a "
+				+ "lookalike wall decoy. Contact flickers it; Dispell destroys it."
+			)
+		"clone":
+			text = (
+				"While Target outlines are active, say \"clone\" to duplicate a "
+				+ "targeted light ball or the relic once. Relic clones look real "
+				+ "but cannot be picked up; Dispell destroys them. Clones and "
+				+ "already-cloned objects cannot be cloned again."
+			)
 	return text
 
 

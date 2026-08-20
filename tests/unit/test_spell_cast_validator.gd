@@ -13,6 +13,8 @@ func run() -> int:
 	failures += _test_stub_bypasses_checks()
 	failures += _test_free_cast_rejects_without_transcript()
 	failures += _test_free_cast_picks_matching_spell()
+	failures += _test_free_cast_prefers_longest_incantation()
+	failures += _test_free_cast_white_ball_is_light_ball()
 	failures += _test_stub_free_cast_single_selected_spell()
 	return failures
 
@@ -135,6 +137,43 @@ func _test_free_cast_picks_matching_spell() -> int:
 	var spell := match.get("spell") as SpellDefinitionScript
 	if spell == null or spell.id != "show_me":
 		push_error("Expected free cast to pick show_me when transcript matches")
+		return 1
+	return 0
+
+
+func _test_free_cast_prefers_longest_incantation() -> int:
+	var light := _make_spell("light", ["light"])
+	var light_ball := _make_spell("light_ball", ["light", "ball"])
+	var match: Dictionary = SpellCastValidatorScript.resolve_free_cast(
+		[light, light_ball],
+		_loud_samples(0.4),
+		44100,
+		PackedStringArray(["light", "ball"]),
+		PackedFloat32Array(),
+		false
+	)
+	var spell := match.get("spell") as SpellDefinitionScript
+	if spell == null or spell.id != "light_ball":
+		push_error("Expected free cast to prefer light_ball over light")
+		return 1
+	return 0
+
+
+func _test_free_cast_white_ball_is_light_ball() -> int:
+	var fireball := _make_spell("fireball", ["fireball"])
+	var light := _make_spell("light", ["light"])
+	var light_ball := _make_spell("light_ball", ["light", "ball"])
+	var match: Dictionary = SpellCastValidatorScript.resolve_free_cast(
+		[fireball, light, light_ball],
+		_loud_samples(0.4),
+		44100,
+		PackedStringArray(["white", "ball"]),
+		PackedFloat32Array(),
+		false
+	)
+	var spell := match.get("spell") as SpellDefinitionScript
+	if spell == null or spell.id != "light_ball":
+		push_error("Expected free cast 'white ball' to resolve to light_ball")
 		return 1
 	return 0
 

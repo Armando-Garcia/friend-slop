@@ -10,10 +10,10 @@ const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.
 
 func run(tree: SceneTree) -> int:
 	var failures := 0
-	failures += _test_sky_flare_direction_threshold()
 	failures += _test_normal_lifetime()
-	failures += _test_sky_flare_finish_conditions()
 	failures += _test_smoke_trail_fade_delay()
+	failures += _test_smoke_uses_mist_texture_without_shadows()
+	failures += _test_embers_use_fine_spark_texture()
 	failures += _test_burst_particle_defaults()
 	failures += _test_hit_radius_matches_visual()
 	failures += _test_cast_lights_use_shadows()
@@ -21,19 +21,6 @@ func run(tree: SceneTree) -> int:
 	failures += _test_explosion_spawn_sets_global_position(tree)
 	failures += _test_max_lifetime_spawns_explosion_at_global_position(tree)
 	return failures
-
-
-func _test_sky_flare_direction_threshold() -> int:
-	if not FireballFlightScript.is_sky_flare_direction(Vector3(0.2, 0.8, 0.2)):
-		push_error("Expected steep upward fireball to count as sky flare")
-		return 1
-	if FireballFlightScript.is_sky_flare_direction(Vector3(1.0, 0.1, 0.0)):
-		push_error("Expected horizontal fireball to stay a normal projectile")
-		return 1
-	if not FireballFlightScript.is_sky_flare_direction(Vector3(0.0, 1.0, 0.0)):
-		push_error("Expected straight-up fireball to count as sky flare")
-		return 1
-	return 0
 
 
 func _test_normal_lifetime() -> int:
@@ -46,29 +33,44 @@ func _test_normal_lifetime() -> int:
 	return 0
 
 
-func _test_sky_flare_finish_conditions() -> int:
-	if not FireballFlightScript.should_finish_sky_flare(
-		FireballFlightScript.SKY_FLARE_MAX_RISE_SEC,
-		0.0
-	):
-		push_error("Expected sky flare to finish when max rise time reached")
-		return 1
-	if not FireballFlightScript.should_finish_sky_flare(
-		0.1,
-		FireballFlightScript.SKY_FLARE_TRAVEL_DIST
-	):
-		push_error("Expected sky flare to finish when travel distance reached")
-		return 1
-	if FireballFlightScript.should_finish_sky_flare(0.1, 1.0):
-		push_error("Expected sky flare to keep rising before limits")
-		return 1
-	return 0
-
-
 func _test_smoke_trail_fade_delay() -> int:
 	var delay := FireballParticlesScript.smoke_trail_fade_delay_sec(2.0)
 	if not is_equal_approx(delay, 2.35):
 		push_error("Expected smoke trail fade delay to include padding")
+		return 1
+	return 0
+
+
+func _test_smoke_uses_mist_texture_without_shadows() -> int:
+	var smoke := FireballParticlesScript.make_smoke_trail_emitter()
+	if smoke.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+		push_error("Expected smoke particles to disable shadow casting")
+		return 1
+	var mat := smoke.material_override as StandardMaterial3D
+	if mat == null or mat.albedo_texture == null:
+		push_error("Expected smoke particles to use a soft mist albedo texture")
+		return 1
+	if not (mat.albedo_texture is GradientTexture2D):
+		push_error("Expected smoke mist texture to be a radial GradientTexture2D")
+		return 1
+	return 0
+
+
+func _test_embers_use_fine_spark_texture() -> int:
+	var embers := FireballParticlesScript.make_comet_spark_emitter()
+	var mat := embers.material_override as StandardMaterial3D
+	if mat == null or mat.albedo_texture == null:
+		push_error("Expected ember particles to use a soft spark albedo texture")
+		return 1
+	if mat.blend_mode != BaseMaterial3D.BLEND_MODE_ADD:
+		push_error("Expected ember particles to use additive blending")
+		return 1
+	var mesh := embers.mesh as QuadMesh
+	if mesh == null or mesh.size.x > 0.08:
+		push_error("Expected ember mesh quads to stay tiny for fine sparks")
+		return 1
+	if embers.scale_amount_max > 0.1:
+		push_error("Expected ember scale to stay fine-particle sized")
 		return 1
 	return 0
 
@@ -129,11 +131,6 @@ func _test_cast_lights_use_shadows() -> int:
 	var flash := FireballLightingScript.make_explosion_flash_light()
 	if not flash.shadow_enabled:
 		push_error("Expected explosion flash light to cast shadows")
-		return 1
-
-	var beacon := FireballLightingScript.make_signal_beacon_light(12.0, 80.0)
-	if not beacon.shadow_enabled:
-		push_error("Expected sky flare beacon to cast shadows")
 		return 1
 	return 0
 

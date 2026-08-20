@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://cstreaksmoke1"]
+
+[ext_resource type="Script" path="res://scripts/spells/streak_smoke.gd" id="1_smoke"]
+
+[node name="StreakSmoke" type="Node3D"]
+editor_description = "World-space 3D tube smoke. Trail = path streak; Rising = locked column that lingers/expands/fades. Tune Trail and Rising groups on this node."
+top_level = true
+script = ExtResource("1_smoke")
+
+[node name="TubeMesh" type="MeshInstance3D" parent="."]
+cast_shadow = 0

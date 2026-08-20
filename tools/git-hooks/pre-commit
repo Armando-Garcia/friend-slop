@@ -1,0 +1,14 @@
+#!/bin/sh
+# Pre-commit: gdlint + GDScript analyzer warnings (same as make lint).
+# Install: make install-hooks
+set -e
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+if [ -x "$ROOT/.venv/Scripts/python.exe" ]; then
+  PY="$ROOT/.venv/Scripts/python.exe"
+elif [ -x "$ROOT/.venv/bin/python" ]; then
+  PY="$ROOT/.venv/bin/python"
+else
+  PY="${PYTHON:-python3}"
+fi
+exec "$PY" tools/run_checks.py --lint-only

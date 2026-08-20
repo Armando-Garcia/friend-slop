@@ -71,7 +71,7 @@ func host(options: Dictionary) -> Error:
 	var create_result: Dictionary = await SteamService.lobby_create_finished
 	if int(create_result.get("error", ERR_CANT_CREATE)) != OK:
 		status_changed.emit("Failed to create Steam lobby.")
-		return int(create_result.get("error", ERR_CANT_CREATE))
+		return int(create_result.get("error", ERR_CANT_CREATE)) as Error
 
 	var lobby_id := int(create_result.get("lobby_id", 0))
 	return _start_host_peer(lobby_id)
@@ -103,7 +103,7 @@ func join(options: Dictionary) -> Error:
 	if result_err != OK:
 		_awaiting_client_peer = false
 		status_changed.emit("Could not enter Steam lobby.")
-		return result_err
+		return result_err as Error
 
 	lobby_id = int(join_result.get("lobby_id", lobby_id))
 	if SteamService.is_local_lobby_owner(lobby_id):

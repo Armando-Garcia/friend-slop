@@ -1,16 +1,20 @@
-[gd_scene load_steps=5 format=3 uid="uid://bapprentice1"]
+[gd_scene format=3 uid="uid://bapprentice1"]
 
 [ext_resource type="PackedScene" uid="uid://bplayable001" path="res://scenes/characters/playable_character.tscn" id="1_base"]
-[ext_resource type="Script" path="res://scripts/characters/apprentice.gd" id="2_apprentice"]
-[ext_resource type="Script" path="res://scripts/position_trail_recorder.gd" id="3_trail"]
-[ext_resource type="Script" path="res://scripts/player/player_wand.gd" id="4_wand"]
+[ext_resource type="Script" uid="uid://c4lmwsyg4fhwe" path="res://scripts/characters/apprentice.gd" id="2_apprentice"]
+[ext_resource type="Script" uid="uid://bwdnqs4aauadi" path="res://scripts/position_trail_recorder.gd" id="3_trail"]
 
-[node name="PlayableCharacter" instance=ExtResource("1_base")]
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_apprentice"]
+radius = 0.2368164
+height = 0.72
+
+[node name="Apprentice" unique_id=416023068 instance=ExtResource("1_base")]
+editor_description = "Edit Apprentice Body / Head / CollisionShape3D here. Wand mesh = player_wand.tscn; held pose = playable_character.tscn."
 script = ExtResource("2_apprentice")
+player_index = 0
 
-[node name="Wand" type="Node3D" parent="Head/CameraPivot/FirstPersonCamera" index="0"]
-transform = Transform3D(1, 0, 0, 0, 0.978148, 0.207912, 0, -0.207912, 0.978148, 0.34, -0.26, -0.52)
-script = ExtResource("4_wand")
+[node name="CollisionShape3D" parent="." index="0" unique_id=294740946]
+shape = SubResource("CapsuleShape3D_apprentice")
 
-[node name="PositionTrailRecorder" type="Node" parent="."]
+[node name="PositionTrailRecorder" type="Node" parent="." index="7" unique_id=2138752126]
 script = ExtResource("3_trail")

@@ -12,8 +12,10 @@ func run() -> int:
 	failures += _test_fuzzy_match_typo()
 	failures += _test_heard_text_contains_incantation()
 	failures += _test_compound_single_word_fireball()
-	failures += _test_light_on_and_off_phrases()
-	failures += _test_flame_on_phrase()
+	failures += _test_light_and_light_ball_phrases()
+	failures += _test_stt_confusable_like_for_light()
+	failures += _test_white_ball_is_light_ball_not_fireball()
+	failures += _test_rejects_short_substring_false_positive()
 	return failures
 
 
@@ -78,27 +80,59 @@ func _test_compound_single_word_fireball() -> int:
 	return 0
 
 
-func _test_light_on_and_off_phrases() -> int:
-	var light_on := _make_spell("light_on", ["light", "on"])
-	var light_off := _make_spell("light_off", ["light", "off"])
-	if not IncantationMatcherScript.matches(PackedStringArray(["light", "on"]), light_on):
-		push_error("Expected exact match for light on")
+func _test_light_and_light_ball_phrases() -> int:
+	var light := _make_spell("light", ["light"])
+	var light_ball := _make_spell("light_ball", ["light", "ball"])
+	if not IncantationMatcherScript.matches(PackedStringArray(["light"]), light):
+		push_error("Expected exact match for light")
 		return 1
-	if not IncantationMatcherScript.matches(PackedStringArray(["light", "off"]), light_off):
-		push_error("Expected exact match for light off")
+	if not IncantationMatcherScript.matches(PackedStringArray(["light", "ball"]), light_ball):
+		push_error("Expected exact match for light ball")
 		return 1
-	if IncantationMatcherScript.matches(PackedStringArray(["light", "on"]), light_off):
-		push_error("Expected light on to not match light off")
+	if IncantationMatcherScript.matches(PackedStringArray(["light"]), light_ball):
+		push_error("Expected bare light to not match light ball")
+		return 1
+	if not IncantationMatcherScript.matches(PackedStringArray(["light", "ball"]), light):
+		push_error("Expected light ball transcript to still contain light")
 		return 1
 	return 0
 
 
-func _test_flame_on_phrase() -> int:
-	var flame_on := _make_spell("flame_on", ["flame", "on"])
-	if not IncantationMatcherScript.matches(PackedStringArray(["flame", "on"]), flame_on):
-		push_error("Expected exact match for flame on")
+func _test_stt_confusable_like_for_light() -> int:
+	var light := _make_spell("light", ["light"])
+	var light_ball := _make_spell("light_ball", ["light", "ball"])
+	if not IncantationMatcherScript.matches(PackedStringArray(["like"]), light):
+		push_error("Expected STT 'like' to match light")
 		return 1
-	if IncantationMatcherScript.matches(PackedStringArray(["light", "on"]), flame_on):
-		push_error("Expected light on to not match flame on")
+	if not IncantationMatcherScript.matches(PackedStringArray(["like", "ball"]), light_ball):
+		push_error("Expected STT 'like ball' to match light ball")
+		return 1
+	if IncantationMatcherScript.matches(PackedStringArray(["ladder"]), light):
+		push_error("Expected unrelated word not to match light")
+		return 1
+	return 0
+
+
+func _test_white_ball_is_light_ball_not_fireball() -> int:
+	var light := _make_spell("light", ["light"])
+	var light_ball := _make_spell("light_ball", ["light", "ball"])
+	var fireball := _make_spell("fireball", ["fireball"])
+	var heard := PackedStringArray(["white", "ball"])
+	if not IncantationMatcherScript.matches(heard, light_ball):
+		push_error("Expected STT 'white ball' to match light ball")
+		return 1
+	if not IncantationMatcherScript.matches(PackedStringArray(["white"]), light):
+		push_error("Expected STT 'white' to match light")
+		return 1
+	if IncantationMatcherScript.matches(heard, fireball):
+		push_error("Expected STT 'white ball' not to match fireball")
+		return 1
+	return 0
+
+
+func _test_rejects_short_substring_false_positive() -> int:
+	var light := _make_spell("light", ["light"])
+	if IncantationMatcherScript.matches(PackedStringArray(["li"]), light):
+		push_error("Expected short substring 'li' not to match light")
 		return 1
 	return 0

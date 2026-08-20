@@ -11,6 +11,7 @@ func run() -> int:
 	failures += _test_create_initial_briefing()
 	failures += _test_phase_transitions()
 	failures += _test_invalid_transition_rejected()
+	failures += _test_gameplay_and_teardown_phases()
 	failures += _test_snapshot_round_trip()
 	return failures
 
@@ -56,13 +57,32 @@ func _test_invalid_transition_rejected() -> int:
 	return 0
 
 
+func _test_gameplay_and_teardown_phases() -> int:
+	if not MatchStateScript.is_gameplay_phase(MatchStateScript.Phase.ACTIVE):
+		push_error("Expected ACTIVE to be a gameplay phase")
+		return 1
+	if MatchStateScript.is_gameplay_phase(MatchStateScript.Phase.BRIEFING):
+		push_error("Expected BRIEFING not to be a gameplay phase")
+		return 1
+	if not MatchStateScript.is_teardown_phase(MatchStateScript.Phase.ENDED):
+		push_error("Expected ENDED to be a teardown phase")
+		return 1
+	if not MatchStateScript.is_teardown_phase(MatchStateScript.Phase.RESOLVING):
+		push_error("Expected RESOLVING to be a teardown phase")
+		return 1
+	if MatchStateScript.is_teardown_phase(MatchStateScript.Phase.ACTIVE):
+		push_error("Expected ACTIVE not to be a teardown phase")
+		return 1
+	return 0
+
+
 func _test_snapshot_round_trip() -> int:
 	var config := HorrorMatchConfigScript.defaults()
 	var original := MatchStateScript.create_initial(config)
 	original.anchors_activated = 2
 	original.checkpoint_anchor_id = 1
 	original.sealed_peers = {2: {"room_id": 5}}
-	original.warden_dread = 10
+	original.headmaster_dread = 10
 
 	var packed := MatchStateSnapshotScript.pack(original)
 	var restored := MatchStateSnapshotScript.unpack(packed)
@@ -79,7 +99,7 @@ func _test_snapshot_round_trip() -> int:
 	if int(restored.sealed_peers.get(2, {}).get("room_id", -1)) != 5:
 		push_error("Snapshot round-trip lost sealed_peers")
 		return 1
-	if restored.warden_dread != 10:
-		push_error("Snapshot round-trip lost warden_dread")
+	if restored.headmaster_dread != 10:
+		push_error("Snapshot round-trip lost headmaster_dread")
 		return 1
 	return 0

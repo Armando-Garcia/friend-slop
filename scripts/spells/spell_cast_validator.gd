@@ -254,15 +254,25 @@ static func resolve_free_cast_dict(
 		)
 
 	samples = SpellAudioUtils.extract_speech_samples(samples, sample_rate)
-	debug_lines.append("trimmed_samples=%d" % samples.size())
+	var peak_rms: float = SpellAudioUtils.compute_peak_window_rms(samples, sample_rate)
+	debug_lines.append("trimmed_samples=%d peak_rms=%.4f" % [samples.size(), peak_rms])
 
 	if transcript_words.is_empty():
 		debug_lines.append("mode=no transcript")
 		debug_lines.append("result=FAIL (words not verified)")
-		var no_stt := CastValidationResult.fail(
-			"Couldn't verify which spell you said — speech recognition is required for free casting"
+		var reason := (
+			"Speak louder into the microphone"
+			if peak_rms < SpellAudioUtils.MIN_SPEECH_RMS
+			else (
+				"Couldn't verify which spell you said — speech recognition is required for free casting"
+			)
 		)
+		var no_stt := CastValidationResult.fail(reason)
 		no_stt.incantation_text = _expected_from_candidate_dicts(candidate_data)
+		no_stt.audio_rms = peak_rms
+		no_stt.audio_duration_sec = (
+			float(samples.size()) / float(sample_rate) if sample_rate > 0 else 0.0
+		)
 		CastValidationResult.apply_transcript(no_stt, transcript_words)
 		return _pack_free_cast_dict(null, no_stt, debug_lines)
 
@@ -310,6 +320,34 @@ static func resolve_free_cast_dict(
 	if passed.is_empty():
 		debug_lines.append("result=FAIL (incantation matched but cast checks failed)")
 		return _pack_free_cast_dict(null, first_failure, debug_lines)
+
+	# Prefer the longest matching incantation ("light ball" over "light").
+	passed.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_words := SpellValidationCodecScript.packed_strings_from_array(
+			a.get("spell", {}).get("incantation_words", [])
+		)
+		var b_words := SpellValidationCodecScript.packed_strings_from_array(
+			b.get("spell", {}).get("incantation_words", [])
+		)
+		return a_words.size() > b_words.size()
+	)
+	var best: Dictionary = passed[0]
+	var best_len := SpellValidationCodecScript.packed_strings_from_array(
+		best.get("spell", {}).get("incantation_words", [])
+	).size()
+	var tied := 0
+	for entry in passed:
+		var entry_len := SpellValidationCodecScript.packed_strings_from_array(
+			entry.get("spell", {}).get("incantation_words", [])
+		).size()
+		if entry_len == best_len:
+			tied += 1
+	if tied == 1:
+		debug_lines.append(
+			"result=%s (longest match among %d)"
+			% [str(best.get("spell", {}).get("id", "")), passed.size()]
+		)
+		return _pack_free_cast_dict(best["spell"], best["result"], debug_lines)
 
 	debug_lines.append("result=FAIL (ambiguous: %d spells passed)" % passed.size())
 	var ambiguous := CastValidationResult.fail("Be more specific — say one spell clearly")
@@ -363,15 +401,25 @@ static func resolve_free_cast(
 		)
 
 	samples = SpellAudioUtils.extract_speech_samples(samples, sample_rate)
-	debug_lines.append("trimmed_samples=%d" % samples.size())
+	var peak_rms: float = SpellAudioUtils.compute_peak_window_rms(samples, sample_rate)
+	debug_lines.append("trimmed_samples=%d peak_rms=%.4f" % [samples.size(), peak_rms])
 
 	if transcript_words.is_empty():
 		debug_lines.append("mode=no transcript")
 		debug_lines.append("result=FAIL (words not verified)")
-		var no_stt := CastValidationResult.fail(
-			"Couldn't verify which spell you said — speech recognition is required for free casting"
+		var reason := (
+			"Speak louder into the microphone"
+			if peak_rms < SpellAudioUtils.MIN_SPEECH_RMS
+			else (
+				"Couldn't verify which spell you said — speech recognition is required for free casting"
+			)
 		)
+		var no_stt := CastValidationResult.fail(reason)
 		no_stt.incantation_text = _expected_from_candidates(candidates)
+		no_stt.audio_rms = peak_rms
+		no_stt.audio_duration_sec = (
+			float(samples.size()) / float(sample_rate) if sample_rate > 0 else 0.0
+		)
 		CastValidationResult.apply_transcript(no_stt, transcript_words)
 		return _pack_free_cast(null, no_stt, debug_lines)
 
@@ -413,6 +461,29 @@ static func resolve_free_cast(
 	if passed.is_empty():
 		debug_lines.append("result=FAIL (incantation matched but cast checks failed)")
 		return _pack_free_cast(null, first_failure, debug_lines)
+
+	# Prefer the longest matching incantation ("light ball" over "light").
+	passed.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_spell: SpellDefinition = a.get("spell")
+		var b_spell: SpellDefinition = b.get("spell")
+		var a_len := a_spell.incantation_words.size() if a_spell != null else 0
+		var b_len := b_spell.incantation_words.size() if b_spell != null else 0
+		return a_len > b_len
+	)
+	var best: Dictionary = passed[0]
+	var best_spell: SpellDefinition = best.get("spell")
+	var best_len := best_spell.incantation_words.size() if best_spell != null else 0
+	var tied := 0
+	for entry in passed:
+		var entry_spell: SpellDefinition = entry.get("spell")
+		var entry_len := entry_spell.incantation_words.size() if entry_spell != null else 0
+		if entry_len == best_len:
+			tied += 1
+	if tied == 1:
+		debug_lines.append(
+			"result=%s (longest match among %d)" % [best_spell.id, passed.size()]
+		)
+		return _pack_free_cast(best["spell"], best["result"], debug_lines)
 
 	debug_lines.append("result=FAIL (ambiguous: %d spells passed)" % passed.size())
 	var ambiguous := CastValidationResult.fail("Be more specific — say one spell clearly")

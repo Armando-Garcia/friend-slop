@@ -1,11 +1,11 @@
 ---
-description: Run gdlint after code changes in this project
+description: Run gdlint and GDScript analyzer warnings after code changes
 alwaysApply: true
 ---
 
 # Run the linter after code changes
 
-After editing `.gd` scripts (or other files covered by checks), run the linter before finishing:
+After editing `.gd` scripts (or other files covered by checks), run lint + analyzer warnings before finishing:
 
 ```bash
 python tools/run_checks.py --lint-only
@@ -13,7 +13,7 @@ python tools/run_checks.py --lint-only
 
 Or: `make lint`
 
-Do this even for small changes. Fix any gdlint issues before committing or reporting the task complete.
+This runs **gdlint** and a headless Godot probe that fails on GDScript `WARNING:` lines under `scripts/`, `tests/`, and `scenes/`. Fix both before committing or reporting the task complete.
 
 For substantive changes, prefer the full check suite when feasible:
 
@@ -22,3 +22,9 @@ python tools/run_checks.py
 ```
 
 Or: `make check`
+
+Optional git hook (same as `make lint`):
+
+```bash
+make install-hooks
+```

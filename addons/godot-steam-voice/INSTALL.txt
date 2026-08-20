@@ -1,5 +1,0 @@
-Copy this folder into your Godot project:
-
-  your_game/addons/godot-steam-voice/
-
-Requires Godot 4.6+ and GodotSteam with voice API.
