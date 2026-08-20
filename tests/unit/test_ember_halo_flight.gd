@@ -9,6 +9,9 @@ func run() -> int:
 	failures += _test_radius_grows_then_clamps()
 	failures += _test_flat_direction()
 	failures += _test_slow_defaults()
+	failures += _test_ring_and_center_zones()
+	failures += _test_jump_pad_velocity()
+	failures += _test_travel_and_knockback()
 	return failures
 
 
@@ -48,5 +51,44 @@ func _test_slow_defaults() -> int:
 		return 1
 	if not is_equal_approx(EmberHaloFlightScript.SLOW_MULTIPLIER, 0.6):
 		push_error("Expected halo slow multiplier 0.6")
+		return 1
+	return 0
+
+
+func _test_ring_and_center_zones() -> int:
+	var outer := 2.0
+	var inner := EmberHaloFlightScript.inner_radius(outer)
+	if not EmberHaloFlightScript.is_in_center(inner * 0.5, outer):
+		push_error("Expected center zone inside inner radius")
+		return 1
+	if EmberHaloFlightScript.is_in_ring(inner * 0.5, outer):
+		push_error("Expected center zone to exclude ring hit")
+		return 1
+	var mid := (inner + outer) * 0.5
+	if not EmberHaloFlightScript.is_in_ring(mid, outer):
+		push_error("Expected ring zone between inner and outer radius")
+		return 1
+	if EmberHaloFlightScript.is_in_center(mid, outer):
+		push_error("Expected ring zone to exclude center")
+		return 1
+	return 0
+
+
+func _test_jump_pad_velocity() -> int:
+	var gravity := 9.8
+	var vel := EmberHaloFlightScript.jump_pad_velocity(gravity)
+	var expected := sqrt(2.0 * gravity * EmberHaloFlightScript.JUMP_PAD_HEIGHT_M)
+	if not is_equal_approx(vel, expected):
+		push_error("Expected jump pad velocity for 2m apex, got %s vs %s" % [vel, expected])
+		return 1
+	return 0
+
+
+func _test_travel_and_knockback() -> int:
+	if not is_equal_approx(EmberHaloFlightScript.TRAVEL_SPEED, 14.0):
+		push_error("Expected halo travel speed 14 m/s (2× prior)")
+		return 1
+	if not is_equal_approx(EmberHaloFlightScript.HIT_KNOCKBACK_SPEED, 3.8):
+		push_error("Expected light-moderate halo knockback speed 3.8")
 		return 1
 	return 0

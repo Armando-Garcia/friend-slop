@@ -17,7 +17,7 @@ func _ready() -> void:
 	if display_name == "Ability":
 		display_name = "Ember Halo"
 	telegraph_color = Color(1.0, 0.18, 0.08, 1.0)
-	cooldown_sec = 7.0
+	cooldown_sec = 7.5
 	min_cast_range = 2.5
 	max_cast_range = 11.0
 

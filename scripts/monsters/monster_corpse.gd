@@ -7,6 +7,10 @@ extends RigidBody3D
 const DEFAULT_LINGER_SEC := 30.0
 const DEFAULT_FADE_SEC := 3.0
 const TORQUE_STRENGTH := 2.8
+const DEFAULT_IMPULSE_SCALE := 1.35
+
+const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
+const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 
 var _fade_sec: float = DEFAULT_FADE_SEC
 var _materials: Array[StandardMaterial3D] = []
@@ -101,3 +105,47 @@ func _start_fade() -> void:
 		_fade_tween.tween_property(mat, "albedo_color", clear, _fade_sec)
 	_fade_tween.set_parallel(false)
 	_fade_tween.tween_callback(queue_free)
+
+
+static func spawn_from_monster(
+	monster: Node,
+	hit_dir: Vector3,
+	linger_sec: float,
+	fade_sec: float,
+	impulse_scale: float = DEFAULT_IMPULSE_SCALE
+) -> void:
+	if monster == null or not monster.is_inside_tree():
+		return
+	var parent_node := monster.get_parent()
+	if parent_node == null:
+		return
+	var corpse := RigidBody3D.new()
+	corpse.name = "%sCorpse" % monster.name
+	corpse.set_script(MonsterCorpseScript)
+	parent_node.add_child(corpse)
+	if monster is Node3D:
+		corpse.global_transform = (monster as Node3D).global_transform
+	for child in monster.get_children():
+		if child is CollisionShape3D:
+			_reparent_node(child, corpse)
+	_reparent_node(monster.get_node_or_null("%Body"), corpse)
+	_reparent_node(monster.get_node_or_null("%MidBody"), corpse)
+	_reparent_node(monster.get_node_or_null("%Head"), corpse)
+	var impulse: Vector3 = BroomLocomotionScript.knockback_impulse(hit_dir) * impulse_scale
+	if corpse.has_method("begin_death_sequence"):
+		corpse.call("begin_death_sequence", impulse, linger_sec, fade_sec)
+
+
+static func _reparent_node(node: Node, corpse: Node) -> void:
+	if node == null or corpse == null:
+		return
+	var xf: Transform3D
+	var is_spatial := node is Node3D
+	if is_spatial:
+		xf = (node as Node3D).global_transform
+	var old_parent := node.get_parent()
+	if old_parent != null:
+		old_parent.remove_child(node)
+	corpse.add_child(node)
+	if is_spatial:
+		(node as Node3D).global_transform = xf

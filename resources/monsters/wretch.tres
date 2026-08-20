@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1")
 id = "wretch"
-display_name = "Wretch"
+display_name = "Rat Queen"
 description = "A packmaster summoner. Rats explode on player contact while chasing."
 monster_scene = ExtResource("2")
 tint = Color(0.72, 0.28, 0.22, 1)

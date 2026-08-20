@@ -13,6 +13,7 @@ const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const MonsterChaseMoveScript := preload("res://scripts/monsters/monster_chase_move.gd")
 const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_combat_spacing.gd")
+const MonsterCasterCombatScript := preload("res://scripts/monsters/monster_caster_combat.gd")
 const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
 const MonsterPatrolScript := preload("res://scripts/monsters/monster_patrol.gd")
 
@@ -146,6 +147,7 @@ var _cast_windup_left: float = 0.0
 var _casting_ability: Node = null
 var _cast_prefer_index: int = 0
 var _chase_move: MonsterChaseMove = null
+var _lookdev_aggro: Node3D = null
 
 func _ready() -> void:
 	if not Engine.is_editor_hint():
@@ -202,6 +204,11 @@ func set_lookdev_pose(pose: MonsterAIScript.LookdevPose, enable_override: bool =
 	lookdev_override = enable_override
 	lookdev_pose = pose
 
+func set_lookdev_aggro(target: Node3D) -> void:
+	_lookdev_aggro = target
+	lookdev_override = lookdev_override and not is_instance_valid(target)
+	set_physics_process(not Engine.is_editor_hint() or is_instance_valid(target))
+
 
 func get_ability_placeholders() -> Array[Node]:
 	var out: Array[Node] = []
@@ -221,6 +228,9 @@ func get_combat_abilities() -> Array[Node]:
 	if root == null:
 		return out
 	for child in root.get_children():
+		if "participates_in_cast_rotation" in child:
+			if not bool(child.get("participates_in_cast_rotation")):
+				continue
 		if (
 			child.has_method("can_cast")
 			and child.has_method("begin_cast")
@@ -276,7 +286,9 @@ func die() -> void:
 		remove_from_group("monster")
 	if is_in_group("combat_target"):
 		remove_from_group("combat_target")
-	_spawn_ragdoll_corpse()
+	MonsterCorpseScript.spawn_from_monster(
+		self, _last_hit_dir, death_linger_sec, death_fade_sec, DEATH_IMPULSE_SCALE
+	)
 	queue_free()
 
 
@@ -307,15 +319,15 @@ func _apply_hurt_knockback() -> void:
 	_knockback_timer = maxf(_knockback_timer, HURT_KNOCKBACK_TIMER_SEC)
 
 
-func _health_ratio() -> float:
+func get_health_ratio() -> float:
 	if max_health <= 0.001:
 		return 1.0
 	return clampf(current_health / max_health, 0.0, 1.0)
 
 
 func _apply_eye_glow_from_health() -> void:
-	## Full HP = authored glow; near death = darker / dimmer (Wretch green dims hard).
-	var t := 1.0 if Engine.is_editor_hint() else _health_ratio()
+	## Full HP = authored glow; near death = darker / dimmer (Rat Queen green dims hard).
+	var t := 1.0 if Engine.is_editor_hint() else get_health_ratio()
 	var dead := Color(
 		eye_glow_color.r * EYE_DEAD_RGB_SCALE.x,
 		eye_glow_color.g * EYE_DEAD_RGB_SCALE.y,
@@ -428,55 +440,10 @@ func _remember_hit_dir(from: Node3D) -> void:
 		_last_hit_dir = away.normalized()
 
 
-func _spawn_ragdoll_corpse() -> void:
-	## No skeleton on the character shell — tumble as one RigidBody with body/head meshes.
-	var parent_node := get_parent()
-	if parent_node == null or not is_inside_tree():
-		return
-	var corpse := RigidBody3D.new()
-	corpse.name = "%sCorpse" % name
-	corpse.set_script(MonsterCorpseScript)
-	parent_node.add_child(corpse)
-	corpse.global_transform = global_transform
-
-	var body_colliders: Array[CollisionShape3D] = []
-	for child in get_children():
-		if child is CollisionShape3D:
-			body_colliders.append(child as CollisionShape3D)
-	for collider in body_colliders:
-		_reparent_to_corpse(collider, corpse)
-	_reparent_to_corpse(_body_mesh, corpse)
-	_reparent_to_corpse(get_node_or_null("%MidBody"), corpse)
-	_reparent_to_corpse(head, corpse)
-
-	var impulse: Vector3 = BroomLocomotionScript.knockback_impulse(_last_hit_dir)
-	impulse *= DEATH_IMPULSE_SCALE
-	if corpse.has_method("begin_death_sequence"):
-		corpse.call(
-			"begin_death_sequence",
-			impulse,
-			death_linger_sec,
-			death_fade_sec
-		)
-
-
-func _reparent_to_corpse(node: Node, corpse: Node) -> void:
-	if node == null or corpse == null:
-		return
-	var xf: Transform3D
-	var is_spatial := node is Node3D
-	if is_spatial:
-		xf = (node as Node3D).global_transform
-	var old_parent := node.get_parent()
-	if old_parent != null:
-		old_parent.remove_child(node)
-	corpse.add_child(node)
-	if is_spatial:
-		(node as Node3D).global_transform = xf
-
-
 ## Collects candidates (default players + senses) and prefers one. Override to replace.
 func _gather_interest() -> RefCounted:
+	if _lookdev_aggro != null and is_instance_valid(_lookdev_aggro):
+		return MonsterInterestScript.from_target(_lookdev_aggro, 2.0, &"lookdev")
 	var candidates: Array = []
 	_append_default_interest_candidates(candidates)
 	_append_sense_interest_candidates(candidates)
@@ -528,7 +495,6 @@ func _append_sense_interest_candidates(out: Array) -> void:
 func _prefer_interest(candidates: Array) -> RefCounted:
 	return MonsterAIScript.prefer_highest_urgency(candidates)
 
-
 func _physics_process(delta: float) -> void:
 	if not is_alive:
 		return
@@ -545,7 +511,12 @@ func _physics_process(delta: float) -> void:
 	if _interest != null:
 		chase_target = _interest.get("target") as Node3D
 
-	if _casting_ability != null:
+	var caster_chase := MonsterCasterCombatScript.tick_monster_if_present(
+		self, delta, _ai_state, chase_target
+	)
+	if caster_chase:
+		pass
+	elif _casting_ability != null:
 		_tick_cast_windup(delta, chase_target)
 	elif _try_start_cast(chase_target):
 		pass
@@ -726,12 +697,16 @@ func _tick_chase_approach(goal: Vector3, target: Node3D) -> void:
 
 
 func _uses_continuous_chase_move_timer() -> bool:
-	## Children (e.g. Wretch) can disable the free 1–3s kite loop.
+	## Children (e.g. Rat Queen) can disable the free 1–3s kite loop.
 	return true
 
 
 func is_chase_retreating() -> bool:
 	return _chase_move != null and _chase_move.is_retreating()
+
+
+func is_chase_moving() -> bool:
+	return _chase_move != null and _chase_move.is_moving()
 
 
 func _clear_chase_move() -> void:
@@ -755,7 +730,7 @@ func _optimal_combat_range() -> float:
 	if chase_style == ChaseStyle.KEEP_AWAY:
 		return keep_away_range
 	if _has_ranged_spacing_abilities():
-		var ability := _preferred_spacing_ability()
+		var ability := MonsterCombatSpacingScript.preferred_spacing(get_combat_abilities())
 		if ability != null:
 			return MonsterCombatSpacingScript.preferred_cast_ideal(ability)
 	return attack_range
@@ -783,6 +758,14 @@ func start_chase_strafe(target: Node3D, side_sign: float, duration_sec: float) -
 
 
 func start_chase_retreat(target: Node3D, side_sign: float, duration_sec: float) -> void:
+	if MonsterCasterCombatScript.try_combo_instead_of_retreat_on(self, target):
+		return
+	_begin_chase_retreat_move(target, side_sign, duration_sec)
+
+
+func _begin_chase_retreat_move(
+	target: Node3D, side_sign: float, duration_sec: float
+) -> void:
 	_sync_chase_move_config()
 	if _chase_move != null:
 		_chase_move.start_retreat(
@@ -855,38 +838,16 @@ func _tick_ranged_cast_chase(target: Node3D) -> bool:
 		_tick_cast_windup(0.0, target)
 		return true
 
-	var awaiting := _first_ranged_castable_ability()
+	var awaiting := MonsterCombatSpacingScript.first_ranged_castable(get_combat_abilities())
 	if awaiting != null:
 		_move_toward_cast_range(target, awaiting)
 		return true
 
-	var spacer := _preferred_spacing_ability()
+	var spacer := MonsterCombatSpacingScript.preferred_spacing(get_combat_abilities())
 	if spacer != null:
 		_move_toward_cast_range(target, spacer)
 		return true
 	return false
-
-
-func _first_ranged_castable_ability() -> Node:
-	var abilities := get_combat_abilities()
-	for ability in abilities:
-		if "requires_target" in ability and not bool(ability.get("requires_target")):
-			continue
-		if not bool(ability.call("can_cast")):
-			continue
-		return ability
-	return null
-
-
-func _preferred_spacing_ability() -> Node:
-	var abilities := get_combat_abilities()
-	for ability in abilities:
-		if "requires_target" in ability and not bool(ability.get("requires_target")):
-			continue
-		return ability
-	if abilities.is_empty():
-		return null
-	return abilities[0]
 
 
 func _move_toward_cast_range(target: Node3D, ability: Node) -> void:
@@ -958,7 +919,7 @@ func _tick_cast_windup(delta: float, target: Node3D) -> void:
 
 
 func _on_ability_cast_fired(_ability: Node) -> void:
-	## Override in children (e.g. Wretch post-Command-Pack retreat).
+	## Override in children (e.g. Rat Queen post-Command-Pack retreat).
 	pass
 
 

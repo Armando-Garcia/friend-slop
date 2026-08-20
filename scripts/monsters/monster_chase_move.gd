@@ -22,6 +22,9 @@ var strafe_max_sec: float = 2.0
 var retreat_min_sec: float = 1.2
 var retreat_max_sec: float = 3.2
 var optimal_eps: float = 0.55
+## When set, called on too-close before retreat/strafe. Return true to skip default move.
+var custom_too_close_cb: Callable = Callable()
+var strafe_radial_blend: float = STRAFE_RADIAL_BLEND
 
 var _rng: RandomNumberGenerator = null
 
@@ -83,7 +86,7 @@ func start_strafe(host: Node3D, target: Node3D, side_sign: float, duration_sec: 
 	reposition = Reposition.STRAFE
 	move_left = maxf(duration_sec, 0.05)
 	move_dir = MonsterAIScript.angled_strafe_dir(
-		host.global_position, target.global_position, side_sign, STRAFE_RADIAL_BLEND
+		host.global_position, target.global_position, side_sign, strafe_radial_blend
 	)
 	wait_armed = false
 
@@ -131,6 +134,10 @@ func _decide(
 		return
 	var side := 1.0 if _rng.randf() < 0.5 else -1.0
 	var too_close := dist < optimal - optimal_eps
+	if too_close and custom_too_close_cb.is_valid():
+		if custom_too_close_cb.call(host, target, side):
+			wait_armed = false
+			return
 	if (
 		too_close
 		and MonsterAIScript.can_retreat_farther(

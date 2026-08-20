@@ -33,8 +33,31 @@ static func build(puff_seed: int, radius: float = REFERENCE_RADIUS) -> ArrayMesh
 	return _voxel_union_mesh(boxes, radius)
 
 
-static func _voxel_union_mesh(boxes: Array[Dictionary], radius: float) -> ArrayMesh:
-	var cell := maxf(radius * VOXEL_CELL_FACTOR, 1.25)
+## Combat-scale clouds (sub-meter radius). Uses a smaller voxel floor so the mesh
+## is not a single chunky cube at frost-breath sizes.
+static func build_combat(puff_seed: int, radius: float) -> ArrayMesh:
+	seed(puff_seed)
+	var puff_count := PUFFS_MIN + (randi() % (PUFFS_MAX - PUFFS_MIN + 1))
+	var boxes: Array[Dictionary] = []
+	for _i in puff_count:
+		var offset := Vector3(
+			(randf() - 0.5) * radius * 0.95,
+			(randf() - 0.5) * radius * 0.22,
+			(randf() - 0.5) * radius * 0.95
+		)
+		var puff_size := Vector3(
+			radius * (0.7 + randf() * 0.55),
+			radius * (0.32 + randf() * 0.28),
+			radius * (0.7 + randf() * 0.55)
+		)
+		boxes.append({"center": offset, "size": puff_size})
+	return _voxel_union_mesh(boxes, radius, 0.06)
+
+
+static func _voxel_union_mesh(
+	boxes: Array[Dictionary], radius: float, min_cell: float = 1.25
+) -> ArrayMesh:
+	var cell := maxf(radius * VOXEL_CELL_FACTOR, min_cell)
 	var half_extent := radius * 1.35
 	var dim := int(ceil(half_extent * 2.0 / cell)) + 2
 	var origin := Vector3(-half_extent, -half_extent * 0.45, -half_extent)
