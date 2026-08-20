@@ -21,7 +21,7 @@ emission = Color(0.25, 1, 0.35, 1)
 emission_energy_multiplier = 4.5
 
 [node name="Summon" unique_id=920001001 instance=ExtResource("1_character")]
-editor_description = "Shared summon shell (Character → Summon). Prefer concrete scenes (wretch_rat) for gameplay."
+editor_description = "Shared summon shell (Character → Summon). Prefer concrete scenes (Queen's Rat Summon / wretch_rat) for gameplay."
 script = ExtResource("2_summon")
 body_tint = Color(0.55, 0.45, 0.35, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)

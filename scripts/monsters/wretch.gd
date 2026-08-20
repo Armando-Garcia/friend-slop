@@ -2,7 +2,7 @@
 class_name Wretch
 extends Monster
 
-## Pack master: weak eyes, moderate ears, shares rat sight, rituals when a player is known.
+## Rat Queen: weak eyes, moderate ears, shares rat sight, rituals when a player is known.
 
 const HEARING_SOURCE := &"hearing"
 const LAST_KNOWN_SOURCE := &"last_known"
@@ -79,11 +79,13 @@ func is_locked_onto_player() -> bool:
 
 
 func _append_default_interest_candidates(_out: Array) -> void:
-	## Wretch uses Sight / Hearing / summon relay only — no wide proximity aggro.
+	## Rat Queen uses Sight / Hearing / summon relay only — no wide proximity aggro.
 	pass
 
 
 func _gather_interest() -> RefCounted:
+	if _lookdev_aggro != null and is_instance_valid(_lookdev_aggro):
+		return MonsterInterestScript.from_target(_lookdev_aggro, 2.0, &"lookdev")
 	var candidates: Array = []
 	_append_sense_interest_candidates(candidates)
 	var host := get_summon_host()
@@ -108,7 +110,9 @@ func _gather_interest() -> RefCounted:
 
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
-	if Engine.is_editor_hint() or not is_alive:
+	if not is_alive:
+		return
+	if Engine.is_editor_hint() and not is_instance_valid(_lookdev_aggro):
 		return
 	_tick_alert_hearing()
 	_direct_rats_from_interest()
@@ -239,7 +243,10 @@ func _pick_ready_ability(target: Node3D) -> Node:
 					return ability
 	## Command Pack is a lost-contact / hearing recovery shot — not while live-locked.
 	if _is_live_player_detection(_interest):
-		return super._pick_ready_ability(target)
+		var live_pick := super._pick_ready_ability(target)
+		if live_pick != null and str(live_pick.get("ability_id")) == COMMAND_ABILITY_ID:
+			live_pick = null
+		return live_pick
 	## Lost contact: aim Command Pack at last known player position.
 	if (
 		is_ai_chasing()
@@ -420,6 +427,8 @@ func _on_ability_cast_fired(ability: Node) -> void:
 		return
 	if str(ability.get("ability_id")) != COMMAND_ABILITY_ID:
 		return
+	if _lookdev_aggro != null and is_instance_valid(_lookdev_aggro):
+		return
 	_reassess_aggro_after_command_pack()
 
 
@@ -577,12 +586,13 @@ func _is_live_detection(interest: RefCounted) -> bool:
 
 
 func _is_live_player_detection(interest: RefCounted) -> bool:
-	## Own sight or rat sight of a player — not sticky memory / last-known.
+	## Own sight, lookdev dummy, or rat sight of a player — not sticky memory.
 	if not _interest_has_player_target(interest):
 		return false
 	var source := str(interest.get("source"))
 	return (
 		source == "sight"
+		or source == "lookdev"
 		or source == String(SUMMON_SIGHT_SOURCE)
 	)
 

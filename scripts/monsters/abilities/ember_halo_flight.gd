@@ -3,15 +3,19 @@ extends RefCounted
 
 ## Expanding ring radius vs distance traveled.
 
-const TRAVEL_SPEED := 7.0
+const TRAVEL_SPEED := 14.0
 const START_RADIUS := 0.35
 const MAX_RADIUS := 2.4
 ## Radius gain per meter traveled.
 const EXPAND_PER_METER := 0.55
+## Torus hole vs outer rim — matches EmberHaloProjectile visual inner_radius mult.
+const INNER_RADIUS_MULT := 0.85
+## Center jump pad apex height (meters).
+const JUMP_PAD_HEIGHT_M := 2.0
 ## Player hit: 60% move speed for 0.5s (via apply_speed_boost).
 const SLOW_DURATION_SEC := 0.5
 const SLOW_MULTIPLIER := 0.6
-const HIT_KNOCKBACK_SPEED := 2.2
+const HIT_KNOCKBACK_SPEED := 3.8
 
 
 static func radius_at_distance(
@@ -29,3 +33,27 @@ static func flat_direction(from: Vector3, toward: Vector3) -> Vector3:
 	if flat.length_squared() < 0.0001:
 		return Vector3.FORWARD
 	return flat.normalized()
+
+
+static func inner_radius(outer_radius: float) -> float:
+	return maxf(0.05, outer_radius * INNER_RADIUS_MULT)
+
+
+static func flat_distance(ring_center: Vector3, body_pos: Vector3) -> float:
+	var flat := Vector2(body_pos.x - ring_center.x, body_pos.z - ring_center.z)
+	return flat.length()
+
+
+static func is_in_center(flat_dist: float, outer_radius: float) -> bool:
+	return flat_dist <= inner_radius(outer_radius)
+
+
+static func is_in_ring(flat_dist: float, outer_radius: float) -> bool:
+	var inner := inner_radius(outer_radius)
+	return flat_dist > inner and flat_dist <= outer_radius
+
+
+static func jump_pad_velocity(
+	gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+) -> float:
+	return sqrt(2.0 * maxf(gravity, 0.01) * JUMP_PAD_HEIGHT_M)

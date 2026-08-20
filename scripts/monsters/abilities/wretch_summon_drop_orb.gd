@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 
 ## Slow green orb that drops to a ground point, then spawns a rat and vanishes.

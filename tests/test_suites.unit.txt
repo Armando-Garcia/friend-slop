@@ -9,6 +9,8 @@ res://tests/unit/test_floating_follow_path.gd
 res://tests/unit/test_world_ground.gd
 res://tests/unit/test_hovering_orb_motion.gd
 res://tests/unit/test_monster_ai.gd
+res://tests/unit/test_ember_dash.gd
+res://tests/unit/test_ash_retreat_dash.gd
 res://tests/unit/test_monster_patrol.gd
 res://tests/unit/test_maze_path_graph.gd
 res://tests/unit/test_charger_launch.gd
@@ -20,10 +22,14 @@ res://tests/unit/test_stun_stars.gd
 res://tests/unit/test_force_field.gd
 res://tests/unit/test_summon.gd
 res://tests/unit/test_ash_ice_flight.gd
+res://tests/unit/test_ash_frost_breath_flight.gd
+res://tests/unit/test_monster_caster_combat.gd
+res://tests/unit/test_monster_combo_triggers.gd
 res://tests/unit/test_monster_summon_catalog.gd
 res://tests/unit/test_ember_lob_flight.gd
 res://tests/unit/test_ember_halo_flight.gd
 res://tests/unit/test_ward_shield.gd
+res://tests/unit/test_spell_ward_block.gd
 res://tests/unit/test_spell_grammar_builder.gd
 res://tests/unit/test_spell_cast_validator.gd
 res://tests/unit/test_character_spell_loadout.gd

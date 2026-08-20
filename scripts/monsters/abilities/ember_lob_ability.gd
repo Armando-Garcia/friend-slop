@@ -19,7 +19,7 @@ func _ready() -> void:
 	if display_name == "Ability":
 		display_name = "Ember Lob"
 	telegraph_color = Color(1.0, 0.22, 0.06, 1.0)
-	cooldown_sec = 5.5
+	cooldown_sec = 5.0
 	min_cast_range = 3.5
 	max_cast_range = 13.0
 

@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1")
 id = "ember_wretch"
-display_name = "Ember Wretch"
+display_name = "Ember Caster"
 description = "Bright-tempered. Drawn hard to fire and flare-light."
 monster_scene = ExtResource("2")
 tint = Color(0.85, 0.38, 0.12, 1)

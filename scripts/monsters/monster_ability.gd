@@ -22,6 +22,8 @@ const WINDUP_SEC_DEFAULT := 0.55
 @export var requires_chase_target: bool = false
 @export_range(0.0, 30.0, 0.1) var min_cast_range: float = 3.0
 @export_range(0.0, 40.0, 0.1) var max_cast_range: float = 12.0
+## When false, ability is excluded from cast rotation (e.g. chase reposition dashes).
+@export var participates_in_cast_rotation: bool = true
 
 @export_tool_button("Preview Cast", "Callable")
 var preview_cast_action := preview_cast
@@ -85,6 +87,27 @@ func begin_cooldown() -> void:
 	_cooldown_left = maxf(0.0, cooldown_sec)
 
 
+func reset_cooldown() -> void:
+	_cooldown_left = 0.0
+
+
+## Combo opener: clear cooldown and any ability-specific cast locks.
+func reset_for_combo() -> void:
+	reset_cooldown()
+
+
+## Combo runner: fire immediately without range/cooldown gates.
+func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	fire_instant(monster, target)
+
+
+## Combo runner: release a held charge regardless of normal gates.
+func release_combo_step(monster: Node3D, target: Node3D) -> void:
+	reset_for_combo()
+	release_charge(monster, target)
+
+
 ## Override: attach windup VFX to the correct hand.
 func start_windup_fx(monster: Node3D) -> void:
 	stop_windup_fx()
@@ -101,30 +124,67 @@ func stop_windup_fx() -> void:
 	_windup_fx = null
 
 
-## Override to spawn combat projectile. Called after windup completes.
+## Override to spawn combat projectile. Called after windup completes (legacy cast path).
 func begin_cast(monster: Node3D, target: Node3D) -> void:
 	stop_windup_fx()
 	begin_cooldown()
 	_fire_cast(monster, target)
 
 
+## Caster combat: release a held charge — fire the spell and start cooldown.
+func release_charge(monster: Node3D, target: Node3D) -> void:
+	stop_windup_fx()
+	begin_cooldown()
+	_fire_cast(monster, target)
+
+
+## Combo / bypass path — no windup, immediate fire + cooldown when off CD.
+func fire_instant(monster: Node3D, target: Node3D) -> void:
+	if not can_cast() or monster == null:
+		return
+	_fire_cast(monster, target)
+	begin_cooldown()
+
+
 func preview_cast() -> void:
+	reset_cooldown()
+	reset_for_combo()
 	var monster := _find_monster()
 	start_windup_fx(monster)
 	var tree := get_tree()
 	if tree == null:
+		stop_windup_fx()
 		return
 	await tree.create_timer(windup_sec).timeout
 	if not is_inside_tree():
 		return
-	if monster != null and is_instance_valid(monster):
-		var aim := monster.global_position + (-monster.global_transform.basis.z * 6.0)
-		var dummy := Node3D.new()
-		dummy.global_position = aim
-		monster.get_parent().add_child(dummy)
-		_fire_cast(monster, dummy)
-		dummy.queue_free()
+	if monster == null or not is_instance_valid(monster):
+		stop_windup_fx()
+		return
+	var target := resolve_preview_target(monster)
+	var ephemeral: Node3D = null
+	if target == null:
+		ephemeral = _spawn_ephemeral_preview_target(monster)
+		target = ephemeral
+	reset_cooldown()
+	fire_instant(monster, target)
+	if ephemeral != null and is_instance_valid(ephemeral):
+		ephemeral.queue_free()
 	stop_windup_fx()
+
+
+func resolve_preview_target(_monster: Node3D) -> Node3D:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	for node in tree.get_nodes_in_group("player"):
+		if not (node is Node3D) or not is_instance_valid(node):
+			continue
+		var alive = node.get("is_alive")
+		if alive != null and not bool(alive):
+			continue
+		return node as Node3D
+	return null
 
 
 func resolve_hand(monster: Node3D) -> Node3D:
@@ -156,6 +216,18 @@ func resolve_cast_origin(monster: Node3D) -> Vector3:
 
 func _fire_cast(_monster: Node3D, _target: Node3D) -> void:
 	pass
+
+
+func _spawn_ephemeral_preview_target(monster: Node3D) -> Node3D:
+	var dummy := Node3D.new()
+	var parent: Node = monster.get_parent()
+	if parent == null:
+		parent = monster
+	parent.add_child(dummy)
+	dummy.global_position = (
+		monster.global_position + (-monster.global_transform.basis.z * 6.0)
+	)
+	return dummy
 
 
 func _find_monster() -> Node3D:

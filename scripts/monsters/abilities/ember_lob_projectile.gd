@@ -1,3 +1,4 @@
+@tool
 class_name EmberLobProjectile
 extends Area3D
 
@@ -31,6 +32,7 @@ static func spawn(
 	) as PackedScene
 	var proj: EmberLobProjectile = packed.instantiate() as EmberLobProjectile
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = origin
 	proj.setup(target, caster)
 	return proj
@@ -97,9 +99,16 @@ func setup(target: Node3D, caster: Node3D = null) -> void:
 	set_physics_process(true)
 
 
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
+
+
 func _physics_process(delta: float) -> void:
 	if _finished:
 		return
+	if _caster != null and not is_instance_valid(_caster):
+		_caster = null
 	_age += delta
 	if _age >= MAX_LIFE_SEC:
 		_finish(true)
@@ -152,7 +161,7 @@ func _try_block_ward_overlap() -> bool:
 
 
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE):
+	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE, _caster):
 		return false
 	## Ward eats the spell — vanish with no ground impact burst.
 	_finish(false)

@@ -1,3 +1,4 @@
+@tool
 extends Area3D
 
 ## Fast green pack orb. Linear shot at a locked aim (player last-known or hear point).
@@ -38,6 +39,7 @@ static func spawn(
 	var proj = new()
 	proj.name = "WretchCommandOrb"
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = origin
 	proj._setup(target, aim, true, caster, summon_host, speed, scale_mult)
 	return proj
@@ -55,6 +57,7 @@ static func spawn_toward_point(
 	var proj = new()
 	proj.name = "WretchCommandOrb"
 	parent.add_child(proj)
+	proj.process_mode = Node.PROCESS_MODE_ALWAYS
 	proj.global_position = origin
 	proj._setup(null, aim_position, true, caster, summon_host, speed, scale_mult)
 	return proj
@@ -111,6 +114,11 @@ func _setup(
 	add_child(light)
 
 	set_physics_process(true)
+
+
+func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		_physics_process(delta)
 
 
 func _physics_process(delta: float) -> void:

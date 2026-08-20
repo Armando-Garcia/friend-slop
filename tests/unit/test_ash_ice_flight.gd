@@ -52,10 +52,11 @@ func _test_advance_reaches_one() -> int:
 	var from := Vector3.ZERO
 	var to := Vector3(6.0, 0.0, 0.0)
 	var control := AshIceFlightScript.make_control(from, to, 1.0)
-	var t := 0.0
+	var dist := 0.0
 	for _i in 240:
-		t = AshIceFlightScript.advance_t(from, control, to, t, 1.0 / 60.0)
-		if t >= 1.0:
+		var step := AshIceFlightScript.advance_arc_distance(from, control, to, dist, 1.0 / 60.0)
+		dist = float(step["distance"])
+		if float(step["t"]) >= 1.0:
 			return 0
-	push_error("Expected ice flight advance_t to reach 1.0")
+	push_error("Expected ice flight advance_arc_distance to reach end of curve")
 	return 1

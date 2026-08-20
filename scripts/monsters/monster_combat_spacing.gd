@@ -102,3 +102,23 @@ static func preferred_cast_ideal(ability: Node) -> float:
 	if ability.has_method("preferred_cast_range"):
 		ideal = float(ability.call("preferred_cast_range"))
 	return ideal
+
+
+static func first_ranged_castable(abilities: Array) -> Node:
+	for ability in abilities:
+		if "requires_target" in ability and not bool(ability.get("requires_target")):
+			continue
+		if not bool(ability.call("can_cast")):
+			continue
+		return ability
+	return null
+
+
+static func preferred_spacing(abilities: Array) -> Node:
+	for ability in abilities:
+		if "requires_target" in ability and not bool(ability.get("requires_target")):
+			continue
+		return ability
+	if abilities.is_empty():
+		return null
+	return abilities[0]

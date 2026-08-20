@@ -11,9 +11,8 @@ const INTERACT_RANGE_SQ := 9.0
 const PLAYER_MIN_SEPARATION := 0.55
 const AIM_RAY_LENGTH := 200.0
 
-const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
-const GameWorldScript := preload("res://scripts/game_world.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
+const GameWorldScript := preload("res://scripts/game_world.gd")
 const NetworkManagerScript := preload("res://scripts/network/network_manager.gd")
 const TargetHighlightScript := preload("res://scripts/spells/target_highlight.gd")
 const TargetedObjectControlScript := preload("res://scripts/spells/targeted_object_control.gd")
@@ -29,6 +28,7 @@ const PlayableCharacterPreviewScript := preload(
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
+const PlayerEmberBurnScript := preload("res://scripts/characters/player_ember_burn.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -83,6 +83,7 @@ var _wand: PlayerWand
 var _wand_raised := false
 var _spell_fire_charging := false
 var _spell_fire_releasing := false
+var _spell_fire_cancel_token := 0
 var _fake_wall_placement: Node
 var _knockback_vel := Vector3.ZERO
 var _knockback_timer := 0.0
@@ -268,6 +269,10 @@ func apply_speed_boost(duration: float, multiplier: float) -> void:
 	_speed_boost_timer = duration
 
 
+func apply_ember_trail_burn(dps: float, slow_multiplier: float, refresh_sec: float) -> void:
+	PlayerEmberBurnScript.apply(self, dps, slow_multiplier, refresh_sec)
+
+
 func set_flashlight_enabled(active: bool) -> void:
 	if _wand != null:
 		_wand.set_flashlight_enabled(active)
@@ -286,17 +291,6 @@ func toggle_flashlight() -> void:
 func set_flame_glow_enabled(active: bool) -> void:
 	if _wand != null:
 		_wand.set_flame_glow_enabled(active)
-
-
-func launch_fireball() -> void:
-	launch_fireball_from_params(_aim_fireball_origin(), _aim_fireball_direction())
-
-
-func launch_fireball_from_params(origin: Vector3, direction: Vector3) -> void:
-	var world: Node = GameWorldScript.find_match_root(get_tree())
-	if world == null:
-		world = get_parent()
-	FireballProjectileScript.spawn(world, origin, direction.normalized())
 
 
 func get_wand_cast_origin() -> Vector3:
@@ -352,14 +346,6 @@ func _crosshair_world_point() -> Vector3:
 	if hit.is_empty():
 		return far_point
 	return hit.position
-
-
-func _aim_fireball_direction() -> Vector3:
-	return get_wand_cast_direction()
-
-
-func _aim_fireball_origin() -> Vector3:
-	return get_wand_cast_origin()
 
 
 func _input(event: InputEvent) -> void:
@@ -437,7 +423,6 @@ func _on_wand_spell_selected(spell: SpellDefinition) -> void:
 	_lower_wand(false)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
-
 
 func _on_wand_cast_succeeded(
 	spell: SpellDefinition,
@@ -551,7 +536,6 @@ func _raise_wand_and_listen() -> bool:
 	_casting_session.start_wand_voice_select(candidates)
 	return true
 
-
 func _lower_wand(cancel_listen: bool) -> void:
 	_wand_raised = false
 	if cancel_listen and _casting_session != null and _casting_session.is_wand_voice_select():
@@ -577,7 +561,6 @@ func _can_fire_armed_spell() -> bool:
 	var one: Array[SpellDefinition] = []
 	one.append(_armed_spell)
 	return not _filter_free_cast_candidates(one).is_empty()
-
 func _try_begin_spell_fire() -> bool:
 	if _spell_fire_charging or _spell_fire_releasing:
 		return false
@@ -602,23 +585,27 @@ func _try_release_spell_fire() -> bool:
 	_spell_fire_releasing = true
 	_fire_armed_spell()
 	return true
-
 func _cancel_spell_fire_charge(instant: bool = false) -> void:
+	if instant:
+		_spell_fire_cancel_token += 1
+		_spell_fire_releasing = false
 	if _spell_fire_charging:
 		_spell_fire_charging = false
 		if _wand != null:
 			_wand.cancel_cast_charge(instant)
-	if _spell_fire_releasing and _wand != null and instant:
+	elif instant and _wand != null:
 		_wand.cancel_cast_charge(true)
-
 func _fire_armed_spell() -> void:
 	var cost := SpellManaScript.cast_cost(_armed_spell)
 	var spell := _armed_spell
+	var fire_token := _spell_fire_cancel_token
 	if _wand != null:
 		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
 			_wand.return_from_cast_charge()
 		else:
 			await _wand.return_from_cast_charge()
+	if fire_token != _spell_fire_cancel_token:
+		return
 	if not is_instance_valid(self) or spell == null:
 		_spell_fire_releasing = false
 		return
@@ -644,7 +631,6 @@ func _fire_armed_spell() -> void:
 		_wand.play_cast_success(spell, true)
 	_spend_mana(cost)
 	_spell_fire_releasing = false
-
 
 func _refill_mana() -> void:
 	_mana = SpellManaScript.MANA_MAX
@@ -682,7 +668,6 @@ func _sync_mana_hud() -> void:
 		_game_hud.call("show_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
 	elif _game_hud.has_method("set_mana"):
 		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
-
 func _tick_mana_drain(delta: float) -> void:
 	if not _uses_local_view():
 		return
@@ -693,8 +678,6 @@ func _tick_mana_drain(delta: float) -> void:
 		_deplete_mana()
 	else:
 		_sync_mana_hud()
-
-
 func _try_tome_teaching_interact() -> bool:
 	if _casting_session == null or not _casting_session.is_tome_teaching():
 		return false
@@ -839,9 +822,16 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	velocity += impulse
 
 
+func apply_ember_halo_jump_pad() -> void:
+	if not is_multiplayer_authority() and GameState.is_multiplayer:
+		return
+	velocity.y = EmberHaloFlightScript.jump_pad_velocity(gravity)
+
+
 func apply_ember_halo_hit(hit_dir: Vector3) -> void:
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
+	## Rim hit: displacement only — no HP damage.
 	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
 	var flat := Vector3(hit_dir.x, 0.0, hit_dir.z)
 	if flat.length_squared() > 0.0001:
@@ -933,6 +923,7 @@ func _physics_process(delta: float) -> void:
 		_refresh_broom_visual()
 		return
 	_tick_mana_drain(delta)
+	PlayerEmberBurnScript.tick(self, delta)
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:

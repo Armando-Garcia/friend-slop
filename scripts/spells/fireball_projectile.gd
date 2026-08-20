@@ -654,6 +654,8 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var motion: Vector3 = _direction * _speed * delta
+	if _try_block_ward_overlap():
+		return
 	if _cast_motion_hit(motion):
 		return
 	global_position += motion
@@ -675,9 +677,29 @@ func _cast_motion_hit(motion: Vector3) -> bool:
 	var safe_fraction: float = contact[0]
 	if safe_fraction >= 1.0:
 		return false
+	var ward := _find_ward_along_motion(params, motion * safe_fraction)
 	global_position += motion * safe_fraction
-	if not _probe_players():
-		_finish(_find_ward_hit(), true)
+	if ward == null:
+		ward = _find_ward_in_group_proximity()
+	if ward != null:
+		_finish(ward, true)
+		return true
+	if _try_block_ward_overlap():
+		return true
+	if _probe_players():
+		return true
+	_finish(null, true)
+	return true
+
+
+func _try_block_ward_overlap() -> bool:
+	## Wards win over monster/player overlap at the impact point (ash ward charge, etc.).
+	if not is_inside_tree() or _hit_shape == null or _finished:
+		return false
+	var ward := _find_ward_hit()
+	if ward == null:
+		return false
+	_finish(ward, true)
 	return true
 
 
@@ -772,20 +794,70 @@ func _apply_splash_to_body(body: Node3D, impact_pos: Vector3) -> void:
 
 
 func _find_ward_hit() -> Node:
-	if not is_inside_tree() or _hit_shape == null:
+	var ward := _find_ward_along_motion(_shape_query_params(), Vector3.ZERO)
+	if ward != null:
+		return ward
+	return _find_ward_in_group_proximity()
+
+
+func _find_ward_in_group_proximity() -> Node:
+	var tree := get_tree()
+	if tree == null:
 		return null
-	var space_state := get_world_3d().direct_space_state
+	var best: Node = null
+	var best_dist_sq := INF
+	for node in tree.get_nodes_in_group("spell_ward"):
+		if node == null or not node.has_method("notify_spell_blocked"):
+			continue
+		if not (node is Node3D):
+			continue
+		var ward_node := node as Node3D
+		var ward_radius := 1.35
+		if "radius" in ward_node:
+			ward_radius = float(ward_node.get("radius"))
+		var reach := hit_radius + ward_radius * 1.2
+		var dist_sq := global_position.distance_squared_to(ward_node.global_position)
+		if dist_sq <= reach * reach and dist_sq < best_dist_sq:
+			best = ward_node
+			best_dist_sq = dist_sq
+	return best
+
+
+func _shape_query_params() -> PhysicsShapeQueryParameters3D:
 	var params := PhysicsShapeQueryParameters3D.new()
 	params.shape = _hit_shape
 	params.transform = global_transform
 	params.exclude = _exclude_rids()
 	params.collision_mask = collision_mask
-	for hit in space_state.intersect_shape(params, 8):
-		var collider: Variant = hit.get("collider")
-		if collider is Node:
-			var ward := _ward_from_node(collider as Node)
+	return params
+
+
+func _find_ward_along_motion(params: PhysicsShapeQueryParameters3D, motion: Vector3) -> Node:
+	if not is_inside_tree() or _hit_shape == null:
+		return null
+	var space_state := get_world_3d().direct_space_state
+	if motion.length_squared() > 0.0001:
+		var origin: Vector3 = params.transform.origin
+		var end: Vector3 = origin + motion
+		var ray := PhysicsRayQueryParameters3D.create(origin, end)
+		ray.exclude = params.exclude
+		ray.collision_mask = params.collision_mask
+		ray.hit_from_inside = true
+		var hit: Dictionary = space_state.intersect_ray(ray)
+		if not hit.is_empty():
+			var ward := _ward_from_collider(hit.get("collider"))
 			if ward != null:
 				return ward
+	for hit_dict in space_state.intersect_shape(params, 8):
+		var ward := _ward_from_collider(hit_dict.get("collider"))
+		if ward != null:
+			return ward
+	return null
+
+
+func _ward_from_collider(collider: Variant) -> Node:
+	if collider is Node:
+		return _ward_from_node(collider as Node)
 	return null
 
 
@@ -801,7 +873,7 @@ func _ward_from_node(node: Node) -> Node:
 func _notify_ward_blocked(blocked_by: Node) -> void:
 	var ward := _ward_from_node(blocked_by) if blocked_by != null else _find_ward_hit()
 	if ward != null:
-		ward.call("notify_spell_blocked", hit_damage)
+		ward.call("notify_spell_blocked", hit_damage, _caster)
 
 
 func _clear_projectile_visuals() -> void:
@@ -824,6 +896,10 @@ func _clear_projectile_visuals() -> void:
 
 
 func _on_body_entered(body: Node3D) -> void:
+	var ward := _ward_from_node(body)
+	if ward != null:
+		_finish(ward, true)
+		return
 	if _try_hit_player(body):
 		return
 	if body == _caster:
@@ -841,6 +917,8 @@ func _try_hit_player(body: Node3D) -> bool:
 		or body.is_in_group("combat_target")
 	):
 		return false
+	if _try_block_ward_overlap():
+		return true
 	## Splash sphere applies damage / knockback (includes this body).
 	_finish(null, true)
 	return true

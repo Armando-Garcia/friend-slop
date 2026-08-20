@@ -163,6 +163,31 @@ static func toward_player_flat(from: Vector3, player: Vector3) -> Vector3:
 	return flat.normalized()
 
 
+## Which lateral sign (+right / -right vs facing the player) increases range.
+static func strafe_sign_further_from_player(from: Vector3, player: Vector3) -> float:
+	var toward := toward_player_flat(from, player)
+	if toward.length_squared() < 0.0001:
+		return 1.0
+	var right := Vector3(-toward.z, 0.0, toward.x)
+	if right.length_squared() < 0.0001:
+		return 1.0
+	right = right.normalized()
+	var step := 0.5
+	var d_right := horizontal_distance(from + right * step, player)
+	var d_left := horizontal_distance(from - right * step, player)
+	return 1.0 if d_right >= d_left else -1.0
+
+
+## 70:30 default toward the further-from-player strafe sign.
+static func pick_weighted_strafe_sign(
+	further_sign: float, roll: float, further_weight: float = 0.7
+) -> float:
+	var away := 1.0 if further_sign >= 0.0 else -1.0
+	if roll < clampf(further_weight, 0.0, 1.0):
+		return away
+	return -away
+
+
 ## Angled strafe: mostly sideways with a small radial blend (positive = toward player).
 static func angled_strafe_dir(
 	from: Vector3,
@@ -222,6 +247,153 @@ static func retreat_velocity_clamped(
 	if horizontal_distance(next, player) > max_dist:
 		return Vector3(0.0, y_velocity, 0.0)
 	return Vector3(flat_dir.x * speed, y_velocity, flat_dir.z * speed)
+
+
+## Flat unit vector of where the player is looking (XZ only).
+static func player_facing_flat(player: Node3D) -> Vector3:
+	if player == null:
+		return Vector3(0.0, 0.0, -1.0)
+	var head := player.get_node_or_null("Head") as Node3D
+	var source: Node3D = head if head != null else player
+	var basis: Basis = source.transform.basis
+	if source.is_inside_tree():
+		basis = source.global_transform.basis
+	var forward := Vector3(-basis.z.x, 0.0, -basis.z.z)
+	if forward.length_squared() < 0.0001:
+		return Vector3(0.0, 0.0, -1.0)
+	return forward.normalized()
+
+
+## Landing spot away from the player along the current radial, clamped to aggro cap.
+static func pick_dash_landing_away(
+	monster_pos: Vector3,
+	player: Node3D,
+	distance: float,
+	max_dist_from_player: float
+) -> Vector3:
+	if player == null:
+		return monster_pos
+	var player_pos := player.global_position
+	var away := Vector3(
+		monster_pos.x - player_pos.x, 0.0, monster_pos.z - player_pos.z
+	)
+	if away.length_squared() < 0.0001:
+		away = Vector3(0.0, 0.0, 1.0)
+	else:
+		away = away.normalized()
+	var landing := monster_pos + away * maxf(distance, 0.0)
+	landing.y = monster_pos.y
+	var to_landing := Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.length_squared() > 0.0001 and to_landing.length() > max_dist_from_player:
+		landing = player_pos + to_landing.normalized() * max_dist_from_player
+		landing.y = monster_pos.y
+	return landing
+
+
+## Dash in along the player radial and stop at `range_m`.
+static func pick_dash_landing_at_range(
+	monster_pos: Vector3,
+	player: Node3D,
+	range_m: float,
+	max_dist_from_player: float
+) -> Vector3:
+	if player == null:
+		return monster_pos
+	var player_pos := player.global_position
+	var to_player := Vector3(
+		player_pos.x - monster_pos.x, 0.0, player_pos.z - monster_pos.z
+	)
+	var dist := to_player.length()
+	var goal_range := clampf(range_m, 0.4, maxf(max_dist_from_player, range_m))
+	if dist <= goal_range + 0.15:
+		return monster_pos
+	var landing := player_pos - to_player.normalized() * goal_range
+	landing.y = monster_pos.y
+	return landing
+
+
+## Sidestep near 90° from `inbound_dir`, preferring the side that stays farther from the player.
+static func pick_dash_landing_sidestep(
+	monster_pos: Vector3,
+	player: Node3D,
+	inbound_dir: Vector3,
+	distance: float,
+	max_dist_from_player: float
+) -> Vector3:
+	if player == null:
+		return monster_pos
+	var inbound := Vector3(inbound_dir.x, 0.0, inbound_dir.z)
+	if inbound.length_squared() < 0.0001:
+		inbound = Vector3(
+			monster_pos.x - player.global_position.x,
+			0.0,
+			monster_pos.z - player.global_position.z
+		)
+	if inbound.length_squared() < 0.0001:
+		inbound = Vector3(1.0, 0.0, 0.0)
+	else:
+		inbound = inbound.normalized()
+	var right := Vector3(-inbound.z, 0.0, inbound.x)
+	var away := Vector3(
+		monster_pos.x - player.global_position.x,
+		0.0,
+		monster_pos.z - player.global_position.z
+	)
+	var side := right
+	var away_dot := right.dot(away)
+	if away_dot < -0.05:
+		side = -right
+	elif absf(away_dot) <= 0.05:
+		side = right if inbound.x >= 0.0 else -right
+	return _clamp_landing(
+		monster_pos + side * maxf(distance, 0.0), monster_pos, player, max_dist_from_player
+	)
+
+
+static func _clamp_landing(
+	landing: Vector3, monster_pos: Vector3, player: Node3D, max_dist_from_player: float
+) -> Vector3:
+	landing.y = monster_pos.y
+	if player == null:
+		return landing
+	var player_pos := player.global_position
+	var to_landing := Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.length_squared() > 0.0001 and to_landing.length() > max_dist_from_player:
+		landing = player_pos + to_landing.normalized() * max_dist_from_player
+		landing.y = monster_pos.y
+	return landing
+
+
+## Landing spot behind the player's view at preferred range, biased to the monster's side.
+static func pick_dash_landing_behind(
+	monster_pos: Vector3,
+	player: Node3D,
+	preferred_range: float,
+	max_dist_from_player: float
+) -> Vector3:
+	if player == null:
+		return monster_pos
+	var player_pos := player.global_position
+	var forward := player_facing_flat(player)
+	var behind := -forward
+	var lateral := Vector3(-forward.z, 0.0, forward.x)
+	var to_monster := Vector3(
+		monster_pos.x - player_pos.x, 0.0, monster_pos.z - player_pos.z
+	)
+	var side_sign := signf(lateral.dot(to_monster))
+	if absf(side_sign) < 0.01:
+		side_sign = 1.0
+	var dist := clampf(preferred_range * 0.95, 1.0, max_dist_from_player)
+	var landing := player_pos + behind * dist + lateral * side_sign * 0.5
+	landing.y = monster_pos.y
+	var to_landing := Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.dot(forward) > 0.0:
+		landing = player_pos + behind * dist + lateral * side_sign * 0.5
+		to_landing = Vector3(landing.x - player_pos.x, 0.0, landing.z - player_pos.z)
+	if to_landing.length_squared() > 0.0001 and to_landing.length() > max_dist_from_player:
+		landing = player_pos + to_landing.normalized() * max_dist_from_player
+		landing.y = monster_pos.y
+	return landing
 
 
 static func is_lookdev_live(node: Node) -> bool:
