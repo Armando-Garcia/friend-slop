@@ -15,7 +15,7 @@ const SLOT_ACTIONS: PackedStringArray = [
 	"spell_slot_3",
 	"spell_slot_4",
 ]
-const SLOT_FALLBACKS: PackedStringArray = ["RMB", "Q", "E", "LMB"]
+const SLOT_FALLBACKS: PackedStringArray = ["LMB", "RMB", "Q", "E"]
 
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
 

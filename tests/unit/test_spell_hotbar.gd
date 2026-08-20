@@ -14,6 +14,7 @@ func run() -> int:
 	failures += _test_four_slot_cap()
 	failures += _test_slots_persist_without_timer()
 	failures += _test_assignment_prompt()
+	failures += _test_slot_order_lmb_first()
 	return failures
 
 
@@ -184,5 +185,16 @@ func _test_assignment_prompt() -> int:
 		return 1
 	if not prompt.contains("LMB") and not prompt.contains("["):
 		push_error("Expected assignment prompt to include the LMB slot")
+		return 1
+	return 0
+
+
+func _test_slot_order_lmb_first() -> int:
+	var order := SpellHotbarScript.SLOT_FALLBACKS
+	if order.size() != 4:
+		push_error("Expected four spell-slot fallbacks")
+		return 1
+	if order[0] != "LMB" or order[1] != "RMB" or order[2] != "Q" or order[3] != "E":
+		push_error("Expected spell slots ordered LMB, RMB, Q, E")
 		return 1
 	return 0

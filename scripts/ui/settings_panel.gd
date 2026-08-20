@@ -69,6 +69,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
 	_cache_node_refs()
+	_tint_settings_tabs()
 	_master_volume_slider.min_value = 0.0
 	_master_volume_slider.max_value = 1.0
 	_master_volume_slider.step = 0.01
@@ -160,6 +161,14 @@ func _process(_delta: float) -> void:
 		_mic_status_label.text = "Quiet input detected — try speaking louder."
 	else:
 		_mic_status_label.text = "Listening… no input yet. Check device selection."
+
+
+func _tint_settings_tabs() -> void:
+	var tabs: TabContainer = $Panel/MarginContainer/VBox/TabContainer
+	tabs.add_theme_color_override("font_selected_color", Color(0.95, 0.90, 0.72, 1))
+	tabs.add_theme_color_override("font_hovered_color", Color(0.98, 0.94, 0.80, 1))
+	tabs.add_theme_color_override("font_unselected_color", Color(0.78, 0.74, 0.62, 1))
+	tabs.add_theme_color_override("font_disabled_color", Color(0.55, 0.50, 0.42, 1))
 
 
 func _cache_node_refs() -> void:
@@ -409,13 +418,13 @@ func _refresh_footer() -> void:
 
 
 func _build_exit_styles() -> void:
-	_exit_style_normal = _make_exit_style(Color(0.45, 0.75, 0.95, 1))
+	_exit_style_normal = _make_exit_style(Color(0.82, 0.70, 0.38, 1))
 	_exit_style_dirty = _make_exit_style(Color(0.92, 0.22, 0.22, 1))
 
 
 func _make_exit_style(border: Color) -> StyleBoxFlat:
 	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.16, 0.12, 0.22, 1)
+	box.bg_color = Color(0.10, 0.08, 0.10, 1)
 	box.border_color = border
 	box.set_border_width_all(2)
 	box.set_corner_radius_all(6)

@@ -7,12 +7,12 @@
 [ext_resource type="Script" path="res://scripts/ui/keybinds/settings_controls_tab.gd" id="5_controls"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.12, 0.09, 0.18, 0.96)
+bg_color = Color(0.08, 0.06, 0.09, 0.96)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.45, 0.75, 0.95, 1)
+border_color = Color(0.82, 0.70, 0.38, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -24,7 +24,7 @@ border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.35, 0.4, 0.5, 1)
+border_color = Color(0.42, 0.36, 0.28, 1)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
@@ -78,7 +78,7 @@ theme_override_constants/separation = 14
 
 [node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
 theme_override_font_sizes/font_size = 28
 text = "Settings"
 horizontal_alignment = 1
@@ -112,7 +112,7 @@ theme_override_constants/separation = 14
 
 [node name="CrosshairHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Crosshair"
 
 [node name="CrosshairPreviewFrame" type="PanelContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
@@ -236,7 +236,7 @@ theme_override_constants/separation = 14
 
 [node name="DisplayModeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Display Mode"
 
 [node name="DisplayModeOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
@@ -245,7 +245,7 @@ layout_mode = 2
 
 [node name="ResolutionLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Resolution"
 
 [node name="ResolutionOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
@@ -254,7 +254,7 @@ layout_mode = 2
 
 [node name="ResolutionHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.45, 0.42, 0.55, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.42, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "In fullscreen, resolution sets render scale while filling your monitor. In windowed mode, it sets the window size."
@@ -283,13 +283,13 @@ theme_override_constants/separation = 12
 
 [node name="GeneralHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
 theme_override_font_sizes/font_size = 18
 text = "General"
 
 [node name="OutputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Output Device"
 
 [node name="OutputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
@@ -298,7 +298,7 @@ layout_mode = 2
 
 [node name="InputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Input Device (Microphone)"
 
 [node name="InputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
@@ -312,7 +312,7 @@ theme_override_constants/separation = 12
 [node name="MasterVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Master Volume"
 
 [node name="MasterVolumeSlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
@@ -324,7 +324,7 @@ value = 1.0
 [node name="MasterVolumeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 text = "100%"
 horizontal_alignment = 2
 
@@ -335,7 +335,7 @@ theme_override_constants/separation = 12
 [node name="MicVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Mic Volume"
 
 [node name="MicVolumeSlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
@@ -347,7 +347,7 @@ value = 1.0
 [node name="MicVolumeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
 custom_minimum_size = Vector2(48, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 text = "100%"
 horizontal_alignment = 2
 
@@ -358,7 +358,7 @@ theme_override_constants/separation = 10
 [node name="HearMyselfLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Hear Myself"
 
 [node name="HearMyselfSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow"]
@@ -371,7 +371,7 @@ script = ExtResource("3_toggle")
 
 [node name="MicTestLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Microphone Test"
 
 [node name="MicTestButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
@@ -386,7 +386,7 @@ show_percentage = false
 
 [node name="MicStatusLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "Press Test Microphone to check input."
@@ -396,7 +396,7 @@ layout_mode = 2
 
 [node name="GameHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
 theme_override_font_sizes/font_size = 18
 text = "Game"
 
@@ -407,7 +407,7 @@ theme_override_constants/separation = 10
 [node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Lobby Voice Chat"
 
 [node name="LobbyVoiceSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow"]
@@ -420,7 +420,7 @@ script = ExtResource("3_toggle")
 
 [node name="LobbyVoiceHint" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "When you are hosting a lobby, this matches the lobby menu switch. Otherwise it sets your default for the next lobby."
@@ -466,7 +466,7 @@ theme_override_constants/separation = 12
 [node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "Click a bind to remap it."
@@ -495,17 +495,17 @@ theme_override_constants/separation = 14
 
 [node name="DevHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Developer Options"
 
 [node name="DevSoloLoadoutLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Solo test loadout"
 
 [node name="DevSoloHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "Pick a default role when you Play alone. Lobby role buttons can still change it."
@@ -517,7 +517,7 @@ theme_override_constants/separation = 8
 [node name="DevRoleCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection"]
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Role"
 
 [node name="DevApprenticeButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection"]
@@ -532,22 +532,22 @@ text = "Headmaster"
 
 [node name="VoiceStubCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.65, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
 text = "Stub voice validation (always succeed)"
 
 [node name="DevSpawnRelicNearSpawnCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.65, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
 text = "Spawn relic near player start (testing)"
 
 [node name="DevAllowAnyLobbySizeCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.65, 0.82, 1)
+theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
 text = "Allow any lobby size in multiplayer (testing)"
 
 [node name="DevHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.45, 0.42, 0.55, 1)
+theme_override_colors/font_color = Color(0.55, 0.50, 0.42, 1)
 theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 text = "Saved locally. Default role applies when you Play alone; lobby size override softens 3-player start rules."

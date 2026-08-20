@@ -18,9 +18,10 @@ func setup(bar: Node, index: int) -> void:
 	slot_index = index
 	focus_mode = Control.FOCUS_NONE
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	custom_minimum_size = Vector2(148, 80)
+	custom_minimum_size = Vector2(120, 72)
 	alignment = HORIZONTAL_ALIGNMENT_CENTER
 	clip_text = true
+	text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	refresh()
 
 
@@ -29,18 +30,18 @@ func refresh() -> void:
 	var spell_name := _display_name(spell_id)
 	var key := _slot_key_label()
 	if spell_name.is_empty():
-		text = "%s\n—" % key
+		text = key
 	else:
 		text = "%s\n%s" % [key, spell_name]
 	var style := StyleBoxFlat.new()
 	style.bg_color = _SLOT_FILLED if not spell_id.is_empty() else _SLOT_EMPTY
 	style.set_border_width_all(1)
-	style.border_color = Color(0.72, 0.55, 0.95, 0.45)
-	style.set_corner_radius_all(8)
+	style.border_color = Color(0.55, 0.46, 0.32, 0.75)
+	style.set_corner_radius_all(6)
 	add_theme_stylebox_override("normal", style)
 	add_theme_stylebox_override("hover", style)
 	add_theme_stylebox_override("pressed", style)
-	add_theme_font_size_override("font_size", 14)
+	add_theme_font_size_override("font_size", 13)
 
 
 func _get_drag_data(_at_position: Vector2) -> Variant:

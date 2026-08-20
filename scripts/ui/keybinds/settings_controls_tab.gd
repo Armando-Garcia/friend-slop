@@ -60,8 +60,8 @@ func rebuild() -> void:
 func _add_group_section(group: String) -> VBoxContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.18, 0.14, 0.26, 0.72)
-	style.border_color = Color(0.45, 0.75, 0.95, 0.95)
+	style.bg_color = Color(0.10, 0.08, 0.12, 0.72)
+	style.border_color = Color(0.82, 0.70, 0.38, 0.95)
 	style.border_width_left = 4
 	style.set_corner_radius_all(6)
 	style.content_margin_left = 12
@@ -75,11 +75,11 @@ func _add_group_section(group: String) -> VBoxContainer:
 	panel.add_child(inner)
 	var header := Label.new()
 	header.text = group.to_upper()
-	header.add_theme_color_override("font_color", Color(0.92, 0.97, 1, 1))
+	header.add_theme_color_override("font_color", Color(0.90, 0.84, 0.68, 1))
 	header.add_theme_font_size_override("font_size", 15)
 	inner.add_child(header)
 	var rule := HSeparator.new()
-	rule.modulate = Color(0.55, 0.8, 0.98, 0.7)
+	rule.modulate = Color(0.82, 0.70, 0.38, 0.75)
 	inner.add_child(rule)
 	return inner
 
