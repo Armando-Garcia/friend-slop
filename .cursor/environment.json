@@ -1,0 +1,5 @@
+{
+  "name": "FriendSlop (Godot 4.6.3)",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh"
+}
