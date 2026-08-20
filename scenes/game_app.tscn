@@ -6,7 +6,6 @@
 [ext_resource type="PackedScene" uid="uid://bflxbhshbo6x5" path="res://scenes/ui/settings_panel.tscn" id="4_settings"]
 [ext_resource type="Script" uid="uid://b48micr1kctoq" path="res://scripts/voice/simple_voice_chat.gd" id="5_engine"]
 [ext_resource type="Script" uid="uid://cnqsb153q3upq" path="res://scripts/voice/game_voice_session.gd" id="6_voice"]
-[ext_resource type="PackedScene" uid="uid://cmain001" path="res://scenes/match.tscn" id="7_match"]
 [ext_resource type="Script" uid="uid://c8txfu4kejr8w" path="res://scripts/voice/mic_capture_broker.gd" id="8_broker"]
 [ext_resource type="Script" uid="uid://bffigx8blggql" path="res://scripts/voice/mic_capture_listener.gd" id="9_listener"]
 [ext_resource type="Script" uid="uid://03pg4jl6d2w1" path="res://scripts/voice/proximity_chat_settings.gd" id="10_prox"]
@@ -77,8 +76,5 @@ proximity = SubResource("ProxMatch")
 script = ExtResource("9_listener")
 service = 1
 proximity = SubResource("Resource_080rt")
-
-[node name="Match" parent="States/Match" unique_id=7089186 instance=ExtResource("7_match")]
-visible = false
 
 [node name="SettingsPanel" parent="." unique_id=410753542 instance=ExtResource("4_settings")]

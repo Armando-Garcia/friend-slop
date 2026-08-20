@@ -223,19 +223,33 @@ func _test_block_signals_prevents_populate_overwrite() -> int:
 	return 1
 
 
-## Devices chosen in the menu must hit disk only when the panel closes.
+## Devices chosen in the menu must hit disk only on Save, not Exit.
 func _test_settings_panel_close_persists_devices() -> int:
 	var src := FileAccess.get_file_as_string("res://scripts/ui/settings_panel.gd")
 	var close_at := src.find("func close_panel")
-	var apply_at := src.find("_apply_to_manager()")
-	var save_at := src.find("SettingsManager.save_settings()")
+	var save_fn := src.find("func _on_save_pressed")
 	var issue := ""
-	if close_at < 0 or apply_at < 0 or save_at < 0:
-		issue = "close_panel must apply UI then SettingsManager.save_settings()"
-	elif apply_at < close_at or save_at < apply_at:
-		issue = "close_panel must call _apply_to_manager() before save_settings()"
-	elif src.find("Persisted to settings.cfg only when the panel is closed") < 0:
-		issue = "Live device handlers must document close-only persistence"
+	if close_at < 0:
+		issue = "SettingsPanel must keep close_panel() for PauseMenu Esc"
+	elif src.find("func _on_exit_pressed") < 0:
+		issue = "SettingsPanel must route Exit through _on_exit_pressed"
+	elif save_fn < 0:
+		issue = "SettingsPanel must have _on_save_pressed"
+	else:
+		var save_body := _gd_func_body(src, "func _on_save_pressed")
+		var close_body := _gd_func_body(src, "func close_panel")
+		var exit_body := _gd_func_body(src, "func _on_exit_pressed")
+		var session_src := FileAccess.get_file_as_string(
+			"res://scripts/ui/settings_edit_session.gd"
+		)
+		if save_body.find("commit_save") < 0:
+			issue = "Save must commit through SettingsEditSession"
+		elif session_src.find("SettingsManager.save_settings()") < 0:
+			issue = "Edit session Save must call SettingsManager.save_settings()"
+		elif close_body.find("save_settings") >= 0 or exit_body.find("save_settings") >= 0:
+			issue = "close_panel / Exit must not write settings.cfg"
+		elif src.find("Persisted to settings.cfg only when Save is pressed") < 0:
+			issue = "Live device handlers must document Save-only persistence"
 	if issue.is_empty():
 		return 0
 	push_error(issue)
@@ -245,31 +259,34 @@ func _test_settings_panel_close_persists_devices() -> int:
 ## Live preview may apply audio, but must not write settings.cfg.
 func _test_settings_panel_live_preview_does_not_save() -> int:
 	var src := FileAccess.get_file_as_string("res://scripts/ui/settings_panel.gd")
-	var input_fn := src.find("func _on_input_device_selected")
-	var output_fn := src.find("func _on_output_device_selected")
-	var apply_fn := src.find("func _apply_to_manager")
 	var issue := ""
-	if input_fn < 0 or output_fn < 0 or apply_fn < 0:
+	var input_body := _gd_func_body(src, "func _on_input_device_selected")
+	var output_body := _gd_func_body(src, "func _on_output_device_selected")
+	var apply_body := _gd_func_body(src, "func _apply_to_manager")
+	if input_body.is_empty() or output_body.is_empty() or apply_body.is_empty():
 		issue = "SettingsPanel missing device selection / apply helpers"
-	else:
-		var input_body := src.substr(input_fn, output_fn - input_fn)
-		var output_body := src.substr(output_fn, apply_fn - output_fn)
-		var apply_end := src.find("\nfunc ", apply_fn + 1)
-		if apply_end < 0:
-			apply_end = src.length()
-		var apply_body := src.substr(apply_fn, apply_end - apply_fn)
-		if input_body.find("save_settings") >= 0:
-			issue = "_on_input_device_selected must not save_settings (close persists)"
-		elif output_body.find("save_settings") >= 0:
-			issue = "_on_output_device_selected must not save_settings (close persists)"
-		elif apply_body.find("save_settings") >= 0:
-			issue = "_apply_to_manager must not save_settings (close_panel owns persist)"
-		elif input_body.find("apply_audio_settings") < 0:
-			issue = "Live input preview must still call apply_audio_settings()"
+	elif input_body.find("save_settings") >= 0:
+		issue = "_on_input_device_selected must not save_settings (Save persists)"
+	elif output_body.find("save_settings") >= 0:
+		issue = "_on_output_device_selected must not save_settings (Save persists)"
+	elif apply_body.find("save_settings") >= 0:
+		issue = "_apply_to_manager must not save_settings (Save owns persist)"
+	elif input_body.find("apply_audio_settings") < 0:
+		issue = "Live input preview must still call apply_audio_settings()"
 	if issue.is_empty():
 		return 0
 	push_error(issue)
 	return 1
+
+
+func _gd_func_body(src: String, signature: String) -> String:
+	var start := src.find(signature)
+	if start < 0:
+		return ""
+	var nxt := src.find("\nfunc ", start + 1)
+	if nxt < 0:
+		return src.substr(start)
+	return src.substr(start, nxt - start)
 
 
 ## Preference is stored even before a capture stream exists.

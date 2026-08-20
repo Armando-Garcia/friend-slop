@@ -151,7 +151,7 @@ func apply_locomotion(player: CharacterBody3D, delta: float, speed_multiplier: f
 		strafe += 1.0
 	if Input.is_action_pressed("move_left"):
 		strafe -= 1.0
-	var boosting := Input.is_action_pressed("sprint")
+	var boosting := Input.is_action_pressed("dash")
 	var haste := maxf(speed_multiplier, 0.1)
 	var max_speed := (sprint_speed if boosting else move_speed) * haste
 	var wish := BroomLocomotionScript.wish_direction(
@@ -160,7 +160,7 @@ func apply_locomotion(player: CharacterBody3D, delta: float, speed_multiplier: f
 	_planar_vel = BroomLocomotionScript.step_planar_velocity(
 		_planar_vel, wish, delta, max_speed, acceleration, friction
 	)
-	var ascend := Input.is_action_pressed("jump")
+	var ascend := Input.is_action_pressed("fly_ascend")
 	var descend := (
 		Input.is_action_pressed("crouch") or Input.is_action_pressed("fly_descend")
 	)

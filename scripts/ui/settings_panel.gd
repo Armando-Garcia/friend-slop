@@ -4,6 +4,9 @@ extends Control
 signal closed
 
 const DisplayResolutionPresetsScript := preload("res://scripts/ui/display_resolution_presets.gd")
+const SettingsEditSessionScript := preload("res://scripts/ui/settings_edit_session.gd")
+const SettingsControlsTabScript := preload("res://scripts/ui/keybinds/settings_controls_tab.gd")
+const EXIT_LABEL := "Exit"
 
 var _mic_test_active := false
 var _mic_peak: float = 0.0
@@ -37,6 +40,10 @@ var _voice_stub_checkbox: CheckBox
 var _dev_spawn_relic_near_spawn_checkbox: CheckBox
 var _dev_allow_any_lobby_size_checkbox: CheckBox
 var _dev_solo_role: int = GameState.PlayerRole.APPRENTICE
+var _session: SettingsEditSessionScript = SettingsEditSessionScript.new()
+var _exit_style_normal: StyleBoxFlat
+var _exit_style_dirty: StyleBoxFlat
+var _exit_wobble: Tween
 
 @onready var _general_vbox: VBoxContainer = (
 	$Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox
@@ -50,7 +57,12 @@ var _dev_solo_role: int = GameState.PlayerRole.APPRENTICE
 @onready var _dev_vbox: VBoxContainer = (
 	$Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox
 )
-@onready var _close_button: Button = $Panel/MarginContainer/VBox/CloseButton
+@onready var _controls_tab: SettingsControlsTabScript = (
+	$Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab
+)
+@onready var _revert_button: Button = $Panel/MarginContainer/VBox/Footer/RevertButton
+@onready var _save_button: Button = $Panel/MarginContainer/VBox/Footer/SaveButton
+@onready var _exit_button: Button = $Panel/MarginContainer/VBox/Footer/ExitButton
 
 
 func _ready() -> void:
@@ -72,7 +84,11 @@ func _ready() -> void:
 	_mic_level_bar.min_value = 0.0
 	_mic_level_bar.max_value = 1.0
 	_mic_level_bar.value = 0.0
-	_close_button.pressed.connect(_on_close_pressed)
+	_revert_button.pressed.connect(_on_revert_pressed)
+	_save_button.pressed.connect(_on_save_pressed)
+	_exit_button.pressed.connect(_on_exit_pressed)
+	_controls_tab.binds_changed.connect(_on_binds_changed)
+	_build_exit_styles()
 	_mic_test_button.pressed.connect(_on_mic_test_pressed)
 	_hear_myself_switch.toggled.connect(_on_hear_myself_toggled)
 	_master_volume_slider.value_changed.connect(_on_master_volume_changed)
@@ -89,6 +105,9 @@ func _ready() -> void:
 	_resolution_option.item_selected.connect(_on_resolution_selected)
 	_input_device_option.item_selected.connect(_on_input_device_selected)
 	_output_device_option.item_selected.connect(_on_output_device_selected)
+	_voice_stub_checkbox.toggled.connect(_on_dev_flags_changed)
+	_dev_spawn_relic_near_spawn_checkbox.toggled.connect(_on_dev_flags_changed)
+	_dev_allow_any_lobby_size_checkbox.toggled.connect(_on_dev_flags_changed)
 	NetworkManager.lobby_roster_changed.connect(_on_lobby_roster_changed)
 	_populate_from_settings()
 
@@ -97,7 +116,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
-		_on_close_pressed()
+		_on_exit_pressed()
 		get_viewport().set_input_as_handled()
 
 
@@ -111,19 +130,14 @@ func open() -> void:
 	_mic_test_button.text = "Test Microphone"
 	_refresh_lobby_voice_switch()
 	_refresh_player_voice_list()
+	_controls_tab.cancel_listen()
+	_controls_tab.rebuild()
+	_session.capture_last_save()
+	_refresh_footer()
 
 
 func close_panel() -> void:
-	if not visible:
-		return
-	if _mic_test_active:
-		_stop_mic_test()
-	## Persist whatever is live in SettingsManager (including mid-panel audio
-	## device rebinds) when leaving the menu.
-	_apply_to_manager()
-	SettingsManager.save_settings()
-	visible = false
-	closed.emit()
+	_on_exit_pressed()
 
 
 func is_open() -> bool:
@@ -318,7 +332,7 @@ func _select_device(option: OptionButton, saved_device: String) -> void:
 
 func _apply_to_manager() -> void:
 	## Push UI into live SettingsManager + audio/display systems.
-	## Does not write settings.cfg — that happens on close/save.
+	## Does not write settings.cfg — that happens on Save.
 	SettingsManager.fullscreen = _display_mode_option.selected == 1
 	SettingsManager.set_window_resolution_preset_index(_resolution_option.selected)
 	SettingsManager.master_volume = _master_volume_slider.value
@@ -343,6 +357,95 @@ func _apply_to_manager() -> void:
 	SettingsManager.apply_display_settings()
 
 
+func _on_binds_changed() -> void:
+	_refresh_footer()
+
+
+func _on_revert_pressed() -> void:
+	_session.revert()
+	_populate_from_settings()
+	_controls_tab.rebuild()
+	_refresh_footer()
+
+
+func _on_save_pressed() -> void:
+	_apply_to_manager()
+	_session.commit_save()
+	_refresh_footer()
+
+
+func _on_exit_pressed() -> void:
+	if not visible:
+		return
+	if _controls_tab.is_listening():
+		_controls_tab.cancel_listen()
+		return
+	_apply_to_manager()
+	var result: Dictionary = _session.request_exit()
+	if bool(result.get("should_close", false)):
+		_finish_close()
+		return
+	_refresh_footer()
+	_wobble_exit()
+
+
+func _finish_close() -> void:
+	if _mic_test_active:
+		_stop_mic_test()
+	visible = false
+	closed.emit()
+
+
+func _refresh_footer() -> void:
+	if _revert_button == null or _exit_button == null:
+		return
+	var dirty := _session.is_dirty()
+	_revert_button.disabled = not dirty
+	if _session.is_exit_confirm_pending():
+		_exit_button.text = SettingsEditSessionScript.EXIT_CONFIRM_TEXT
+	else:
+		_exit_button.text = EXIT_LABEL
+	_apply_exit_outline(dirty)
+
+
+func _build_exit_styles() -> void:
+	_exit_style_normal = _make_exit_style(Color(0.45, 0.75, 0.95, 1))
+	_exit_style_dirty = _make_exit_style(Color(0.92, 0.22, 0.22, 1))
+
+
+func _make_exit_style(border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color(0.16, 0.12, 0.22, 1)
+	box.border_color = border
+	box.set_border_width_all(2)
+	box.set_corner_radius_all(6)
+	box.content_margin_left = 8
+	box.content_margin_right = 8
+	box.content_margin_top = 6
+	box.content_margin_bottom = 6
+	return box
+
+
+func _apply_exit_outline(dirty: bool) -> void:
+	var box := _exit_style_dirty if dirty else _exit_style_normal
+	_exit_button.add_theme_stylebox_override("normal", box)
+	_exit_button.add_theme_stylebox_override("hover", box)
+	_exit_button.add_theme_stylebox_override("pressed", box)
+
+
+func _wobble_exit() -> void:
+	if _exit_button == null:
+		return
+	if _exit_wobble != null:
+		_exit_wobble.kill()
+	var origin := _exit_button.position
+	_exit_wobble = create_tween()
+	_exit_wobble.tween_property(_exit_button, "position:x", origin.x + 7.0, 0.04)
+	_exit_wobble.tween_property(_exit_button, "position:x", origin.x - 7.0, 0.06)
+	_exit_wobble.tween_property(_exit_button, "position:x", origin.x + 4.0, 0.05)
+	_exit_wobble.tween_property(_exit_button, "position:x", origin.x, 0.05)
+
+
 func _read_device_selection(option: OptionButton) -> String:
 	if option.selected <= 0:
 		return ""
@@ -353,77 +456,103 @@ func _on_display_mode_selected(index: int) -> void:
 	SettingsManager.fullscreen = index == 1
 	_update_resolution_hint()
 	SettingsManager.apply_display_settings()
+	_refresh_footer()
 
 
 func _on_resolution_selected(index: int) -> void:
 	SettingsManager.set_window_resolution_preset_index(index)
 	SettingsManager.apply_display_settings()
+	_refresh_footer()
 
 
 func _on_dev_apprentice_pressed() -> void:
 	_dev_solo_role = GameState.PlayerRole.APPRENTICE
 	_refresh_dev_solo_ui()
+	_on_dev_flags_changed(false)
 
 
 func _on_dev_headmaster_pressed() -> void:
 	_dev_solo_role = GameState.PlayerRole.HEADMASTER
 	_refresh_dev_solo_ui()
+	_on_dev_flags_changed(false)
+
+
+func _on_dev_flags_changed(_on: bool) -> void:
+	SettingsManager.dev_solo_role = _dev_solo_role
+	SettingsManager.voice_use_stub = _voice_stub_checkbox.button_pressed
+	SettingsManager.dev_spawn_relic_near_spawn = (
+		_dev_spawn_relic_near_spawn_checkbox.button_pressed
+	)
+	SettingsManager.dev_allow_any_lobby_size = (
+		_dev_allow_any_lobby_size_checkbox.button_pressed
+	)
+	_refresh_footer()
 
 
 func _on_master_volume_changed(value: float) -> void:
 	_update_master_volume_label(value)
 	SettingsManager.master_volume = value
 	SettingsManager.apply_audio_settings()
+	_refresh_footer()
 
 
 func _on_mic_volume_changed(value: float) -> void:
 	_update_mic_volume_label(value)
 	SettingsManager.mic_volume = value
 	SettingsManager.apply_audio_settings()
+	_refresh_footer()
 
 
 func _on_crosshair_opacity_changed(value: float) -> void:
 	_update_crosshair_opacity_label(value)
 	SettingsManager.crosshair_opacity = value
 	_refresh_crosshair_preview()
+	_refresh_footer()
 
 
 func _on_crosshair_thickness_changed(value: float) -> void:
 	_update_crosshair_thickness_label(value)
 	SettingsManager.crosshair_thickness = value
 	_refresh_crosshair_preview()
+	_refresh_footer()
 
 
 func _on_crosshair_color_changed(color: Color) -> void:
 	SettingsManager.crosshair_color = color
 	_refresh_crosshair_preview()
+	_refresh_footer()
 
 
 func _on_crosshair_outer_toggled(enabled: bool) -> void:
 	SettingsManager.crosshair_show_outer = enabled
 	_refresh_crosshair_preview()
+	_refresh_footer()
 
 
 func _on_crosshair_dot_toggled(enabled: bool) -> void:
 	SettingsManager.crosshair_show_dot = enabled
 	_refresh_crosshair_preview()
+	_refresh_footer()
 
 
 func _on_hear_myself_toggled(enabled: bool) -> void:
 	SettingsManager.hear_myself = enabled
 	SettingsManager.apply_audio_settings()
+	_refresh_footer()
 
 
 func _on_input_device_selected(_index: int) -> void:
 	## Live preview: free old mic stream and open the selected device.
-	## Persisted to settings.cfg only when the panel is closed.
+	## Persisted to settings.cfg only when Save is pressed.
 	SettingsManager.input_device = _read_device_selection(_input_device_option)
 	SettingsManager.apply_audio_settings()
+	_refresh_footer()
 
 
 func _on_output_device_selected(_index: int) -> void:
 	SettingsManager.output_device = _read_device_selection(_output_device_option)
 	SettingsManager.apply_audio_settings()
+	_refresh_footer()
 
 
 func _is_lobby_voice_ui_on() -> bool:
@@ -469,6 +598,7 @@ func _on_lobby_voice_toggled(enabled: bool) -> void:
 	if _can_toggle_lobby_voice_live():
 		_set_lobby_voice_enabled(enabled)
 	_refresh_lobby_voice_switch()
+	_refresh_footer()
 
 
 func _set_lobby_voice_enabled(enabled: bool) -> void:
@@ -541,7 +671,3 @@ func _on_lobby_roster_changed() -> void:
 func _refresh_player_voice_list() -> void:
 	if _player_voice_list != null and _player_voice_list.has_method("refresh"):
 		_player_voice_list.call("refresh")
-
-
-func _on_close_pressed() -> void:
-	close_panel()
