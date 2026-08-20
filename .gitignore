@@ -12,8 +12,9 @@ addons/godotsteam/
 !addons/godotsteam/README.txt
 models/vosk/
 
-# Cursor hook debug log
+# Cursor hook debug log and local editor settings
 .cursor/hooks/last-run.log
+.cursor/settings.json
 
 # Python
 __pycache__/
