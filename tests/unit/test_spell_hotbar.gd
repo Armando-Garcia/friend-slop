@@ -11,7 +11,7 @@ func run() -> int:
 	failures += _test_pending_clears_selection()
 	failures += _test_empty_activate_does_nothing()
 	failures += _test_swap_moves_selection()
-	failures += _test_three_slot_cap()
+	failures += _test_four_slot_cap()
 	failures += _test_slots_persist_without_timer()
 	failures += _test_assignment_prompt()
 	return failures
@@ -120,12 +120,12 @@ func _test_swap_moves_selection() -> int:
 	return 0
 
 
-func _test_three_slot_cap() -> int:
+func _test_four_slot_cap() -> int:
 	var pack := _make_hotbar()
 	var hotbar: SpellHotbarScript = pack["hotbar"]
 	var problem := ""
-	if SpellHotbarScript.SLOT_COUNT != 3:
-		problem = "Expected exactly 3 spell slots"
+	if SpellHotbarScript.SLOT_COUNT != 4:
+		problem = "Expected exactly 4 spell slots"
 	else:
 		hotbar.begin_pending(pack["fireball"])
 		hotbar.assign_pending_to(0)
@@ -134,14 +134,16 @@ func _test_three_slot_cap() -> int:
 		hotbar.begin_pending(pack["ward"])
 		hotbar.assign_pending_to(2)
 		hotbar.begin_pending(pack["flare"])
-		if hotbar.get_slots() != ["fireball", "haste", "ward"]:
-			problem = "Expected three assigned spells to fill the hotbar"
-		elif hotbar.assign_pending_to(3):
-			problem = "Expected assign past slot 2 to fail"
+		hotbar.assign_pending_to(3)
+		hotbar.begin_pending(pack["fireball"])
+		if hotbar.get_slots() != ["fireball", "haste", "ward", "flare"]:
+			problem = "Expected four assigned spells to fill the hotbar"
+		elif hotbar.assign_pending_to(4):
+			problem = "Expected assign past slot 3 to fail"
 		elif not hotbar.has_pending():
 			problem = "Expected rejected assign to keep pending"
-		elif hotbar.get_slots() != ["fireball", "haste", "ward"]:
-			problem = "Expected a fourth assign to leave the three slots unchanged"
+		elif hotbar.get_slots() != ["fireball", "haste", "ward", "flare"]:
+			problem = "Expected a fifth assign to leave the four slots unchanged"
 	if problem.is_empty():
 		return 0
 	push_error(problem)
@@ -179,5 +181,8 @@ func _test_assignment_prompt() -> int:
 		return 1
 	if not prompt.contains("E") and not prompt.contains("["):
 		push_error("Expected assignment prompt to include the E slot key")
+		return 1
+	if not prompt.contains("LMB") and not prompt.contains("["):
+		push_error("Expected assignment prompt to include the LMB slot")
 		return 1
 	return 0

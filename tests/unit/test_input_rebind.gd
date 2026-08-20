@@ -171,6 +171,7 @@ func _catalog_error(names: PackedStringArray) -> String:
 		"spell_slot_1",
 		"spell_slot_2",
 		"spell_slot_3",
+		"spell_slot_4",
 		"hotbar_1",
 		"hotbar_2",
 		"hotbar_3",

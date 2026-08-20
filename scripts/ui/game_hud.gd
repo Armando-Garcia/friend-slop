@@ -1,7 +1,7 @@
 class_name GameHud
 extends CanvasLayer
 
-## In-game HUD: casting overlay, inventory hotbar, 3-slot spell hotbar,
+## In-game HUD: casting overlay, inventory hotbar, 4-slot spell hotbar,
 ## Tab player menu (Inventory / Spells / Guide), and the spellbook overlay (B).
 
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")

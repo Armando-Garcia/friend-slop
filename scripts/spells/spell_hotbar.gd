@@ -1,19 +1,21 @@
 class_name SpellHotbar
 extends Node
 
-## Per-player 3-slot spell bar. Voice confirm starts pending assignment;
-## RMB / Q / E store and fire a slot. Middle mouse captures a new spell.
+## Per-player 4-slot spell bar. Voice confirm starts pending assignment;
+## LMB / RMB / Q / E store and fire a slot. Middle mouse captures a new spell.
 
 signal slots_changed()
 signal pending_changed()
 signal slot_selected(slot_index: int, spell: SpellDefinition)
 
-const SLOT_COUNT := 3
+const SLOT_COUNT := 4
 const SLOT_ACTIONS: PackedStringArray = [
 	"spell_slot_1",
 	"spell_slot_2",
 	"spell_slot_3",
+	"spell_slot_4",
 ]
+const SLOT_FALLBACKS: PackedStringArray = ["RMB", "Q", "E", "LMB"]
 
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
 
@@ -85,12 +87,13 @@ func assignment_prompt() -> String:
 	var spell_name := _pending_spell.display_name.strip_edges()
 	if spell_name.is_empty():
 		spell_name = _pending_spell.id.capitalize()
-	return "Assign %s  %s  %s  %s" % [
-		spell_name,
-		InputPromptScript.bracket("spell_slot_1", "RMB"),
-		InputPromptScript.bracket("spell_slot_2", "Q"),
-		InputPromptScript.bracket("spell_slot_3", "E"),
-	]
+	var parts: PackedStringArray = ["Assign %s" % spell_name]
+	for i in SLOT_ACTIONS.size():
+		var fallback := "?"
+		if i < SLOT_FALLBACKS.size():
+			fallback = SLOT_FALLBACKS[i]
+		parts.append(InputPromptScript.bracket(SLOT_ACTIONS[i], fallback))
+	return "  ".join(parts)
 
 
 func begin_pending(spell: SpellDefinition) -> void:

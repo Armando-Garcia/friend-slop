@@ -91,14 +91,14 @@ theme_override_constants/separation = 10
 layout_mode = 2
 theme_override_colors/font_color = Color(0.62, 0.7, 0.84, 1)
 theme_override_font_sizes/font_size = 13
-text = "Drag spells to swap slots. After a voice confirm, press RMB / Q / E to assign."
+text = "Drag spells to swap slots. After a voice confirm, press LMB / RMB / Q / E to assign."
 autowrap_mode = 3
 
 [node name="SpellsGrid" type="GridContainer" parent="MarginContainer/VBox/SpellsPage"]
 layout_mode = 2
 theme_override_constants/h_separation = 8
 theme_override_constants/v_separation = 8
-columns = 3
+columns = 4
 
 [node name="GuidePage" type="VBoxContainer" parent="MarginContainer/VBox"]
 layout_mode = 2
