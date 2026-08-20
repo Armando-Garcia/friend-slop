@@ -235,8 +235,8 @@ func _east_hall() -> Array:
 
 
 func _test_return_paths_cover_far_corridors() -> int:
-	var graph: Dictionary = MazePathGraphScript.build(_east_hall(), 15, 15, 2.0)
-	var home: Vector3 = MazeGeometryScript.grid_to_world(1, 1, 15, 15, 2.0)
+	var graph: Dictionary = MazePathGraphScript.build(_east_hall(), 7, 7, 2.0)
+	var home: Vector3 = MazeGeometryScript.grid_to_world(1, 1, 7, 7, 2.0)
 	var size := Vector2(3.0, 3.0)
 	var ids: PackedInt32Array = MazePathGraphScript.return_path_segment_ids(
 		graph, home, size
@@ -244,7 +244,7 @@ func _test_return_paths_cover_far_corridors() -> int:
 	if ids.is_empty():
 		push_error("Expected return lines covering the hall outside the patrol square")
 		return 1
-	var far: Vector3 = MazeGeometryScript.grid_to_world(13, 1, 15, 15, 2.0)
+	var far: Vector3 = MazeGeometryScript.grid_to_world(13, 1, 7, 7, 2.0)
 	if MazePathGraphScript.point_in_patrol_rect(far, home, size):
 		push_error("Far hall cell should sit outside the tiny patrol square")
 		return 1
@@ -256,8 +256,8 @@ func _test_return_paths_cover_far_corridors() -> int:
 
 
 func _test_homeward_walk_points_into_patrol() -> int:
-	var graph: Dictionary = MazePathGraphScript.build(_east_hall(), 15, 15, 2.0)
-	var home: Vector3 = MazeGeometryScript.grid_to_world(1, 1, 15, 15, 2.0)
+	var graph: Dictionary = MazePathGraphScript.build(_east_hall(), 7, 7, 2.0)
+	var home: Vector3 = MazeGeometryScript.grid_to_world(1, 1, 7, 7, 2.0)
 	var size := Vector2(3.0, 3.0)
 	var far_j := -1
 	var far_d := -1.0

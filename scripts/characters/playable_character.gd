@@ -1,8 +1,10 @@
 class_name PlayableCharacter
 extends Character
 
-const WALK_SPEED := 3.0
-const SPRINT_SPEED := 5.0
+const DEFAULT_WALK_SPEED := 5.0
+const DEFAULT_MOVE_FRICTION := 50.0
+const WALK_SPEED := DEFAULT_WALK_SPEED
+const SPRINT_SPEED := DEFAULT_WALK_SPEED
 const JUMP_VELOCITY := 2.5
 const MOUSE_SENSITIVITY := 0.002
 const INTERACT_RANGE_SQ := 9.0
@@ -19,6 +21,11 @@ const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_pla
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
+const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
+const PlayableCharacterPreviewScript := preload(
+	"res://scripts/characters/playable_character_preview.gd"
+)
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
@@ -26,6 +33,38 @@ const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 @export var is_alive: bool = true
+
+@export_group("Movement")
+## Ground foot speed (WASD on floor). Scaled by spell haste/slow effects.
+@export_range(1.0, 20.0, 0.1, "suffix:m/s") var move_speed: float = DEFAULT_WALK_SPEED
+## Deceleration when grounded with no WASD (m/s²). Not scaled by haste/slow.
+@export_range(0.1, 200.0, 0.5) var move_friction: float = DEFAULT_MOVE_FRICTION
+
+@export_group("Dash")
+## Tuning reference only — not applied by code. Match dash_speed × dash_duration for ~this far.
+@export_range(0.5, 24.0, 0.1, "suffix:m") var dash_distance: float = 3.0
+## Seconds walk input is locked after a dash; velocity stays at dash_speed for this window.
+@export_range(0.05, 1.0, 0.01, "suffix:s") var dash_duration: float = 0.15
+## Seconds before Shift can dash again (still requires a held move direction).
+@export_range(0.5, 30.0, 0.1, "suffix:s") var dash_cooldown_sec: float = 3.0
+## Horizontal speed set instantly on dash (Shift + direction). Works on ground and in air.
+@export_range(1.0, 40.0, 0.5, "suffix:m/s") var dash_speed: float = 20.0
+
+@export_group("Crouch")
+## Max foot speed while holding C on the ground. Also caps steering during a crouch slide.
+@export_range(0.5, 10.0, 0.1, "suffix:m/s") var crouch_speed: float = 2.5
+## Start a crouch slide when horizontal speed exceeds this (m/s). Not scaled by haste.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_threshold: float = 0.5
+## End the slide below this speed, then recovery eases into crouch walk.
+@export_range(0.0, 10.0, 0.05, "suffix:m/s") var crouch_slide_exit_speed: float = 1.0
+## After a dash, crouch within dash duration + this grace still starts a slide above exit speed.
+@export_range(0.0, 2.0, 0.01, "suffix:s") var crouch_slide_dash_grace_sec: float = 0.6
+## After slide ends, blend back to normal crouch movement for this long (or until slow enough).
+@export_range(0.0, 1.5, 0.01, "suffix:s") var crouch_slide_recovery_sec: float = 0.3
+## Slide friction at high speed (0–100 % of move_friction). Lower = longer dash-slide carry.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction_start: float = 12.0
+## Slide friction near exit speed (0–100). Higher = snappier finish before recovery.
+@export_range(0.0, 100.0, 1.0) var crouch_slide_friction: float = 35.0
 
 var broom_active := false:
 	set(value):
@@ -57,8 +96,8 @@ var _broom_active_visual := false
 
 
 func _ready() -> void:
-	if _should_use_preview_mode():
-		_enter_editor_preview_mode()
+	if PlayableCharacterPreviewScript.should_use_preview_mode(self):
+		PlayableCharacterPreviewScript.enter_editor_preview_mode(self)
 		return
 
 	add_to_group("player")
@@ -74,57 +113,6 @@ func _ready() -> void:
 	_character_color = GameState.get_snail_color(player_index)
 	_apply_character_color(_character_color)
 	_setup_view_camera()
-
-
-func _should_use_preview_mode() -> bool:
-	if _is_under_spawn_slot():
-		return true
-	if not is_inside_tree():
-		return false
-	var scene := get_tree().current_scene
-	return scene != null and scene.has_meta("character_preview_scene")
-
-
-func _is_under_spawn_slot() -> bool:
-	var node := get_parent()
-	while node != null:
-		if node.is_in_group("player_spawn_slot"):
-			return true
-		node = node.get_parent()
-	return false
-
-
-func _enter_editor_preview_mode() -> void:
-	process_mode = Node.PROCESS_MODE_DISABLED
-	collision_layer = 0
-	collision_mask = 0
-	var sync := get_node_or_null("MultiplayerSynchronizer")
-	if sync != null:
-		sync.process_mode = Node.PROCESS_MODE_DISABLED
-	var cam := get_node_or_null("%FirstPersonCamera") as Camera3D
-	if cam != null:
-		cam.current = false
-	if Engine.is_editor_hint():
-		visible = true
-		_apply_character_color(_preview_tint())
-	else:
-		visible = false
-		queue_free()
-
-
-func _preview_tint() -> Color:
-	var parent := get_parent()
-	if (
-		parent != null
-		and parent.is_in_group("player_spawn_slot")
-		and parent.has_method("get_game_role")
-		and int(parent.call("get_game_role")) == 1
-	):
-		return Color(0.55, 0.2, 0.7)
-	var scr := get_script() as Script
-	if scr != null and scr.resource_path.ends_with("headmaster.gd"):
-		return Color(0.55, 0.2, 0.7)
-	return Color(0.25, 0.65, 0.95)
 
 
 func _exit_tree() -> void:
@@ -968,8 +956,18 @@ func _physics_process(delta: float) -> void:
 		_update_interaction_prompt()
 		return
 
+	PlayerDashScript.tick_and_try(self, head, delta)
+	PlayerCrouchScript.tick(self)
+	var dash_active := PlayerDashScript.is_active(self)
+	var crouch_coasting := PlayerCrouchScript.is_coasting(self)
 	SlideSurfaceScript.apply_ground_move(
-		self, head, gravity, delta, _speed_boost_multiplier
+		self,
+		head,
+		gravity,
+		delta,
+		_speed_boost_multiplier,
+		dash_active or crouch_coasting,
+		dash_active
 	)
 	_apply_knockback_bleed(delta)
 

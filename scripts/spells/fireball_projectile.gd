@@ -644,7 +644,7 @@ func _stop_glow_pulse() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _finished:
+	if _finished or not is_inside_tree():
 		return
 	if Engine.is_editor_hint() and not _is_lookdev_flight():
 		return
@@ -662,7 +662,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _cast_motion_hit(motion: Vector3) -> bool:
-	if _hit_shape == null:
+	if not is_inside_tree() or _hit_shape == null:
 		return false
 	var space_state := get_world_3d().direct_space_state
 	var params := PhysicsShapeQueryParameters3D.new()

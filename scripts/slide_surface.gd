@@ -13,6 +13,8 @@ const PEAK_DOT := 0.98
 const PEAK_SPEED := 0.35
 const PEAK_NUDGE := 2.4
 
+const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
+
 
 static func tag(body: CollisionObject3D) -> void:
 	if body == null:
@@ -106,7 +108,9 @@ static func apply_ground_move(
 	head: Node3D,
 	gravity: float,
 	delta: float,
-	boost: float
+	boost: float,
+	preserve_horizontal: bool = false,
+	block_crouch_slide: bool = false
 ) -> void:
 	var on_slide := prepare(player)
 	if not player.is_on_floor() or on_slide:
@@ -115,22 +119,31 @@ static func apply_ground_move(
 		Input.is_action_just_pressed("jump")
 		and player.is_on_floor()
 		and not on_slide
+		and not PlayerCrouchScript.is_crouching(player)
 	):
 		player.velocity.y = PlayableCharacter.JUMP_VELOCITY
-	if on_slide:
+	if on_slide or preserve_horizontal:
+		if not block_crouch_slide and PlayerCrouchScript.is_coasting(player):
+			PlayerCrouchScript.apply_coast_physics(player, head, delta, boost)
 		return
-	var input_dir := Input.get_vector(
-		"move_left", "move_right", "move_forward", "move_back"
-	)
-	var local := Vector3(input_dir.x, 0.0, input_dir.y)
-	var direction := (head.transform.basis * local).normalized()
-	var speed := PlayableCharacter.WALK_SPEED
-	if Input.is_action_pressed("sprint"):
-		speed = PlayableCharacter.SPRINT_SPEED
-	speed *= boost
+	if not player.is_on_floor():
+		return
+	var direction := camera_relative_move_direction(head)
+	var speed := PlayerCrouchScript.ground_move_speed(player, boost)
 	if direction:
 		player.velocity.x = direction.x * speed
 		player.velocity.z = direction.z * speed
 	else:
-		player.velocity.x = move_toward(player.velocity.x, 0.0, speed)
-		player.velocity.z = move_toward(player.velocity.z, 0.0, speed)
+		var friction_step := PlayerCrouchScript.resolve_move_friction(player) * delta
+		player.velocity.x = move_toward(player.velocity.x, 0.0, friction_step)
+		player.velocity.z = move_toward(player.velocity.z, 0.0, friction_step)
+
+
+static func camera_relative_move_direction(head: Node3D) -> Vector3:
+	var input_dir := Input.get_vector(
+		"move_left", "move_right", "move_forward", "move_back"
+	)
+	if input_dir.length_squared() < 0.0001:
+		return Vector3.ZERO
+	var local := Vector3(input_dir.x, 0.0, input_dir.y)
+	return (head.transform.basis * local).normalized()

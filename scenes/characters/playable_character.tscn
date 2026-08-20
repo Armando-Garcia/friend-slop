@@ -9,8 +9,20 @@
 [ext_resource type="Script" uid="uid://u8e7vj0h4fwt" path="res://scripts/headmaster/broom_flight.gd" id="7_broom_flight"]
 [ext_resource type="PackedScene" uid="uid://cxhdm10j1ei3m" path="res://scenes/characters/broom.tscn" id="8_broom_scene"]
 [ext_resource type="Script" uid="uid://dd77j25oui52d" path="res://scripts/inventory/player_inventory.gd" id="9_inventory"]
-[ext_resource type="Script" path="res://scripts/characters/player_stun.gd" id="10_stun"]
-[ext_resource type="PackedScene" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
+[ext_resource type="Script" uid="uid://bcqyf4grpegj6" path="res://scripts/characters/player_stun.gd" id="10_stun"]
+[ext_resource type="PackedScene" uid="uid://7shalb8dn4r4" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xep72"]
+resource_local_to_scene = true
+albedo_color = Color(0.25, 0.65, 0.95, 1)
+metallic = 0.05
+roughness = 0.62
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_d8q2a"]
+resource_local_to_scene = true
+albedo_color = Color(0.32, 0.7, 0.97, 1)
+metallic = 0.05
+roughness = 0.62
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_playable"]
 properties/0/path = NodePath(".:position")
@@ -33,8 +45,26 @@ properties/4/replication_mode = 1
 editor_description = "Shared playable base. Wand = player_wand.tscn (held pose = Wand transform here). Broom = Body/BroomMount/Broom (hidden until mounted)."
 script = ExtResource("2_playable")
 player_index = 0
+gravity = null
+is_alive = true
+move_speed = 4.5
+move_friction = 50.0
+dash_distance = 3.0
+dash_duration = 0.2
+dash_cooldown_sec = 3.0
+dash_speed = 10.0
+crouch_speed = 2.0
+crouch_slide_threshold = 0.5
+crouch_slide_exit_speed = 1.0
+crouch_slide_dash_grace_sec = 0.6
+crouch_slide_recovery_sec = 0.3
+crouch_slide_friction_start = 12.0
+crouch_slide_friction = 35.0
 
-[node name="BroomMount" type="Node3D" parent="Body" parent_id_path=PackedInt32Array(73058391) index="0" unique_id=1571568894]
+[node name="Body" parent="." index="1" unique_id=73058391]
+surface_material_override/0 = SubResource("StandardMaterial3D_xep72")
+
+[node name="BroomMount" type="Node3D" parent="Body" index="0" unique_id=1571568894]
 editor_description = "Anchor on Body. Move/rotate the Broom child for the riding pose. Keep this visible — hide the Broom child instead."
 transform = Transform3D(1, 0, 0, 0, 0.9926331, -0.12115906, 0, 0.12115906, 0.9926331, 0.008568168, 0.21335162, -0.15933038)
 
@@ -43,28 +73,30 @@ editor_description = "Riding pose only — invisible when dismounted."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.33, 0.07)
 visible = false
 
+[node name="HeadMesh" parent="Head" parent_id_path=PackedInt32Array(1186111743) index="0" unique_id=1294118041]
+surface_material_override/0 = SubResource("StandardMaterial3D_d8q2a")
+
 [node name="CameraPivot" type="Node3D" parent="Head" parent_id_path=PackedInt32Array(1186111743) index="1" unique_id=1649868741]
 unique_name_in_owner = true
 
 [node name="FirstPersonCamera" type="Camera3D" parent="Head/CameraPivot" index="0" unique_id=731766597]
 unique_name_in_owner = true
 
-[node name="StunOverlay" type="Node3D" parent="Head/CameraPivot/FirstPersonCamera"]
+[node name="StunOverlay" type="Node3D" parent="Head/CameraPivot/FirstPersonCamera" index="0" unique_id=1336131083]
 editor_description = "Local-only stun FX: 'stunned' word plus facing-orbit stars."
 visible = false
 
-[node name="StunnedWord" type="Label3D" parent="Head/CameraPivot/FirstPersonCamera/StunOverlay"]
+[node name="StunnedWord" type="Label3D" parent="Head/CameraPivot/FirstPersonCamera/StunOverlay" index="0" unique_id=90517935]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, -0.62)
+pixel_size = 0.0014
+no_depth_test = true
+modulate = Color(1, 0.9, 0.25, 1)
+outline_modulate = Color(0.18, 0.04, 0, 1)
 text = "stunned"
 font_size = 64
-modulate = Color(1, 0.9, 0.25, 1)
-outline_size = 12
-outline_modulate = Color(0.18, 0.04, 0, 1)
-pixel_size = 0.0014
-position = Vector3(0, 0.06, -0.62)
-no_depth_test = true
 
-[node name="StunStars" parent="Head/CameraPivot/FirstPersonCamera/StunOverlay" instance=ExtResource("11_stars")]
-position = Vector3(0, 0.04, -0.58)
+[node name="StunStars" parent="Head/CameraPivot/FirstPersonCamera/StunOverlay" index="1" unique_id=893482535 instance=ExtResource("11_stars")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.04, -0.58)
 orbit_radius = 0.12
 orbit_speed = 4.6
 star_size = 0.045
@@ -104,12 +136,12 @@ unique_name_in_owner = true
 script = ExtResource("9_inventory")
 starting_items = Array[String](["", "spellbook"])
 
-[node name="Stun" type="Node" parent="." index="9"]
+[node name="Stun" type="Node" parent="." index="9" unique_id=796869350]
 editor_description = "Charger ram stun: locks move/cast, ballistic launch, shared stun stars + camera 'stunned' word."
 script = ExtResource("10_stun")
 
-[node name="StunStars" parent="." index="10" instance=ExtResource("11_stars")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
+[node name="StunStars" parent="." index="10" unique_id=1280587676 instance=ExtResource("11_stars")]
 editor_description = "World stun stars around the head. Other players see these while this character is stunned."
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
 orbit_radius = 0.22
 star_size = 0.06

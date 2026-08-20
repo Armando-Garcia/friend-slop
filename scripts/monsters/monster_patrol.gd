@@ -40,8 +40,9 @@ func begin(body: CharacterBody3D, rng: RandomNumberGenerator, patrol_radius: flo
 	if body != null and body.has_meta("patrol_home"):
 		set_home(body.get_meta("patrol_home"))
 	if not home_set and body != null:
-		home = body.global_position
+		home = body.global_position if body.is_inside_tree() else body.position
 		home_set = true
+	_pref_seg_count = -1
 	_sync_routes(body)
 	var segments: Array = graph.get("segments", [])
 	if body == null or segments.is_empty():
@@ -169,6 +170,20 @@ static func pick_goal(
 
 func _snap_to_path(body: CharacterBody3D) -> void:
 	var pos := body.global_position
+	if not _in_patrol_rect(pos):
+		if preferred.is_empty():
+			preferred = MazePathGraphScript.return_path_segment_ids(graph, home, size)
+		if preferred.size() > 0:
+			segment_id = MazePathGraphScript.nearest_segment_id_from(graph, pos, preferred)
+			toward_b = MazePathGraphScript.homeward_toward_b(graph, segment_id, home, size)
+			return
+		var junc_i := _nearest_junction(pos)
+		if junc_i >= 0:
+			var homeward := MazePathGraphScript.homeward_next_segment(graph, junc_i, home, size)
+			if homeward >= 0:
+				segment_id = homeward
+				toward_b = MazePathGraphScript.homeward_toward_b(graph, segment_id, home, size)
+				return
 	if MazePathGraphScript.is_in_clearing(graph, pos):
 		var link := _nearest_reachable_via_clearing(pos)
 		if link >= 0:
@@ -180,14 +195,6 @@ func _snap_to_path(body: CharacterBody3D) -> void:
 				toward_b = MazePathGraphScript.homeward_toward_b(
 					graph, segment_id, home, size
 				)
-			return
-	if not _in_patrol_rect(pos) and preferred.size() > 0:
-		var ret_id := MazePathGraphScript.nearest_segment_id_from(graph, pos, preferred)
-		if not _segment_reachable(pos, ret_id):
-			ret_id = _nearest_reachable_from_ids(pos, preferred)
-		if ret_id >= 0:
-			segment_id = ret_id
-			toward_b = MazePathGraphScript.homeward_toward_b(graph, segment_id, home, size)
 			return
 	var nearest := MazePathGraphScript.nearest_segment_id(graph, pos)
 	if not _segment_reachable(pos, nearest):
@@ -212,6 +219,19 @@ func _snap_to_path(body: CharacterBody3D) -> void:
 	toward_b = facing.dot(Vector3(b.x - a.x, 0.0, b.z - a.z)) >= 0.0
 	if off_network:
 		toward_b = MazePathGraphScript.homeward_toward_b(graph, segment_id, home, size)
+
+
+func _nearest_junction(pos: Vector3) -> int:
+	var junctions: Array = graph.get("junctions", [])
+	var best := -1
+	var best_d := INF
+	for i in junctions.size():
+		var j_pos: Vector3 = junctions[i]["pos"]
+		var d := Vector3(pos.x - j_pos.x, 0.0, pos.z - j_pos.z).length()
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
 
 
 func _homeward_on_segment(a: Vector3, b: Vector3) -> bool:
