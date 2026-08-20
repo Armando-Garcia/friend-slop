@@ -1,22 +1,27 @@
 class_name PlayerMenu
 extends PanelContainer
 
-## Centered Tab menu: Inventory and Guide. (The spellbook is its own
+## Centered Tab menu: Inventory, Spells, and Guide. (The spellbook is its own
 ## book overlay now — see scripts/ui/book/spell/spell_book.gd, hotkey B.)
 
 enum Tab {
 	INVENTORY,
+	SPELLS,
 	GUIDE,
 }
 
 const GuideContentScript := preload("res://scripts/ui/guide_content.gd")
 const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory.gd")
 const InventorySlotButtonScript := preload("res://scripts/ui/inventory_slot_button.gd")
+const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
+const SpellSlotButtonScript := preload("res://scripts/ui/spell_slot_button.gd")
 
 var _inventory: Node
+var _spell_hotbar: Node
 var _tab: Tab = Tab.GUIDE
 var _objective_lines: PackedStringArray = PackedStringArray()
 var _inv_buttons: Array[Button] = []
+var _spell_buttons: Array[Button] = []
 
 @onready var _title_label: Label = $MarginContainer/VBox/Header/TitleLabel
 @onready var _subtitle_label: Label = $MarginContainer/VBox/Header/SubtitleLabel
@@ -24,6 +29,9 @@ var _inv_buttons: Array[Button] = []
 @onready var _inventory_page: VBoxContainer = $MarginContainer/VBox/InventoryPage
 @onready var _inventory_grid: GridContainer = $MarginContainer/VBox/InventoryPage/InventoryGrid
 @onready var _inventory_hint: Label = $MarginContainer/VBox/InventoryPage/InventoryHint
+@onready var _spells_page: VBoxContainer = $MarginContainer/VBox/SpellsPage
+@onready var _spells_grid: GridContainer = $MarginContainer/VBox/SpellsPage/SpellsGrid
+@onready var _spells_hint: Label = $MarginContainer/VBox/SpellsPage/SpellsHint
 @onready var _guide_page: VBoxContainer = $MarginContainer/VBox/GuidePage
 @onready var _hints_label: Label = $MarginContainer/VBox/GuidePage/HintsLabel
 @onready var _objective_label: Label = $MarginContainer/VBox/GuidePage/ObjectiveLabel
@@ -33,6 +41,7 @@ func _ready() -> void:
 	visible = false
 	_tab_bar.tab_changed.connect(_on_tab_changed)
 	_build_inventory_slots()
+	_build_spell_slots()
 	_show_tab(Tab.GUIDE)
 
 
@@ -47,6 +56,19 @@ func configure_inventory(inventory: Node) -> void:
 	if _inventory != null and _inventory.has_signal("inventory_changed"):
 		_inventory.inventory_changed.connect(_refresh_inventory)
 	_refresh_inventory()
+
+
+func configure_spell_hotbar(hotbar: Node) -> void:
+	if (
+		_spell_hotbar != null
+		and _spell_hotbar.has_signal("slots_changed")
+		and _spell_hotbar.slots_changed.is_connected(_refresh_spells)
+	):
+		_spell_hotbar.slots_changed.disconnect(_refresh_spells)
+	_spell_hotbar = hotbar
+	if _spell_hotbar != null and _spell_hotbar.has_signal("slots_changed"):
+		_spell_hotbar.slots_changed.connect(_refresh_spells)
+	_refresh_spells()
 
 
 func get_tab() -> Tab:
@@ -67,6 +89,8 @@ func refresh(objective_lines: PackedStringArray) -> void:
 		_apply_main_view(_objective_lines)
 	elif _tab == Tab.INVENTORY:
 		_refresh_inventory()
+	elif _tab == Tab.SPELLS:
+		_refresh_spells()
 
 
 func _show_tab(tab: Tab) -> void:
@@ -80,6 +104,10 @@ func _show_tab(tab: Tab) -> void:
 			_title_label.text = "Inventory"
 			_subtitle_label.text = "Drag items between slots. Press [Tab] to hide"
 			_refresh_inventory()
+		Tab.SPELLS:
+			_title_label.text = "Spells"
+			_subtitle_label.text = "Drag to swap slots. Press [Tab] to hide"
+			_refresh_spells()
 		Tab.GUIDE:
 			_title_label.text = "Guide"
 			_subtitle_label.text = "Press [Tab] to hide"
@@ -89,6 +117,7 @@ func _show_tab(tab: Tab) -> void:
 
 func _update_content_visibility() -> void:
 	_inventory_page.visible = _tab == Tab.INVENTORY
+	_spells_page.visible = _tab == Tab.SPELLS
 	_guide_page.visible = _tab == Tab.GUIDE
 
 
@@ -122,4 +151,29 @@ func _refresh_inventory() -> void:
 			button.call("setup", _inventory, int(button.get("slot_index")))
 		elif button.has_method("refresh"):
 			button.set("inventory", _inventory)
+			button.call("refresh")
+
+
+func _build_spell_slots() -> void:
+	for child in _spells_grid.get_children():
+		child.queue_free()
+	_spell_buttons.clear()
+	for i in SpellHotbarScript.SLOT_COUNT:
+		var button: Button = SpellSlotButtonScript.new()
+		_spells_grid.add_child(button)
+		if button.has_method("setup"):
+			button.call("setup", _spell_hotbar, i)
+		_spell_buttons.append(button)
+	if _spells_hint != null:
+		_spells_hint.text = (
+			"Drag spells to swap slots. After a voice confirm, press RMB / Q / E to assign."
+		)
+
+
+func _refresh_spells() -> void:
+	for button in _spell_buttons:
+		if button.has_method("setup"):
+			button.call("setup", _spell_hotbar, int(button.get("slot_index")))
+		elif button.has_method("refresh"):
+			button.set("hotbar", _spell_hotbar)
 			button.call("refresh")

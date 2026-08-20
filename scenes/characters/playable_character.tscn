@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://dd77j25oui52d" path="res://scripts/inventory/player_inventory.gd" id="9_inventory"]
 [ext_resource type="Script" uid="uid://bcqyf4grpegj6" path="res://scripts/characters/player_stun.gd" id="10_stun"]
 [ext_resource type="PackedScene" uid="uid://7shalb8dn4r4" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
+[ext_resource type="Script" uid="uid://bspellhotbar01" path="res://scripts/spells/spell_hotbar.gd" id="12_hotbar"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_xep72"]
 resource_local_to_scene = true
@@ -145,3 +146,8 @@ editor_description = "World stun stars around the head. Other players see these 
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
 orbit_radius = 0.22
 star_size = 0.06
+
+[node name="SpellHotbar" type="Node" parent="." index="11" unique_id=2020083901]
+unique_name_in_owner = true
+editor_description = "Three persistent spell slots. After a voice confirm, press RMB / Q / E to assign."
+script = ExtResource("12_hotbar")

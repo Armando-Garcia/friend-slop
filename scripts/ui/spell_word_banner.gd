@@ -3,8 +3,8 @@ extends Control
 
 ## Invisible banner: typewriter-reveals spell words between aim and hotbar.
 
-const CHAR_INTERVAL_SEC := 0.09
-const HOLD_AFTER_REVEAL_SEC := 1.35
+const CHAR_INTERVAL_SEC := 0.03
+const HOLD_AFTER_REVEAL_SEC := 0.9
 const SERIF_FONT_PATH := "res://assets/fonts/LibreBaskerville-Regular.otf"
 const FONT_SIZE := 68
 ## Opaque white glyphs; dark outline so they read on bright or dark ground.
@@ -12,8 +12,8 @@ const DEFAULT_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const OUTLINE_COLOR := Color(0.0, 0.0, 0.0, 0.9)
 ## Place text 40% of the way from screen-center aim toward the hotbar mid.
 const AIM_TO_HOTBAR_T := 0.40
-## Matches GameHud HotbarMargin mid (~offset_top -96 … offset_bottom -16).
-const HOTBAR_MID_FROM_BOTTOM_PX := 56.0
+## Matches GameHud bottom hotbar row mid (36 px margin + half of 72 px row).
+const HOTBAR_MID_FROM_BOTTOM_PX := 72.0
 const BAND_HALF_HEIGHT_PX := 44.0
 
 var _full_text: String = ""

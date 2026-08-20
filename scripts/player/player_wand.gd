@@ -7,6 +7,7 @@ extends Node3D
 
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const WandListeningFxScript := preload("res://scripts/player/wand_listening_fx.gd")
+const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 
 const WORLD_LIGHT_CULL_MASK := WorldVisualLayersScript.WORLD_LIGHT_MASK
 
@@ -20,7 +21,6 @@ const SHAFT_LENGTH := 0.28
 const SHAFT_TOP_RADIUS := 0.008
 const SHAFT_BOTTOM_RADIUS := 0.008
 const TIP_RADIUS := 0.012
-## Spill-tuned cone from the wand tip toward the crosshair.
 const FLASHLIGHT_ENERGY := 3.6
 const FLASHLIGHT_RANGE := 14.0
 const FLASHLIGHT_HALF_ANGLE_DEG := 28.0
@@ -31,12 +31,11 @@ const FLASHLIGHT_TIP_EMISSION := 1.0
 const FLAME_GLOW_COLOR := Color(0.72, 0.08, 0.04)
 const FLAME_GLOW_EMISSION := 3.2
 
-## Tip raised and nudged toward screen center relative to idle held pose.
 @export var raised_position_offset: Vector3 = Vector3(-0.04, 0.10, -0.02)
 @export var raised_basis_euler_deg: Vector3 = Vector3(28.0, -8.0, -4.0)
 @export_range(0.05, 1.0, 0.01) var raise_tween_sec: float = 0.25
 
-## Tip lift while holding LMB; spell fires on release as the wand returns forward.
+## Tip lift while holding a spell-slot hotkey; spell fires on release as the wand returns forward.
 ## Pitch sign matches E-raise (+X): tip is on local −Z, so +pitch lifts the lit end.
 @export_range(0.05, 0.8, 0.01) var cast_charge_sec: float = 0.14
 ## Flipped-P release: large tip arc left/up, brief pause, then fast drop. Fire awaits all.
@@ -67,15 +66,11 @@ var _flashlight_active := false
 var _flame_glow_active := false
 var _listen_level: float = 0.0
 var _listen_peak: float = 0.0
-## Scene Tip scale from player_wand.tscn — runtime pulse must not replace it with Vector3.ONE.
 var _tip_base_scale := Vector3.ONE
-## Authored held pose from the scene — never overwritten by cast flourishes.
 var _default_held_transform: Transform3D = Transform3D.IDENTITY
 var _has_default_held := false
 var _idle_transform: Transform3D = Transform3D.IDENTITY
-## Exact pose at LMB press — release always restores the default held pose.
 var _cast_pre_click_transform: Transform3D = Transform3D.IDENTITY
-## Stable tip offset in wand space (authored child chain); not from live to_local.
 var _tip_rest_local: Vector3 = Vector3(0.0, 0.0, -0.28)
 var _raised := false
 var _pose_tween: Tween
@@ -85,7 +80,6 @@ var _cast_charge_duration: float = 0.0
 var _cast_charge_elapsed: float = 0.0
 var _cast_charge_ready := false
 var _cast_fx_started := false
-## Snapshotted on release so build_params still sees power after charge ends.
 var _cast_power_factor: float = 1.0
 var _cast_fx_kind: int = 0
 
@@ -94,7 +88,6 @@ func _ready() -> void:
 	ensure_preview_ready()
 
 
-## Bind meshes/particles; safe to call from editor workshops (@tool).
 func ensure_preview_ready() -> void:
 	if _cast_origin != null and _success_particles != null:
 		return
@@ -281,7 +274,7 @@ func play_cast_success(spell: SpellDefinition = null, keep_armed: bool = false) 
 	_pulse_tip(_success_pulse_color_for_spell(spell), 0.35)
 
 
-## LMB press: ready immediately; hold builds charge power up to spell charge_time.
+## Slot press: hold builds tip charge; spells with require_full_charge must finish before fire.
 func begin_cast_charge(spell: SpellDefinition = null) -> void:
 	if _raised:
 		return
@@ -296,7 +289,7 @@ func begin_cast_charge(spell: SpellDefinition = null) -> void:
 	)
 	_cast_charge_duration = spell.get_charge_time_sec() if spell != null else 1.0
 	_cast_charge_elapsed = 0.0
-	_cast_charge_ready = true
+	_cast_charge_ready = not (spell != null and spell.requires_full_charge())
 	_cast_power_factor = 1.0 if _cast_charge_duration <= 0.001 else 0.0
 	_start_cast_charge_visuals()
 	_refresh_process_enabled()
@@ -323,20 +316,29 @@ func _start_cast_charge_visuals() -> void:
 
 func _start_p_shaped_charge_lift() -> void:
 	var apex := _cast_charge_transform(_cast_pre_click_transform)
-	if cast_charge_sec <= 0.001:
+	var pose_sec := cast_charge_sec
+	if _cast_charge_spell != null and _cast_charge_spell.effect_id == "fireball":
+		pose_sec = FireballProjectileScript.authored_wand_charge_pose_sec()
+	if pose_sec <= 0.001:
 		transform = apex
 		return
 	_pose_tween = create_tween()
 	_pose_tween.set_trans(Tween.TRANS_QUAD)
 	_pose_tween.set_ease(Tween.EASE_OUT)
-	_pose_tween.tween_property(self, "transform", apex, cast_charge_sec)
+	_pose_tween.tween_property(self, "transform", apex, pose_sec)
 
 
 func _tick_cast_charge(delta: float) -> void:
 	if not _cast_charging:
 		return
 	_cast_charge_elapsed += delta
-	_cast_charge_ready = true
+	if (
+		_cast_charge_spell != null
+		and _cast_charge_spell.requires_full_charge()
+	):
+		_cast_charge_ready = _cast_charge_elapsed >= _cast_charge_duration
+	else:
+		_cast_charge_ready = true
 	var power := get_cast_power_factor()
 	if _cast_fx_started and _listen_fx != null and _listen_fx.has_method("set_cast_charge_progress"):
 		_listen_fx.set_cast_charge_progress(power)
@@ -409,7 +411,7 @@ func release_cast(spell: SpellDefinition = null, keep_armed: bool = true) -> voi
 	play_cast_success(spell, keep_armed)
 
 
-func cancel_cast_charge(instant: bool = false) -> void:
+func cancel_cast_charge(instant: bool = false, end_fx: bool = true) -> void:
 	_cast_power_factor = _compute_cast_power_factor() if _cast_charging else _cast_power_factor
 	var height_t := _cast_power_factor
 	var kind := _cast_fx_kind
@@ -417,7 +419,8 @@ func cancel_cast_charge(instant: bool = false) -> void:
 	_cast_charging = false
 	_cast_charge_ready = false
 	_cast_fx_started = false
-	_end_cast_charge_fx()
+	if end_fx:
+		_end_cast_charge_fx()
 	_refresh_process_enabled()
 	if not had_fx:
 		_snap_to_pre_click_pose()
@@ -434,12 +437,15 @@ func cancel_cast_charge(instant: bool = false) -> void:
 			_start_p_shaped_wand_fx(height_t)
 
 
-## Cancel after tip FX began: sparks. Instant cancel snaps with no flourish.
-func fizzle_cast_charge(instant: bool = false) -> void:
+func fizzle_cast_charge(_instant: bool = false) -> void:
 	var had_fx := _cast_fx_started
-	cancel_cast_charge(instant)
+	var spell := _cast_charge_spell
+	## Failed charge: snap the wand home. No P-swing flourish.
+	cancel_cast_charge(true, false)
 	if had_fx:
-		play_fizzle(true)
+		play_fizzle(true, spell)
+	else:
+		_end_cast_charge_fx()
 
 
 func _cast_release_duration() -> float:
@@ -630,9 +636,16 @@ func _cast_charge_transform(base: Transform3D) -> Transform3D:
 	)
 
 
-func play_fizzle(keep_armed: bool = false) -> void:
+func play_fizzle(keep_armed: bool = false, spell: SpellDefinition = null) -> void:
 	if not keep_armed:
 		set_armed(false)
+	if _listen_fx != null and _listen_fx.has_method("pop_cast_charge_fx"):
+		_listen_fx.pop_cast_charge_fx()
+	else:
+		_end_cast_charge_fx()
+	if spell != null and spell.effect_id == "fireball":
+		_pulse_tip(Color(0.55, 0.48, 0.42), 0.28)
+		return
 	_emit_burst(_fizzle_particles, Color(0.55, 0.5, 0.65))
 	_pulse_tip(Color(0.65, 0.55, 0.75), 0.2)
 
@@ -945,10 +958,10 @@ func _resolve_tip_rest_local() -> Vector3:
 func _success_color_for_spell(spell: SpellDefinition) -> Color:
 	if spell == null:
 		return Color(1.0, 0.95, 0.85)
-	return spell.get_display_color()
+	return spell.color
 
 
 func _success_pulse_color_for_spell(spell: SpellDefinition) -> Color:
 	if spell == null:
 		return Color(1.0, 0.98, 0.92)
-	return spell.get_display_color().lightened(0.2)
+	return spell.color.lightened(0.2)

@@ -177,6 +177,9 @@ func _test_build_haste_params() -> int:
 	if float(params.get(SyncScript.KEY_DURATION, 0.0)) <= 0.0:
 		push_error("Expected haste duration in params")
 		return 1
+	if SyncScript.get_effect_duration_sec(HasteSpell, params) != 0.0:
+		push_error("Expected haste to hide HUD active timer")
+		return 1
 	return 0
 
 
@@ -507,8 +510,8 @@ func _test_build_ward_params() -> int:
 	if not params.has(SyncScript.KEY_ORIGIN) or not params.has(SyncScript.KEY_DIRECTION):
 		push_error("Expected ward aim origin and direction")
 		return 1
-	if SyncScript.get_effect_duration_sec(WardSpell, params) != SyncScript.DEFAULT_WARD_DURATION:
-		push_error("Expected ward HUD duration of 1 second")
+	if SyncScript.get_effect_duration_sec(WardSpell, params) != 0.0:
+		push_error("Expected ward to hide HUD active timer")
 		return 1
 	var wire := SyncScript.pack_for_network(params)
 	var unpacked := SyncScript.unpack_from_network(wire)

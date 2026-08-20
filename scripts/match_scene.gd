@@ -238,7 +238,10 @@ func _wire_spell_system(player: CharacterBody3D) -> void:
 
 	loadout.configure(spell_registry.get_all_spells())
 	_apply_role_starting_spells(loadout)
-	game_hud.configure(loadout, casting_session)
+	var spell_hotbar := player.get_node_or_null("%SpellHotbar")
+	if spell_hotbar == null:
+		spell_hotbar = player.get_node_or_null("SpellHotbar")
+	game_hud.configure(loadout, casting_session, spell_hotbar)
 	var inventory := player.get_node_or_null("%PlayerInventory")
 	if inventory == null:
 		inventory = player.get_node_or_null("PlayerInventory")
@@ -608,7 +611,6 @@ func _on_cast_succeeded(
 	else:
 		game_hud.reveal_cast_spell(spell)
 		var params := SpellEffectSyncScript.build_params(spell, _local_player)
-		var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
 		if spell.effect_id == "fake_wall":
 			if _local_player.has_method("_begin_fake_wall_placement"):
 				_local_player.call("_begin_fake_wall_placement", spell)
@@ -619,14 +621,8 @@ func _on_cast_succeeded(
 			game_hud.hide_casting()
 			return
 		effect_applier.cast_spell(_local_player, spell)
-		if (
-			spell.id == "clone"
-			and not params.is_empty()
-			and loadout.has_method("start_cooldown")
-		):
+		if loadout.has_method("start_cooldown") and (spell.id != "clone" or not params.is_empty()):
 			loadout.start_cooldown(spell.id)
-		if effect_duration > 0.0:
-			game_hud.show_spell_active(spell.id, effect_duration)
 		if casting_session.is_free_cast():
 			return
 		game_hud.show_cast_success(spell, validation)

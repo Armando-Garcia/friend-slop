@@ -1,7 +1,7 @@
 class_name FireballParticles
 extends RefCounted
 
-## Shared CPUParticles3D builders for fireball VFX.
+## Shared particle builders for fireball VFX (CPU trails/bursts + wand charge look).
 
 
 static func make_burst(
@@ -370,3 +370,104 @@ static func _make_firework_color_ramp(base_color: Color) -> Gradient:
 	gradient.add_point(0.65, base_color.lightened(0.15))
 	gradient.add_point(1.0, Color(base_color.r, base_color.g, base_color.b, 0.0))
 	return gradient
+
+
+static func make_wand_charge_fire_texture() -> NoiseTexture2D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.22, 0.55, 0.82, 1.0])
+	gradient.colors = PackedColorArray(
+		[
+			Color(1.0, 0.97, 0.55, 1.0),
+			Color(1.0, 0.72, 0.2, 1.0),
+			Color(1.0, 0.42, 0.08, 1.0),
+			Color(0.95, 0.28, 0.05, 1.0),
+			Color(0.75, 0.18, 0.04, 1.0),
+		]
+	)
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+	noise.frequency = 0.09
+	noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
+	noise.fractal_lacunarity = 2.2
+	noise.fractal_gain = 0.55
+	var tex := NoiseTexture2D.new()
+	tex.width = 256
+	tex.height = 256
+	tex.seamless = true
+	tex.noise = noise
+	tex.color_ramp = gradient
+	return tex
+
+
+static func make_wand_charge_core_material() -> StandardMaterial3D:
+	var fire_tex := make_wand_charge_fire_texture()
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.72, 0.28, 1.0)
+	mat.albedo_texture = fire_tex
+	mat.uv1_scale = Vector3(2.4, 2.4, 2.4)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.55, 0.12, 1.0)
+	mat.emission_energy_multiplier = 1.6
+	mat.emission_texture = fire_tex
+	return mat
+
+
+static func make_wand_charge_shell_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.35, 0.05, 0.08)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.4, 0.08, 1.0)
+	mat.emission_energy_multiplier = 1.0
+	return mat
+
+
+static func configure_wand_charge_fireball(
+	bubble: MeshInstance3D, rim: MeshInstance3D, radius: float
+) -> void:
+	var core_mesh := SphereMesh.new()
+	core_mesh.radius = radius
+	core_mesh.height = radius * 2.0
+	core_mesh.radial_segments = 24
+	core_mesh.rings = 12
+	bubble.mesh = core_mesh
+	var core_mat := make_wand_charge_core_material()
+	bubble.material_override = core_mat
+	var shell_mesh := SphereMesh.new()
+	shell_mesh.radius = radius * 1.18
+	shell_mesh.height = radius * 2.36
+	shell_mesh.radial_segments = 20
+	shell_mesh.rings = 10
+	rim.mesh = shell_mesh
+	var shell_mat := make_wand_charge_shell_material()
+	rim.material_override = shell_mat
+	rim.visible = true
+
+
+static func apply_wand_charge_fire_progress(
+	core: StandardMaterial3D, shell: StandardMaterial3D, p: float
+) -> void:
+	var t := clampf(p, 0.0, 1.0)
+	if core != null:
+		core.albedo_color = Color(1.0, 0.95, 0.7, 1.0).lerp(Color(1.0, 0.72, 0.28, 1.0), t)
+		core.emission = Color(1.0, 0.85, 0.4, 1.0).lerp(Color(1.0, 0.55, 0.12, 1.0), t)
+		core.emission_energy_multiplier = lerpf(1.5, 4.2, t)
+	if shell != null:
+		shell.albedo_color = Color(1.0, 0.45, 0.08, lerpf(0.04, 0.24, t))
+		shell.emission_energy_multiplier = lerpf(0.7, 2.6, t)
+
+
+static func scroll_wand_charge_fire(core: StandardMaterial3D, delta: float) -> void:
+	if core == null:
+		return
+	core.uv1_offset.x = fmod(core.uv1_offset.x + delta * 0.35, 1.0)
+	core.uv1_offset.y = fmod(core.uv1_offset.y + delta * 0.55, 1.0)

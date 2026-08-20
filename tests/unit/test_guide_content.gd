@@ -44,6 +44,9 @@ func _test_build_view_includes_all_sections() -> int:
 	if view["objectives"] != "Objective: shrine":
 		push_error("Expected guide view to include objective text")
 		return 1
+	if not str(view["hints"]).contains("RMB"):
+		push_error("Expected guide hints to mention spell-slot hotkeys")
+		return 1
 	return 0
 
 

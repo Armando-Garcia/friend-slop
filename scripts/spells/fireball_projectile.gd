@@ -5,8 +5,11 @@ extends Area3D
 ## Forward-moving fireball that explodes on impact and knocks combat targets back.
 ## Open scenes/spells/fireball.tscn / fireball_workspace.tscn to tune look + preview FX.
 
-const SPEED := 16.0
+const SPEED := 28.0
 const DEFAULT_HIT_DAMAGE := 20.0
+const SCENE_PATH := "res://scenes/spells/fireball.tscn"
+const DEFAULT_CHARGE_TIME_SEC := 0.8
+const DEFAULT_WAND_CHARGE_POSE_SEC := 0.14
 ## Min charge combat values; max uses authored hit_damage / splash / radii.
 const CHARGE_DAMAGE_MIN := 5.0
 const CHARGE_AOE_MIN_RADIUS := 0.037
@@ -19,6 +22,16 @@ const FireballParticlesScript := preload("res://scripts/spells/fireball_particle
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
+
+@export_group("Cast timing")
+## Hold time until the tip orb is ready to launch. Drives charge animation too.
+@export_range(0.05, 5.0, 0.05) var charge_time_sec: float = DEFAULT_CHARGE_TIME_SEC:
+	set(value):
+		charge_time_sec = maxf(value, 0.05)
+## Wand lift into the charge pose. Independent of charge_time_sec.
+@export_range(0.02, 1.0, 0.01) var wand_charge_pose_sec: float = DEFAULT_WAND_CHARGE_POSE_SEC:
+	set(value):
+		wand_charge_pose_sec = maxf(value, 0.02)
 
 @export_group("Radii")
 @export_range(0.05, 1.5, 0.01, "or_greater") var core_radius: float = 0.22:
@@ -264,6 +277,25 @@ static func spawn(
 	elif parent != null:
 		parent.add_child(projectile)
 	return projectile
+
+
+static func authored_charge_time_sec() -> float:
+	return _authored_float("charge_time_sec", DEFAULT_CHARGE_TIME_SEC, 0.05)
+
+
+static func authored_wand_charge_pose_sec() -> float:
+	return _authored_float("wand_charge_pose_sec", DEFAULT_WAND_CHARGE_POSE_SEC, 0.02)
+
+
+static func _authored_float(property_name: String, fallback: float, min_value: float) -> float:
+	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	if packed == null:
+		return maxf(fallback, min_value)
+	var state := packed.get_state()
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == property_name:
+			return maxf(float(state.get_node_property_value(0, i)), min_value)
+	return maxf(fallback, min_value)
 
 
 ## charge 0 → min damage / baseball AoE / base speed; charge 1 → authored max + speed boost.

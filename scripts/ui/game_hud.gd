@@ -1,13 +1,21 @@
 class_name GameHud
 extends CanvasLayer
 
-## In-game HUD: casting overlay, hotbar, Tab player menu (Inventory / Guide),
-## and the standalone spellbook overlay (B).
+## In-game HUD: casting overlay, inventory hotbar, 3-slot spell hotbar,
+## Tab player menu (Inventory / Spells / Guide), and the spellbook overlay (B).
 
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")
 const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
 const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory.gd")
+const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
 const SpellbookPanelScene := preload("res://scenes/ui/book/spell/spell_book.tscn")
+
+## Bottom HUD: spell hotbar (left) + inventory hotbar (right), lifted for 1080p viewport scaling.
+const BOTTOM_HUD_MARGIN_PX := 36.0
+const BOTTOM_HUD_ROW_HEIGHT_PX := 72.0
+const BOTTOM_HUD_BAR_GAP_PX := 16.0
+const INVENTORY_SLOT_SIZE := Vector2(96, 64)
+const SPELL_SLOT_SIZE := Vector2(120, 72)
 
 var _loadout: Node
 var _inventory: Node
@@ -15,12 +23,14 @@ var _selected_spell_id: String = ""
 var _active_spell: Resource
 var _from_tome := false
 var _coaching_countdown := 0.0
-var _active_strip: VBoxContainer
-var _active_rows: Dictionary = {}
 var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
 var _hotbar_row: HBoxContainer
 var _hotbar_labels: Array[Label] = []
+var _spell_hotbar: Node
+var _spell_hotbar_cells: Array[PanelContainer] = []
+var _spell_hotbar_labels: Array[Label] = []
+var _spell_hotbar_fills: Array[ColorRect] = []
 var _mana_root: Control
 var _mana_fill: ColorRect
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
@@ -51,8 +61,7 @@ func _ready() -> void:
 	mic_level_bar.max_value = 1.0
 	mic_level_bar.value = 0.0
 	_setup_spellbook_panel()
-	_setup_active_strip()
-	_setup_hotbar()
+	_setup_bottom_hud()
 	_setup_mana_bar()
 	_update_aim_cursor_visibility()
 
@@ -89,6 +98,8 @@ func _open_player_menu() -> void:
 	player_menu.visible = true
 	if _inventory != null and player_menu.has_method("configure_inventory"):
 		player_menu.configure_inventory(_inventory)
+	if _spell_hotbar != null and player_menu.has_method("configure_spell_hotbar"):
+		player_menu.configure_spell_hotbar(_spell_hotbar)
 	if player_menu.has_method("reset_to_main"):
 		player_menu.reset_to_main()
 	_refresh_player_menu_content()
@@ -140,7 +151,11 @@ func configure_objective(objective: DeliveryObjective) -> void:
 	_refresh_objective_lines(objective)
 
 
-func configure(loadout: Node, casting_session: Node = null) -> void:
+func configure(
+	loadout: Node,
+	casting_session: Node = null,
+	spell_hotbar: Node = null
+) -> void:
 	_loadout = loadout
 	if _loadout != null and _loadout.has_signal("spell_learned"):
 		_loadout.spell_learned.connect(_on_spell_learned)
@@ -152,6 +167,7 @@ func configure(loadout: Node, casting_session: Node = null) -> void:
 		casting_session.listen_coaching_changed.connect(_update_listen_coaching)
 	if casting_session != null and casting_session.has_signal("tome_retry_tick"):
 		casting_session.tome_retry_tick.connect(update_tome_coaching_countdown)
+	_bind_spell_hotbar(spell_hotbar)
 
 
 func configure_inventory(inventory: Node) -> void:
@@ -167,6 +183,28 @@ func configure_inventory(inventory: Node) -> void:
 	if player_menu != null and player_menu.has_method("configure_inventory"):
 		player_menu.configure_inventory(_inventory)
 	_refresh_hotbar()
+
+
+func _bind_spell_hotbar(hotbar: Node) -> void:
+	var resolved := hotbar
+	if resolved == null and _loadout != null:
+		var player := _loadout.get_parent()
+		if player != null:
+			resolved = player.get_node_or_null("%SpellHotbar")
+			if resolved == null:
+				resolved = player.get_node_or_null("SpellHotbar")
+	if (
+		_spell_hotbar != null
+		and _spell_hotbar.has_signal("slots_changed")
+		and _spell_hotbar.slots_changed.is_connected(_refresh_spell_hotbar)
+	):
+		_spell_hotbar.slots_changed.disconnect(_refresh_spell_hotbar)
+	_spell_hotbar = resolved
+	if _spell_hotbar != null and _spell_hotbar.has_signal("slots_changed"):
+		_spell_hotbar.slots_changed.connect(_refresh_spell_hotbar)
+	if player_menu != null and player_menu.has_method("configure_spell_hotbar"):
+		player_menu.configure_spell_hotbar(_spell_hotbar)
+	_refresh_spell_hotbar()
 
 
 func set_interaction_prompt(text: String) -> void:
@@ -282,14 +320,15 @@ func hide_mana() -> void:
 
 
 func _setup_mana_bar() -> void:
-	## Between spell-word band and hotbar (hotbar top ≈ -96 from bottom).
+	## Thin strip above the combined bottom hotbar row.
+	var bottom := BOTTOM_HUD_MARGIN_PX + BOTTOM_HUD_ROW_HEIGHT_PX + 12.0
 	var anchor := MarginContainer.new()
 	anchor.name = "ManaBarMargin"
 	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	anchor.offset_left = -160.0
-	anchor.offset_top = -128.0
+	anchor.offset_top = -(bottom + 20.0)
 	anchor.offset_right = 160.0
-	anchor.offset_bottom = -108.0
+	anchor.offset_bottom = -bottom
 	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	anchor.visible = false
@@ -326,28 +365,84 @@ func _setup_mana_bar() -> void:
 	set_mana(100.0, 100.0)
 
 
-func _setup_hotbar() -> void:
+func _bottom_hud_half_width() -> float:
+	var spell_w := (
+		SPELL_SLOT_SIZE.x * SpellHotbarScript.SLOT_COUNT
+		+ 10.0 * maxf(float(SpellHotbarScript.SLOT_COUNT - 1), 0.0)
+	)
+	var inv_w := (
+		INVENTORY_SLOT_SIZE.x * PlayerInventoryScript.HOTBAR_COUNT
+		+ 8.0 * maxf(float(PlayerInventoryScript.HOTBAR_COUNT - 1), 0.0)
+	)
+	return (spell_w + BOTTOM_HUD_BAR_GAP_PX + inv_w) * 0.5
+
+
+func _setup_bottom_hud() -> void:
+	var half_w := _bottom_hud_half_width()
+	var bottom := BOTTOM_HUD_MARGIN_PX
+	var top := bottom + BOTTOM_HUD_ROW_HEIGHT_PX
 	var anchor := MarginContainer.new()
-	anchor.name = "HotbarMargin"
+	anchor.name = "BottomHudMargin"
 	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	anchor.offset_left = -220.0
-	anchor.offset_top = -96.0
-	anchor.offset_right = 220.0
-	anchor.offset_bottom = -16.0
+	anchor.offset_left = -half_w
+	anchor.offset_top = -top
+	anchor.offset_right = half_w
+	anchor.offset_bottom = -bottom
 	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(anchor)
 
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_END
+	row.add_theme_constant_override("separation", int(BOTTOM_HUD_BAR_GAP_PX))
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	anchor.add_child(row)
+
+	var spell_row := HBoxContainer.new()
+	spell_row.alignment = BoxContainer.ALIGNMENT_END
+	spell_row.add_theme_constant_override("separation", 10)
+	spell_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(spell_row)
+
 	_hotbar_row = HBoxContainer.new()
-	_hotbar_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	_hotbar_row.alignment = BoxContainer.ALIGNMENT_END
 	_hotbar_row.add_theme_constant_override("separation", 8)
 	_hotbar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.add_child(_hotbar_row)
+	row.add_child(_hotbar_row)
+
+	_spell_hotbar_cells.clear()
+	_spell_hotbar_labels.clear()
+	_spell_hotbar_fills.clear()
+	for i in SpellHotbarScript.SLOT_COUNT:
+		var cell := PanelContainer.new()
+		cell.custom_minimum_size = SPELL_SLOT_SIZE
+		var stack := Control.new()
+		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var fill := ColorRect.new()
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fill.color = Color(0.12, 0.08, 0.22, 0.72)
+		fill.visible = false
+		fill.set_anchors_preset(Control.PRESET_FULL_RECT)
+		stack.add_child(fill)
+		var label := Label.new()
+		label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 14)
+		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
+		stack.add_child(label)
+		cell.add_child(stack)
+		spell_row.add_child(cell)
+		_spell_hotbar_cells.append(cell)
+		_spell_hotbar_labels.append(label)
+		_spell_hotbar_fills.append(fill)
 
 	_hotbar_labels.clear()
 	for i in PlayerInventoryScript.HOTBAR_COUNT:
 		var cell := PanelContainer.new()
-		cell.custom_minimum_size = Vector2(96, 64)
+		cell.custom_minimum_size = INVENTORY_SLOT_SIZE
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.08, 0.06, 0.14, 0.82)
 		style.set_border_width_all(1)
@@ -363,7 +458,120 @@ func _setup_hotbar() -> void:
 		cell.add_child(label)
 		_hotbar_row.add_child(cell)
 		_hotbar_labels.append(label)
+	_refresh_spell_hotbar()
 	_refresh_hotbar()
+
+
+func _refresh_spell_hotbar() -> void:
+	if _spell_hotbar_labels.is_empty():
+		return
+	var pending := (
+		_spell_hotbar != null
+		and _spell_hotbar.has_method("has_pending")
+		and bool(_spell_hotbar.call("has_pending"))
+	)
+	var selected := -1
+	if _spell_hotbar != null and _spell_hotbar.has_method("get_selected_index"):
+		selected = int(_spell_hotbar.call("get_selected_index"))
+	for i in _spell_hotbar_labels.size():
+		var action := SpellHotbarScript.SLOT_ACTIONS[i]
+		var key := InputPromptScript.action_label(action, "?")
+		var spell_id := ""
+		if _spell_hotbar != null and _spell_hotbar.has_method("get_slot"):
+			spell_id = str(_spell_hotbar.call("get_slot", i))
+		var spell_name := ""
+		if _spell_hotbar != null and _spell_hotbar.has_method("display_name"):
+			spell_name = str(_spell_hotbar.call("display_name", spell_id))
+		elif not spell_id.is_empty():
+			spell_name = spell_id.capitalize()
+		var remaining := 0.0
+		var total_cd := 0.0
+		var ammo := 0
+		var ammo_cap := 0
+		var refill_left := 0.0
+		if not spell_id.is_empty() and _loadout != null:
+			if _loadout.has_method("ammo_max"):
+				ammo_cap = int(_loadout.ammo_max(spell_id))
+			if ammo_cap > 0:
+				if _loadout.has_method("ammo_count"):
+					ammo = int(_loadout.ammo_count(spell_id))
+				if _loadout.has_method("remaining_ammo_refill_sec"):
+					refill_left = float(_loadout.remaining_ammo_refill_sec(spell_id))
+				if _loadout.has_method("ammo_refill_sec"):
+					total_cd = float(_loadout.ammo_refill_sec(spell_id))
+				elif _loadout.has_method("get_spell_definition"):
+					var ammo_def: Resource = _loadout.get_spell_definition(spell_id)
+					if ammo_def != null:
+						total_cd = float(ammo_def.get("ammo_refill_sec"))
+				remaining = refill_left if ammo <= 0 else 0.0
+			else:
+				if _loadout.has_method("remaining_cooldown_sec"):
+					remaining = float(_loadout.remaining_cooldown_sec(spell_id))
+				if remaining > 0.0 and _loadout.has_method("get_spell_definition"):
+					var def: Resource = _loadout.get_spell_definition(spell_id)
+					if def != null:
+						total_cd = float(def.get("cooldown_sec"))
+		var empty_ammo := ammo_cap > 0 and ammo <= 0
+		if spell_name.is_empty():
+			_spell_hotbar_labels[i].text = "%s\n—" % key
+		elif ammo_cap > 0 and ammo > 0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%d" % [key, spell_name, ammo]
+		elif ammo_cap > 0 and remaining > 0.0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
+		elif remaining > 0.0:
+			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
+		else:
+			_spell_hotbar_labels[i].text = "%s\n%s" % [key, spell_name]
+		_apply_spell_slot_style(
+			_spell_hotbar_cells[i], pending, i == selected, remaining > 0.0 or empty_ammo
+		)
+		if ammo_cap > 0 and ammo < ammo_cap and total_cd > 0.0:
+			_apply_spell_slot_cooldown_fill(i, refill_left, total_cd)
+		else:
+			_apply_spell_slot_cooldown_fill(i, remaining, total_cd)
+		var label_color := (
+			Color(0.55, 0.52, 0.62, 1)
+			if remaining > 0.0 or empty_ammo
+			else Color(0.94, 0.9, 1, 1)
+		)
+		_spell_hotbar_labels[i].add_theme_color_override("font_color", label_color)
+
+
+func _apply_spell_slot_style(
+	cell: PanelContainer, pending: bool, selected: bool, on_cooldown: bool
+) -> void:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.05, 0.10, 0.92) if on_cooldown else Color(0.10, 0.06, 0.16, 0.88)
+	style.set_corner_radius_all(8)
+	if pending:
+		style.set_border_width_all(2)
+		style.border_color = Color(0.95, 0.78, 0.35, 0.95)
+	elif selected:
+		style.set_border_width_all(2)
+		style.border_color = Color(0.78, 0.55, 1.0, 0.95)
+	else:
+		style.set_border_width_all(1)
+		style.border_color = (
+			Color(0.42, 0.32, 0.55, 0.55) if on_cooldown else Color(0.72, 0.55, 0.95, 0.45)
+		)
+	cell.add_theme_stylebox_override("panel", style)
+
+
+func _apply_spell_slot_cooldown_fill(index: int, remaining: float, total_sec: float) -> void:
+	if index < 0 or index >= _spell_hotbar_fills.size():
+		return
+	var fill := _spell_hotbar_fills[index]
+	if remaining <= 0.0 or total_sec <= 0.0:
+		fill.visible = false
+		return
+	fill.visible = true
+	var fraction := clampf(remaining / total_sec, 0.0, 1.0)
+	fill.anchor_top = 1.0 - fraction
+	fill.anchor_bottom = 1.0
+	fill.offset_top = 0.0
+	fill.offset_bottom = 0.0
+	fill.offset_left = 0.0
+	fill.offset_right = 0.0
 
 
 func _refresh_hotbar() -> void:
@@ -574,18 +782,6 @@ func show_cast_success(spell: Resource, validation: RefCounted = null) -> void:
 	mic_level_bar.visible = false
 
 
-func show_spell_active(spell_id: String, duration_sec: float) -> void:
-	if duration_sec <= 0.0:
-		return
-	_ensure_active_row(spell_id)
-	var row: Dictionary = _active_rows[spell_id]
-	var now := Time.get_ticks_msec() / 1000.0
-	row["total_sec"] = duration_sec
-	row["active_until"] = now + duration_sec
-	_refresh_active_row(spell_id)
-	_active_strip.visible = true
-
-
 func update_tome_coaching_countdown(seconds_left: float) -> void:
 	if not _from_tome or not casting_panel.visible:
 		return
@@ -621,7 +817,7 @@ func _on_spell_learned(spell_id: String) -> void:
 
 func _process(_delta: float) -> void:
 	_update_aim_cursor_visibility()
-	_update_active_strip()
+	_refresh_spell_hotbar()
 
 
 func _update_aim_cursor_visibility() -> void:
@@ -667,84 +863,3 @@ func _sync_objective_lines_from_scene() -> void:
 		_objective_lines = objective.get_status_lines()
 	else:
 		_objective_lines = PackedStringArray()
-
-
-func _setup_active_strip() -> void:
-	_active_strip = VBoxContainer.new()
-	_active_strip.name = "ActiveEffectStrip"
-	_active_strip.add_theme_constant_override("separation", 4)
-	add_child(_active_strip)
-	_active_strip.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_active_strip.offset_left = -220.0
-	_active_strip.offset_top = 12.0
-	_active_strip.offset_right = -16.0
-	_active_strip.offset_bottom = 12.0
-	_active_strip.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_active_strip.visible = false
-
-
-func _ensure_active_row(spell_id: String) -> void:
-	if _active_rows.has(spell_id):
-		return
-	var container := HBoxContainer.new()
-	container.add_theme_constant_override("separation", 8)
-	var label := Label.new()
-	label.custom_minimum_size = Vector2(96, 0)
-	label.add_theme_font_size_override("font_size", 14)
-	label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.72, 1))
-	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(120, 14)
-	bar.min_value = 0.0
-	bar.max_value = 1.0
-	bar.show_percentage = false
-	container.add_child(label)
-	container.add_child(bar)
-	_active_strip.add_child(container)
-	_active_rows[spell_id] = {
-		"container": container,
-		"label": label,
-		"bar": bar,
-		"total_sec": 1.0,
-	}
-
-
-func _refresh_active_row(spell_id: String) -> void:
-	if not _active_rows.has(spell_id):
-		return
-	var row: Dictionary = _active_rows[spell_id]
-	var display_name: String = spell_id
-	if _loadout != null:
-		var spell: Resource = _loadout.get_spell_definition(spell_id)
-		var def := spell as SpellDefinitionScript
-		if def != null:
-			display_name = def.display_name
-	var remaining: float = maxf(
-		0.0,
-		float(row.get("active_until", 0.0)) - Time.get_ticks_msec() / 1000.0
-	)
-	var total: float = maxf(float(row.get("total_sec", 1.0)), 0.001)
-	row["label"].text = "%s %.1fs" % [display_name, remaining]
-	row["bar"].value = clampf(remaining / total, 0.0, 1.0)
-
-
-func _remove_active_row(spell_id: String) -> void:
-	if not _active_rows.has(spell_id):
-		return
-	var row: Dictionary = _active_rows[spell_id]
-	row["container"].queue_free()
-	_active_rows.erase(spell_id)
-	_active_strip.visible = not _active_rows.is_empty()
-
-
-func _update_active_strip() -> void:
-	for spell_id in _active_rows.keys():
-		var row: Dictionary = _active_rows[spell_id]
-		var remaining: float = maxf(
-			0.0,
-			float(row.get("active_until", 0.0)) - Time.get_ticks_msec() / 1000.0
-		)
-		if remaining <= 0.0:
-			_remove_active_row(spell_id)
-			continue
-		_refresh_active_row(spell_id)
-	_active_strip.visible = not _active_rows.is_empty()

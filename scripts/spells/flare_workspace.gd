@@ -1,27 +1,25 @@
 @tool
 extends Node3D
 
-## Flare look-dev studio: authored Flare burn preview + Launch Flare trajectory preview.
-## Launch uses a fixed pitch into the scene so trail/rising smoke are easy to read.
+## Flare look-dev studio — select FlareWorkspace root in scenes/spells/flare_workspace.tscn.
+## Tune the instanced Flare child, then Launch Flare on this root for flight preview.
 
 const FlareEffectScript := preload("res://scripts/spells/flare_effect.gd")
 const FlareSpell := preload("res://resources/spells/flare.tres")
 
 @export_group("Launch preview")
-## Hide the authored lookdev Flare while a launch preview is alive.
+## Hide the lookdev Flare instance while a launch preview rocket is in the air.
 @export var hide_lookdev_during_cast := true
-## Extra push along the launch direction from the wand tip.
+## Extra offset along the shot direction from the wand cast origin.
 @export_range(0.0, 1.5, 0.05) var tip_forward_nudge: float = 0.0
-## Elevation above horizontal for the preview shot (0 = flat, 90 = straight up).
-@export_range(5.0, 85.0, 1.0) var launch_pitch_deg: float = 30.0
+## Launch elevation (5 = nearly flat, 85 = nearly straight up). Shot heads toward -Z.
+@export_range(5.0, 85.0, 1.0) var launch_pitch_deg: float = 35.0
 @export_tool_button("Launch Flare", "Callable")
 var launch_flare_action := launch_flare_preview
 @export_tool_button("Clear Launch", "Callable")
 var clear_launch_action := clear_launch_preview
-@export_tool_button("Replay Lookdev Burn", "Callable")
-var replay_lookdev_action := replay_lookdev_burn
 
-var _preview_flare: Node3D
+var _preview_flare: FlareEffect
 
 
 func _ready() -> void:
@@ -39,17 +37,25 @@ func launch_flare_preview() -> void:
 	var origin := Vector3(0.15, 1.05, 1.15)
 	if wand != null:
 		origin = _resolve_cast_origin(wand)
-		## Best-effort FX — never block the launch preview if wand particles error.
 		if wand.has_method("play_cast_success"):
-			wand.call("play_cast_success", FlareSpell, true)
-	## Fixed upward arc into the scene (-Z) so trajectory is easy to read from the studio camera.
+			var spell_for_fx: SpellDefinition = null if Engine.is_editor_hint() else FlareSpell
+			wand.call("play_cast_success", spell_for_fx, true)
 	var direction := _preview_launch_direction()
 	origin += direction * tip_forward_nudge
 	var bucket := _ensure_bucket("LaunchPreview")
 	bucket.process_mode = Node.PROCESS_MODE_ALWAYS
-	_preview_flare = FlareEffectScript.spawn_launched(bucket, origin, direction)
+	var template := _lookdev_flare()
+	var burn_sec := FlareEffectScript.DEFAULT_DURATION_SEC
+	if template != null:
+		burn_sec = template.duration_sec
+	_preview_flare = FlareEffectScript.spawn_launched(
+		bucket, origin, direction, burn_sec, true, null, template
+	)
 	if _preview_flare != null:
 		_preview_flare.process_mode = Node.PROCESS_MODE_ALWAYS
+		for child in _preview_flare.get_children():
+			if child is GPUParticles3D:
+				child.process_mode = Node.PROCESS_MODE_ALWAYS
 		if Engine.is_editor_hint():
 			var root := get_tree().edited_scene_root
 			if root != null:
@@ -60,7 +66,6 @@ func launch_flare_preview() -> void:
 
 func _preview_launch_direction() -> Vector3:
 	var pitch := deg_to_rad(clampf(launch_pitch_deg, 5.0, 85.0))
-	## Shoot away from the camera into open air: up + toward -Z.
 	return Vector3(0.0, sin(pitch), -cos(pitch)).normalized()
 
 
@@ -68,12 +73,6 @@ func clear_launch_preview() -> void:
 	_clear_bucket("LaunchPreview")
 	_preview_flare = null
 	_refresh_lookdev_visibility()
-
-
-func replay_lookdev_burn() -> void:
-	var lookdev := _lookdev_flare()
-	if lookdev != null and lookdev.has_method("play_launch"):
-		lookdev.call("play_launch")
 
 
 func _on_preview_exited() -> void:
@@ -85,8 +84,8 @@ func _wand() -> Node3D:
 	return get_node_or_null("Wand") as Node3D
 
 
-func _lookdev_flare() -> Node3D:
-	return get_node_or_null("Flare") as Node3D
+func _lookdev_flare() -> FlareEffect:
+	return get_node_or_null("Flare") as FlareEffect
 
 
 func _resolve_cast_origin(wand: Node3D) -> Vector3:
@@ -140,7 +139,5 @@ func _refresh_lookdev_visibility() -> void:
 	var lookdev := _lookdev_flare()
 	if lookdev == null:
 		return
-	var preview_live := (
-		_preview_flare != null and is_instance_valid(_preview_flare)
-	)
+	var preview_live := _preview_flare != null and is_instance_valid(_preview_flare)
 	lookdev.visible = not (hide_lookdev_during_cast and preview_live)

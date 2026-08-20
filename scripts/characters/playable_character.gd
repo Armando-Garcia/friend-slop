@@ -26,7 +26,6 @@ const PlayableCharacterPreviewScript := preload(
 	"res://scripts/characters/playable_character_preview.gd"
 )
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
-const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 const PlayerEmberBurnScript := preload("res://scripts/characters/player_ember_burn.gd")
 
@@ -79,10 +78,12 @@ var _armed_spell: SpellDefinition
 var _mana: float = SpellManaScript.MANA_MAX
 var _speed_boost_multiplier: float = 1.0
 var _speed_boost_timer: float = 0.0
+var _haste_aura: OmniLight3D
 var _wand: PlayerWand
 var _wand_raised := false
 var _spell_fire_charging := false
 var _spell_fire_releasing := false
+var _spell_fire_slot := -1
 var _spell_fire_cancel_token := 0
 var _fake_wall_placement: Node
 var _knockback_vel := Vector3.ZERO
@@ -91,6 +92,7 @@ var _broom_active_visual := false
 
 @onready var camera_pivot: Node3D = %CameraPivot
 @onready var spell_loadout: Node = %CharacterSpellLoadout
+@onready var spell_hotbar: Node = %SpellHotbar
 @onready var casting_session: SpellCastingSession = %SpellCastingSession
 @onready var effect_applier: Node = %SpellEffectApplier
 @onready var _view_camera: Camera3D = %FirstPersonCamera
@@ -267,6 +269,26 @@ func _confirm_fake_wall_placement(spell: SpellDefinition, params: Dictionary) ->
 func apply_speed_boost(duration: float, multiplier: float) -> void:
 	_speed_boost_multiplier = multiplier
 	_speed_boost_timer = duration
+	_sync_haste_visual()
+
+
+func _sync_haste_visual() -> void:
+	var boosting := _speed_boost_timer > 0.0 and _speed_boost_multiplier > 1.01
+	if not boosting:
+		if _haste_aura != null:
+			_haste_aura.visible = false
+		return
+	if _haste_aura == null:
+		_haste_aura = OmniLight3D.new()
+		_haste_aura.name = "HasteAura"
+		_haste_aura.light_color = Color(1.0, 0.82, 0.32)
+		_haste_aura.omni_range = 2.6
+		_haste_aura.shadow_enabled = false
+		_haste_aura.light_volumetric_fog_energy = 0.0
+		_haste_aura.position = Vector3(0.0, 1.15, 0.0)
+		add_child(_haste_aura)
+	_haste_aura.visible = true
+	_haste_aura.light_energy = 0.22 + 0.55 * clampf(_speed_boost_timer / 0.5, 0.0, 1.0)
 
 
 func apply_ember_trail_burn(dps: float, slow_multiplier: float, refresh_sec: float) -> void:
@@ -384,15 +406,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
-	if event.is_action_pressed("spell_fire"):
-		if _try_begin_spell_fire():
-			get_viewport().set_input_as_handled()
-		return
-
-	if event.is_action_released("spell_fire"):
-		if _try_release_spell_fire():
-			get_viewport().set_input_as_handled()
-
 
 func _on_cast_session_state_changed(state: String, _spell: SpellDefinition) -> void:
 	if _wand == null:
@@ -414,15 +427,32 @@ func _on_cast_listen_level_changed(level: float) -> void:
 
 
 func _on_wand_spell_selected(spell: SpellDefinition) -> void:
-	_armed_spell = spell
-	_refill_mana()
 	if _game_hud != null and _game_hud.has_method("reveal_cast_spell"):
 		_game_hud.call("reveal_cast_spell", spell)
 	if _wand != null and _wand.has_method("play_spell_recognition"):
 		await _wand.play_spell_recognition(spell)
+	if not is_instance_valid(self):
+		return
+	## Slot assign already lowered the wand so LMB is free; skip the leftover flourish.
+	if not _wand_raised:
+		return
 	_lower_wand(false)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
+
+
+func _arm_slotted_spell(spell: SpellDefinition) -> void:
+	## Kept for stun/cancel callers; slots no longer stay loaded on a timer.
+	if spell == null:
+		_cancel_slot_cast()
+
+
+func _cancel_slot_cast() -> void:
+	_cancel_spell_fire_charge(true)
+	_armed_spell = null
+	_spell_fire_slot = -1
+	_sync_mana_hud()
+
 
 func _on_wand_cast_succeeded(
 	spell: SpellDefinition,
@@ -545,46 +575,59 @@ func _lower_wand(cancel_listen: bool) -> void:
 		_wand.set_armed(false)
 
 
-func _can_fire_armed_spell() -> bool:
+func _can_fire_slotted_spell(spell: SpellDefinition) -> bool:
 	if not (
 		_uses_local_view()
 		and not _wand_controls_blocked()
 		and not _wand_raised
 		and not is_carrying_relic()
-		and _armed_spell != null
+		and spell != null
 		and _effect_applier != null
 		and (_casting_session == null or not _casting_session.is_tome_teaching())
 	):
 		return false
-	if _mana <= 0.0:
-		return false
 	var one: Array[SpellDefinition] = []
-	one.append(_armed_spell)
+	one.append(spell)
 	return not _filter_free_cast_candidates(one).is_empty()
-func _try_begin_spell_fire() -> bool:
+
+
+func _try_begin_slot_fire(slot_index: int) -> bool:
 	if _spell_fire_charging or _spell_fire_releasing:
 		return false
-	if not _can_fire_armed_spell():
+	if spell_hotbar == null or not spell_hotbar.has_method("get_spell_at"):
 		return false
+	var spell: SpellDefinition = spell_hotbar.call("get_spell_at", slot_index) as SpellDefinition
+	if not _can_fire_slotted_spell(spell):
+		return false
+	if _wand_raised:
+		_lower_wand(false)
+	_armed_spell = spell
+	_spell_fire_slot = slot_index
 	_spell_fire_charging = true
+	_refill_mana()
 	if _wand != null:
 		_wand.begin_cast_charge(_armed_spell)
 	return true
 
-func _try_release_spell_fire() -> bool:
-	if not _spell_fire_charging:
+
+func _try_release_slot_fire(slot_index: int) -> bool:
+	if not _spell_fire_charging or slot_index != _spell_fire_slot:
 		return false
 	_spell_fire_charging = false
 	if _wand == null or not _wand.is_cast_charge_ready():
 		if _wand != null:
-			_wand.cancel_cast_charge()
+			_wand.fizzle_cast_charge()
+		_cancel_slot_cast()
 		return false
-	if not _can_fire_armed_spell():
+	if not _can_fire_slotted_spell(_armed_spell):
 		_wand.fizzle_cast_charge()
+		_cancel_slot_cast()
 		return false
 	_spell_fire_releasing = true
 	_fire_armed_spell()
 	return true
+
+
 func _cancel_spell_fire_charge(instant: bool = false) -> void:
 	if instant:
 		_spell_fire_cancel_token += 1
@@ -595,22 +638,24 @@ func _cancel_spell_fire_charge(instant: bool = false) -> void:
 			_wand.cancel_cast_charge(instant)
 	elif instant and _wand != null:
 		_wand.cancel_cast_charge(true)
+
+
 func _fire_armed_spell() -> void:
 	var cost := SpellManaScript.cast_cost(_armed_spell)
 	var spell := _armed_spell
 	var fire_token := _spell_fire_cancel_token
 	if _wand != null:
-		if spell != null and spell.get_wand_fx_kind() == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
-			_wand.return_from_cast_charge()
-		else:
-			await _wand.return_from_cast_charge()
+		## Flourish plays out; don't wait for the return tween before the projectile.
+		_wand.return_from_cast_charge()
 	if fire_token != _spell_fire_cancel_token:
 		return
 	if not is_instance_valid(self) or spell == null:
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
-	if _armed_spell != spell or _mana <= 0.0:
+	if _armed_spell != spell:
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
 	if spell.effect_id == "fake_wall":
 		if _begin_fake_wall_placement(spell):
@@ -618,19 +663,17 @@ func _fire_armed_spell() -> void:
 				_wand.play_cast_success(spell, true)
 			_spend_mana(cost)
 		_spell_fire_releasing = false
+		_cancel_slot_cast()
 		return
-	var params := SpellEffectSyncScript.build_params(spell, self)
-	var effect_duration := SpellEffectSyncScript.get_effect_duration_sec(spell, params)
 	if _effect_applier.has_method("cast_spell"):
 		_effect_applier.cast_spell(self, spell)
-	if spell.id == "clone" and _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
+	if _spell_loadout != null and _spell_loadout.has_method("start_cooldown"):
 		_spell_loadout.start_cooldown(spell.id)
-	if effect_duration > 0.0 and _game_hud != null and _game_hud.has_method("show_spell_active"):
-		_game_hud.call("show_spell_active", spell.id, effect_duration)
 	if _wand != null:
 		_wand.play_cast_success(spell, true)
 	_spend_mana(cost)
 	_spell_fire_releasing = false
+	_cancel_slot_cast()
 
 func _refill_mana() -> void:
 	_mana = SpellManaScript.MANA_MAX
@@ -641,43 +684,13 @@ func _spend_mana(amount: float) -> void:
 		_sync_mana_hud()
 		return
 	_mana = maxf(0.0, _mana - amount)
-	if _mana <= 0.001:
-		_deplete_mana()
-	else:
-		_sync_mana_hud()
-
-func _deplete_mana() -> void:
-	_mana = 0.0
-	_cancel_spell_fire_charge(true)
-	_armed_spell = null
-	if _game_hud != null:
-		if _game_hud.has_method("hide_mana"):
-			_game_hud.call("hide_mana")
-		if _game_hud.has_method("clear_spell_word"):
-			_game_hud.call("clear_spell_word")
+	_sync_mana_hud()
 
 func _sync_mana_hud() -> void:
-	if _game_hud == null:
-		return
-	if _armed_spell == null or _mana <= 0.001:
-		if _game_hud.has_method("hide_mana"):
-			_game_hud.call("hide_mana")
-		return
-	var bar_color := _armed_spell.get_display_color()
-	if _game_hud.has_method("show_mana"):
-		_game_hud.call("show_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
-	elif _game_hud.has_method("set_mana"):
-		_game_hud.call("set_mana", _mana, SpellManaScript.MANA_MAX, bar_color)
-func _tick_mana_drain(delta: float) -> void:
-	if not _uses_local_view():
-		return
-	if _armed_spell == null or _mana <= 0.0:
-		return
-	_mana = maxf(0.0, _mana - SpellManaScript.drain_rate(_armed_spell) * delta)
-	if _mana <= 0.001:
-		_deplete_mana()
-	else:
-		_sync_mana_hud()
+	if _game_hud != null and _game_hud.has_method("hide_mana"):
+		_game_hud.call("hide_mana")
+
+
 func _try_tome_teaching_interact() -> bool:
 	if _casting_session == null or not _casting_session.is_tome_teaching():
 		return false
@@ -754,7 +767,12 @@ func _find_delivery_objective() -> DeliveryObjective:
 func _update_interaction_prompt() -> void:
 	if _game_hud == null or not _game_hud.has_method("set_interaction_prompt"):
 		return
-	_game_hud.set_interaction_prompt(_resolve_interaction_prompt())
+	var text := _resolve_interaction_prompt()
+	if spell_hotbar != null and spell_hotbar.has_method("assignment_prompt"):
+		var slot_prompt := str(spell_hotbar.call("assignment_prompt"))
+		if not slot_prompt.is_empty():
+			text = slot_prompt
+	_game_hud.set_interaction_prompt(text)
 
 
 func _resolve_interaction_prompt() -> String:
@@ -795,18 +813,7 @@ func _resolve_interaction_prompt() -> String:
 			prompt = interactable.get_prompt()
 	if prompt.is_empty() and flight != null and flight.has_method("get_prompt"):
 		prompt = str(flight.call("get_prompt"))
-	if prompt.is_empty():
-		prompt = _default_cast_prompt()
 	return prompt
-
-
-func _default_cast_prompt() -> String:
-	var flight := _get_broom_flight()
-	if flight != null and flight.has_method("get_prompt"):
-		var broom_prompt := str(flight.call("get_prompt"))
-		if not broom_prompt.is_empty():
-			return broom_prompt
-	return ""
 
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
@@ -919,15 +926,17 @@ func _sync_body_yaw_to_head() -> void:
 
 func _physics_process(delta: float) -> void:
 	_sync_body_yaw_to_head()
-	if not _uses_local_view():
-		_refresh_broom_visual()
-		return
-	_tick_mana_drain(delta)
-	PlayerEmberBurnScript.tick(self, delta)
 	if _speed_boost_timer > 0.0:
 		_speed_boost_timer -= delta
 		if _speed_boost_timer <= 0.0:
 			_speed_boost_multiplier = 1.0
+		_sync_haste_visual()
+	elif _haste_aura != null and _haste_aura.visible:
+		_sync_haste_visual()
+	if not _uses_local_view():
+		_refresh_broom_visual()
+		return
+	PlayerEmberBurnScript.tick(self, delta)
 	if is_stunned():
 		var stun := get_node("Stun")
 		stun.call("tick_physics", self, delta, gravity)
