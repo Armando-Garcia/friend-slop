@@ -195,19 +195,27 @@ func _test_ward_spell_row_exposes_shatter_scale() -> int:
 	var rows := CatalogScript.spell_rows(CatalogScript.load_all_spell_defs())
 	var ward_row: Dictionary = {}
 	for row in rows:
-		if bool(row.get("is_ward", false)):
+		if str(row.get("id", "")) == "ward":
 			ward_row = row
 			break
 	if ward_row.is_empty():
 		push_error("Expected a Ward row in the spell table")
 		return 1
-	var hp_ok := is_equal_approx(float(ward_row["max_health"]), 40.0)
-	var delay_ok := is_equal_approx(float(ward_row["regen_delay_sec"]), 1.0)
-	var regen_ok := is_equal_approx(float(ward_row["regen_per_sec"]), 10.0)
-	var cd_ok := is_equal_approx(float(ward_row["cooldown_sec"]), 0.0)
-	var shatter_ok := is_equal_approx(float(ward_row["shatter_regen_scale"]), 2.0)
+	var hp := float(ward_row["max_health"])
+	var delay := float(ward_row["regen_delay_sec"])
+	var regen := float(ward_row["regen_per_sec"])
+	var cd := float(ward_row["cooldown_sec"])
+	var shatter := float(ward_row["shatter_regen_scale"])
+	var hp_ok := is_equal_approx(hp, 40.0)
+	var delay_ok := is_equal_approx(delay, 1.0)
+	var regen_ok := is_equal_approx(regen, 10.0)
+	var cd_ok := is_equal_approx(cd, 0.0)
+	var shatter_ok := is_equal_approx(shatter, 2.0)
 	if not (hp_ok and delay_ok and regen_ok and cd_ok and shatter_ok):
-		push_error("Expected Ward row: 40 HP, 0 CD, regen 10/s after 1s, shatter regen ×2")
+		push_error(
+			"Expected Ward row: 40 HP, 0 CD, regen 10/s after 1s, shatter regen ×2; got hp=%s delay=%s regen=%s cd=%s shatter=%s"
+			% [hp, delay, regen, cd, shatter]
+		)
 		return 1
 	if CatalogScript.format_report().find("regen 10/s") < 0:
 		push_error("Expected balance report to list ward regen")

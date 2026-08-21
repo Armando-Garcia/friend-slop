@@ -57,7 +57,7 @@ script = ExtResource("1_ward")
 radius = 0.7
 segment_count = 26
 duration_sec = 0.2
-regen_delay_sec = 2.0
+regen_delay_sec = 1.0
 hold_forward = 0.6000000000000001
 beam_diameter = 0.02
 
