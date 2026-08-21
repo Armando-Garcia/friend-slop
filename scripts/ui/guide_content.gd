@@ -14,7 +14,7 @@ static func control_hints_text() -> String:
 		"Move — WASD\n"
 		+ "Dash — Shift · Jump — Space · Crouch — C\n"
 		+ "Interact — F\n"
-		+ 		"Cast — MMB raise wand & speak · RMB/Q/E assign or hold to fire\n"
+		+ "Cast — MMB raise wand & speak · LMB/RMB/Q/E assign or hold to fire\n"
 		+ "Spellbook — [2] or B · Guide — Tab · Spells tab rearranges slots\n"
 		+ "Broom — [1] · WASD fly · Space up · C down · Shift boost\n"
 		+ "Summoning Book — [3] · Q/E turn pages · LMB select · Esc cancel"

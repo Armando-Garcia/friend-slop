@@ -88,13 +88,13 @@ func _build_row(peer_id: int, local_id: int) -> VBoxContainer:
 
 	var name_label := Label.new()
 	name_label.text = NetworkManager.get_lobby_player_label(peer_id)
-	name_label.add_theme_color_override("font_color", Color(0.85, 0.95, 1))
+	name_label.add_theme_color_override("font_color", Color(0.95, 0.90, 0.72))
 	name_column.add_child(name_label)
 
 	var detail := Label.new()
 	detail.name = "DetailLabel"
 	detail.add_theme_font_size_override("font_size", 12)
-	detail.add_theme_color_override("font_color", Color(0.65, 0.58, 0.78))
+	detail.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
 	name_column.add_child(detail)
 
 	_row_controls[peer_id] = {"button": speaker, "volume": volume_row, "detail": detail}

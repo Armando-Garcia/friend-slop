@@ -27,6 +27,7 @@ static func entries() -> Array[Dictionary]:
 		_entry("spell_slot_1", "Spell Slot 1", GROUP_SPELLS),
 		_entry("spell_slot_2", "Spell Slot 2", GROUP_SPELLS),
 		_entry("spell_slot_3", "Spell Slot 3", GROUP_SPELLS),
+		_entry("spell_slot_4", "Spell Slot 4", GROUP_SPELLS),
 		_entry("hotbar_1", "Item 1", GROUP_ITEMS),
 		_entry("hotbar_2", "Item 2", GROUP_ITEMS),
 		_entry("hotbar_3", "Item 3", GROUP_ITEMS),

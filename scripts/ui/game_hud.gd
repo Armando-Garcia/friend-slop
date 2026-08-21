@@ -1,21 +1,20 @@
 class_name GameHud
 extends CanvasLayer
 
-## In-game HUD: casting overlay, inventory hotbar, 3-slot spell hotbar,
+## In-game HUD: casting overlay, inventory hotbar, 4-slot spell hotbar,
 ## Tab player menu (Inventory / Spells / Guide), and the spellbook overlay (B).
 
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")
-const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
-const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory.gd")
-const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
+const HudSpellBarScript := preload("res://scripts/ui/hud_spell_bar.gd")
+const HudItemBarScript := preload("res://scripts/ui/hud_item_bar.gd")
+const HudConjureTipScript := preload("res://scripts/ui/hud_conjure_tip.gd")
+const HudSectionScript := preload("res://scripts/ui/hud_section.gd")
 const SpellbookPanelScene := preload("res://scenes/ui/book/spell/spell_book.tscn")
 
 ## Bottom HUD: spell hotbar (left) + inventory hotbar (right), lifted for 1080p viewport scaling.
 const BOTTOM_HUD_MARGIN_PX := 36.0
-const BOTTOM_HUD_ROW_HEIGHT_PX := 72.0
+const BOTTOM_HUD_ROW_HEIGHT_PX := 88.0
 const BOTTOM_HUD_BAR_GAP_PX := 16.0
-const INVENTORY_SLOT_SIZE := Vector2(96, 64)
-const SPELL_SLOT_SIZE := Vector2(120, 72)
 
 var _loadout: Node
 var _inventory: Node
@@ -25,12 +24,10 @@ var _from_tome := false
 var _coaching_countdown := 0.0
 var _player_menu_open := false
 var _objective_lines: PackedStringArray = PackedStringArray()
-var _hotbar_row: HBoxContainer
-var _hotbar_labels: Array[Label] = []
 var _spell_hotbar: Node
-var _spell_hotbar_cells: Array[PanelContainer] = []
-var _spell_hotbar_labels: Array[Label] = []
-var _spell_hotbar_fills: Array[ColorRect] = []
+var _spell_bar: HudSpellBarScript
+var _item_bar: HudItemBarScript
+var _conjure_tip: HudConjureTipScript
 var _mana_root: Control
 var _mana_fill: ColorRect
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
@@ -366,15 +363,10 @@ func _setup_mana_bar() -> void:
 
 
 func _bottom_hud_half_width() -> float:
-	var spell_w := (
-		SPELL_SLOT_SIZE.x * SpellHotbarScript.SLOT_COUNT
-		+ 10.0 * maxf(float(SpellHotbarScript.SLOT_COUNT - 1), 0.0)
-	)
-	var inv_w := (
-		INVENTORY_SLOT_SIZE.x * PlayerInventoryScript.HOTBAR_COUNT
-		+ 8.0 * maxf(float(PlayerInventoryScript.HOTBAR_COUNT - 1), 0.0)
-	)
-	return (spell_w + BOTTOM_HUD_BAR_GAP_PX + inv_w) * 0.5
+	var spell_w := HudSpellBarScript.bar_width()
+	var inv_w := HudItemBarScript.bar_width()
+	var tip_w := 108.0
+	return (spell_w + inv_w + tip_w + BOTTOM_HUD_BAR_GAP_PX * 2.0) * 0.5
 
 
 func _setup_bottom_hud() -> void:
@@ -393,203 +385,49 @@ func _setup_bottom_hud() -> void:
 	add_child(anchor)
 
 	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_END
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	row.add_theme_constant_override("separation", int(BOTTOM_HUD_BAR_GAP_PX))
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	anchor.add_child(row)
 
-	var spell_row := HBoxContainer.new()
-	spell_row.alignment = BoxContainer.ALIGNMENT_END
-	spell_row.add_theme_constant_override("separation", 10)
-	spell_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(spell_row)
+	_spell_bar = HudSpellBarScript.new()
+	_spell_bar.name = "HudSpellBar"
+	_conjure_tip = HudConjureTipScript.new()
+	_conjure_tip.name = "HudConjureTip"
+	_item_bar = HudItemBarScript.new()
+	_item_bar.name = "HudItemBar"
 
-	_hotbar_row = HBoxContainer.new()
-	_hotbar_row.alignment = BoxContainer.ALIGNMENT_END
-	_hotbar_row.add_theme_constant_override("separation", 8)
-	_hotbar_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_hotbar_row)
+	var spells_row := HBoxContainer.new()
+	spells_row.name = "SpellsRow"
+	spells_row.add_theme_constant_override("separation", 10)
+	spells_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	spells_row.add_child(_spell_bar)
+	spells_row.add_child(_conjure_tip)
+	var spells_section: HudSectionScript = HudSectionScript.new()
+	spells_section.name = "SpellsSection"
+	spells_section.setup("Spells", spells_row)
+	row.add_child(spells_section)
 
-	_spell_hotbar_cells.clear()
-	_spell_hotbar_labels.clear()
-	_spell_hotbar_fills.clear()
-	for i in SpellHotbarScript.SLOT_COUNT:
-		var cell := PanelContainer.new()
-		cell.custom_minimum_size = SPELL_SLOT_SIZE
-		var stack := Control.new()
-		stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var fill := ColorRect.new()
-		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		fill.color = Color(0.12, 0.08, 0.22, 0.72)
-		fill.visible = false
-		fill.set_anchors_preset(Control.PRESET_FULL_RECT)
-		stack.add_child(fill)
-		var label := Label.new()
-		label.set_anchors_preset(Control.PRESET_FULL_RECT)
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 14)
-		label.add_theme_color_override("font_color", Color(0.94, 0.9, 1, 1))
-		stack.add_child(label)
-		cell.add_child(stack)
-		spell_row.add_child(cell)
-		_spell_hotbar_cells.append(cell)
-		_spell_hotbar_labels.append(label)
-		_spell_hotbar_fills.append(fill)
-
-	_hotbar_labels.clear()
-	for i in PlayerInventoryScript.HOTBAR_COUNT:
-		var cell := PanelContainer.new()
-		cell.custom_minimum_size = INVENTORY_SLOT_SIZE
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(0.08, 0.06, 0.14, 0.82)
-		style.set_border_width_all(1)
-		style.border_color = Color(0.45, 0.75, 0.95, 0.4)
-		style.set_corner_radius_all(8)
-		cell.add_theme_stylebox_override("panel", style)
-		var label := Label.new()
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 14)
-		label.add_theme_color_override("font_color", Color(0.9, 0.94, 1, 1))
-		label.text = "%d\n—" % (i + 1)
-		cell.add_child(label)
-		_hotbar_row.add_child(cell)
-		_hotbar_labels.append(label)
+	var items_section: HudSectionScript = HudSectionScript.new()
+	items_section.name = "ItemsSection"
+	items_section.setup("Items", _item_bar)
+	row.add_child(items_section)
 	_refresh_spell_hotbar()
 	_refresh_hotbar()
 
 
 func _refresh_spell_hotbar() -> void:
-	if _spell_hotbar_labels.is_empty():
+	if _spell_bar == null:
 		return
-	var pending := (
-		_spell_hotbar != null
-		and _spell_hotbar.has_method("has_pending")
-		and bool(_spell_hotbar.call("has_pending"))
-	)
-	var selected := -1
-	if _spell_hotbar != null and _spell_hotbar.has_method("get_selected_index"):
-		selected = int(_spell_hotbar.call("get_selected_index"))
-	for i in _spell_hotbar_labels.size():
-		var action := SpellHotbarScript.SLOT_ACTIONS[i]
-		var key := InputPromptScript.action_label(action, "?")
-		var spell_id := ""
-		if _spell_hotbar != null and _spell_hotbar.has_method("get_slot"):
-			spell_id = str(_spell_hotbar.call("get_slot", i))
-		var spell_name := ""
-		if _spell_hotbar != null and _spell_hotbar.has_method("display_name"):
-			spell_name = str(_spell_hotbar.call("display_name", spell_id))
-		elif not spell_id.is_empty():
-			spell_name = spell_id.capitalize()
-		var remaining := 0.0
-		var total_cd := 0.0
-		var ammo := 0
-		var ammo_cap := 0
-		var refill_left := 0.0
-		if not spell_id.is_empty() and _loadout != null:
-			if _loadout.has_method("ammo_max"):
-				ammo_cap = int(_loadout.ammo_max(spell_id))
-			if ammo_cap > 0:
-				if _loadout.has_method("ammo_count"):
-					ammo = int(_loadout.ammo_count(spell_id))
-				if _loadout.has_method("remaining_ammo_refill_sec"):
-					refill_left = float(_loadout.remaining_ammo_refill_sec(spell_id))
-				if _loadout.has_method("ammo_refill_sec"):
-					total_cd = float(_loadout.ammo_refill_sec(spell_id))
-				elif _loadout.has_method("get_spell_definition"):
-					var ammo_def: Resource = _loadout.get_spell_definition(spell_id)
-					if ammo_def != null:
-						total_cd = float(ammo_def.get("ammo_refill_sec"))
-				remaining = refill_left if ammo <= 0 else 0.0
-			else:
-				if _loadout.has_method("remaining_cooldown_sec"):
-					remaining = float(_loadout.remaining_cooldown_sec(spell_id))
-				if remaining > 0.0 and _loadout.has_method("get_spell_definition"):
-					var def: Resource = _loadout.get_spell_definition(spell_id)
-					if def != null:
-						total_cd = float(def.get("cooldown_sec"))
-		var empty_ammo := ammo_cap > 0 and ammo <= 0
-		if spell_name.is_empty():
-			_spell_hotbar_labels[i].text = "%s\n—" % key
-		elif ammo_cap > 0 and ammo > 0:
-			_spell_hotbar_labels[i].text = "%s\n%s\n%d" % [key, spell_name, ammo]
-		elif ammo_cap > 0 and remaining > 0.0:
-			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
-		elif remaining > 0.0:
-			_spell_hotbar_labels[i].text = "%s\n%s\n%.1fs" % [key, spell_name, remaining]
-		else:
-			_spell_hotbar_labels[i].text = "%s\n%s" % [key, spell_name]
-		_apply_spell_slot_style(
-			_spell_hotbar_cells[i], pending, i == selected, remaining > 0.0 or empty_ammo
-		)
-		if ammo_cap > 0 and ammo < ammo_cap and total_cd > 0.0:
-			_apply_spell_slot_cooldown_fill(i, refill_left, total_cd)
-		else:
-			_apply_spell_slot_cooldown_fill(i, remaining, total_cd)
-		var label_color := (
-			Color(0.55, 0.52, 0.62, 1)
-			if remaining > 0.0 or empty_ammo
-			else Color(0.94, 0.9, 1, 1)
-		)
-		_spell_hotbar_labels[i].add_theme_color_override("font_color", label_color)
-
-
-func _apply_spell_slot_style(
-	cell: PanelContainer, pending: bool, selected: bool, on_cooldown: bool
-) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.05, 0.10, 0.92) if on_cooldown else Color(0.10, 0.06, 0.16, 0.88)
-	style.set_corner_radius_all(8)
-	if pending:
-		style.set_border_width_all(2)
-		style.border_color = Color(0.95, 0.78, 0.35, 0.95)
-	elif selected:
-		style.set_border_width_all(2)
-		style.border_color = Color(0.78, 0.55, 1.0, 0.95)
-	else:
-		style.set_border_width_all(1)
-		style.border_color = (
-			Color(0.42, 0.32, 0.55, 0.55) if on_cooldown else Color(0.72, 0.55, 0.95, 0.45)
-		)
-	cell.add_theme_stylebox_override("panel", style)
-
-
-func _apply_spell_slot_cooldown_fill(index: int, remaining: float, total_sec: float) -> void:
-	if index < 0 or index >= _spell_hotbar_fills.size():
-		return
-	var fill := _spell_hotbar_fills[index]
-	if remaining <= 0.0 or total_sec <= 0.0:
-		fill.visible = false
-		return
-	fill.visible = true
-	var fraction := clampf(remaining / total_sec, 0.0, 1.0)
-	fill.anchor_top = 1.0 - fraction
-	fill.anchor_bottom = 1.0
-	fill.offset_top = 0.0
-	fill.offset_bottom = 0.0
-	fill.offset_left = 0.0
-	fill.offset_right = 0.0
+	_spell_bar.configure(_spell_hotbar, _loadout)
+	if _conjure_tip != null:
+		_conjure_tip.refresh()
 
 
 func _refresh_hotbar() -> void:
-	if _hotbar_labels.is_empty():
+	if _item_bar == null:
 		return
-	for i in _hotbar_labels.size():
-		var item_id := ""
-		if _inventory != null and _inventory.has_method("get_slot"):
-			item_id = str(_inventory.call("get_slot", i))
-		var item_name := ""
-		if _inventory != null and _inventory.has_method("display_name"):
-			item_name = str(_inventory.call("display_name", item_id))
-		elif not item_id.is_empty():
-			item_name = item_id.capitalize()
-		if item_name.is_empty():
-			_hotbar_labels[i].text = "%d\n—" % (i + 1)
-		else:
-			_hotbar_labels[i].text = "%d\n%s" % [i + 1, item_name]
+	_item_bar.configure(_inventory)
 
 
 func show_casting_state(

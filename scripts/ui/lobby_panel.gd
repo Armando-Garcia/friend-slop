@@ -335,7 +335,7 @@ func _build_player_row(peer_id: int, local_peer_id: int) -> VBoxContainer:
 
 	var name_label := Label.new()
 	name_label.text = NetworkManager.get_lobby_player_label(peer_id)
-	name_label.add_theme_color_override("font_color", Color(0.85, 0.95, 1))
+	name_label.add_theme_color_override("font_color", Color(0.95, 0.90, 0.72))
 	name_column.add_child(name_label)
 
 	var config := PlayerCharacterConfig.from_dict(
@@ -344,7 +344,7 @@ func _build_player_row(peer_id: int, local_peer_id: int) -> VBoxContainer:
 	var detail_label := Label.new()
 	detail_label.text = config.summary()
 	detail_label.add_theme_font_size_override("font_size", 12)
-	detail_label.add_theme_color_override("font_color", Color(0.65, 0.58, 0.78))
+	detail_label.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
 	name_column.add_child(detail_label)
 
 	var role := NetworkManager.lobby.get_role(peer_id)

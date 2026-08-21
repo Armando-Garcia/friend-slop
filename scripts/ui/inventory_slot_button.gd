@@ -33,7 +33,7 @@ func refresh() -> void:
 		_SLOT_HOTBAR if slot_index < PlayerInventoryScript.HOTBAR_COUNT else _SLOT_NORMAL
 	)
 	style.set_border_width_all(1)
-	style.border_color = Color(0.45, 0.75, 0.95, 0.35)
+	style.border_color = Color(0.82, 0.70, 0.38, 0.35)
 	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("normal", style)
 	add_theme_stylebox_override("hover", style)

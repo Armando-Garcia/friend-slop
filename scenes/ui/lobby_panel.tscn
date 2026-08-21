@@ -4,12 +4,12 @@
 [ext_resource type="Script" path="res://scripts/ui/menu_toggle_switch.gd" id="2_toggle"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.12, 0.09, 0.18, 0.96)
+bg_color = Color(0.08, 0.06, 0.09, 0.96)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.45, 0.75, 0.95, 1)
+border_color = Color(0.82, 0.70, 0.38, 1)
 corner_radius_top_left = 10
 corner_radius_top_right = 10
 corner_radius_bottom_right = 10
@@ -62,7 +62,7 @@ theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.95, 1, 1)
+theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
 theme_override_font_sizes/font_size = 28
 text = "Host"
 horizontal_alignment = 1
@@ -74,7 +74,7 @@ theme_override_constants/separation = 8
 [node name="RoomCodeCaption" type="Label" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
 custom_minimum_size = Vector2(88, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Lobby ID"
 
 [node name="RoomCodeDisplay" type="LineEdit" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
@@ -112,7 +112,7 @@ theme_override_constants/separation = 10
 [node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 text = "Lobby Voice"
 
 [node name="LobbyVoiceSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
@@ -130,7 +130,7 @@ theme_override_constants/separation = 6
 
 [node name="PlayersCaption" type="Label" parent="Panel/MarginContainer/VBox/PlayersSection"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.75, 0.88, 1, 1)
+theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
 theme_override_font_sizes/font_size = 16
 text = "Players"
 
@@ -146,7 +146,7 @@ theme_override_constants/separation = 6
 
 [node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.65, 0.58, 0.78, 1)
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 14
 autowrap_mode = 2
 text = "Enter the host's Steam lobby ID or accept a Steam invite."
