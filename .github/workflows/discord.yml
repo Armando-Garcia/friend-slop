@@ -60,7 +60,7 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           python3 tools/discord_summarize.py \
-            --prompt-file "${RUNNER_TEMP}/digest-prompt.txt" \
+            --edition daily \
             --briefing-file "${RUNNER_TEMP}/digest-briefing.md" \
             --output-file "${RUNNER_TEMP}/digest-summary.md"
 
@@ -157,7 +157,7 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           python3 tools/discord_summarize.py \
-            --prompt-file "${RUNNER_TEMP}/release-prompt.txt" \
+            --edition special \
             --briefing-file "${RUNNER_TEMP}/release-briefing.md" \
             --output-file "${RUNNER_TEMP}/release-summary.md"
 

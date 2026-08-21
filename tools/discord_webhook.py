@@ -67,6 +67,36 @@ def article_to_embed_parts(article: dict) -> tuple[str, list[dict]]:
     return lede, fields
 
 
+def format_discord_preview(payload: dict) -> str:
+    """Render a webhook payload as pasteable Discord markdown for local review."""
+    embeds = payload.get("embeds") or []
+    if not embeds:
+        return str(payload.get("content") or "").strip()
+    embed = embeds[0]
+    lines: list[str] = []
+    title = str(embed.get("title") or "").strip()
+    if title:
+        lines.append(f"**{title}**")
+        lines.append("")
+    description = str(embed.get("description") or "").strip()
+    if description:
+        lines.append(description)
+        lines.append("")
+    for field in embed.get("fields") or []:
+        name = str(field.get("name") or "").strip()
+        value = str(field.get("value") or "").strip()
+        if not name or not value:
+            continue
+        lines.append(f"**{name}**")
+        lines.append(value)
+        lines.append("")
+    footer = embed.get("footer") or {}
+    footer_text = str(footer.get("text") or "").strip()
+    if footer_text:
+        lines.append(f"*{footer_text}*")
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def build_pr_payload(
     *,
     number: str,

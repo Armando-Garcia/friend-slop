@@ -1,0 +1,13 @@
+{
+  "lede": "FriendSlop closed higher on ward integrity and a new afternoon paper.",
+  "sections": [
+    {
+      "title": "Combat",
+      "body": "CombatHealth now backs players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered."
+    },
+    {
+      "title": "Publishing Desk",
+      "body": "The Wand Street Journal posts a daily closing when pull requests land and Special Editions when releases publish."
+    }
+  ]
+}
