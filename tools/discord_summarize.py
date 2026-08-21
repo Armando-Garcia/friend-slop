@@ -102,10 +102,9 @@ def parse_article(raw: str) -> dict:
     return {"lede": lede, "sections": sections}
 
 
-def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
-    # Avoid Groq response_format=json_object: Qwen often fails validation with
-    # empty failed_generation. Ask for JSON in the prompt and parse it ourselves.
-    body = {
+def build_chat_request_body(*, system_prompt: str, briefing: str) -> dict:
+    """Request body sent to the chat API (no response_format)."""
+    return {
         "model": _model(),
         "temperature": 0.4,
         "max_tokens": 1600,
@@ -123,6 +122,12 @@ def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
             },
         ],
     }
+
+
+def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
+    # Avoid Groq response_format=json_object: Qwen often fails validation with
+    # empty failed_generation. Ask for JSON in the prompt and parse it ourselves.
+    body = build_chat_request_body(system_prompt=system_prompt, briefing=briefing)
     request = urllib.request.Request(
         f"{_base_url()}/chat/completions",
         data=json.dumps(body).encode("utf-8"),
@@ -142,7 +147,15 @@ def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
     return extract_assistant_text(payload)
 
 
-def summarize(*, system_prompt: str, briefing: str) -> dict:
+def summarize(
+    *,
+    system_prompt: str,
+    briefing: str,
+    chat_fn=None,
+) -> dict:
+    """Summarize a briefing. chat_fn(system_prompt, briefing) -> str for tests."""
+    if chat_fn is not None:
+        return parse_article(chat_fn(system_prompt, briefing))
     key = _api_key()
     if not key:
         raise SystemExit(

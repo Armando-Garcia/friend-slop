@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks
+.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks discord-test discord-preview
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= python
@@ -33,6 +33,8 @@ help:
 	@echo "  make lint                  gdlint + GDScript analyzer warnings"
 	@echo "  make warnings              GDScript analyzer warning probe only (requires Godot)"
 	@echo "  make test                  Godot unit tests"
+	@echo "  make discord-test          Discord digest Python unit tests (offline)"
+	@echo "  make discord-preview       Print pasteable Discord digest from fixtures"
 	@echo "  make test-ci               smoke-test the GitHub Actions test job locally"
 	@echo "  make release-ci            smoke-test the GitHub Actions release export (Linux)"
 	@echo "  make check                 lint + warnings + test"
@@ -73,6 +75,12 @@ endif
 
 lint:
 	$(RUN_PYTHON) tools/run_checks.py --lint-only
+
+discord-test:
+	$(RUN_PYTHON) tools/test_discord_webhook.py
+
+discord-preview:
+	$(RUN_PYTHON) tools/discord_preview.py
 
 warnings:
 	$(RUN_PYTHON) tools/run_checks.py --warnings-only --require-godot-warnings
