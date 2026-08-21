@@ -7,9 +7,10 @@ uniform float fresnel_power : hint_range(0.5, 6.0) = 2.8;
 uniform float base_alpha : hint_range(0.0, 0.4) = 0.05;
 uniform float rim_strength : hint_range(0.0, 2.0) = 0.92;
 uniform float energy_amount : hint_range(0.0, 2.0) = 1.15;
-uniform float pattern_scale : hint_range(0.05, 2.0) = 0.28;
+uniform float pattern_scale : hint_range(0.05, 8.0) = 0.28;
 uniform float scroll_speed : hint_range(0.0, 1.0) = 0.11;
 uniform float proximity_fade : hint_range(0.0, 4.0) = 1.2;
+uniform float opacity : hint_range(0.0, 1.0) = 1.0;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest, repeat_disable;
 
 varying vec3 v_world;
@@ -113,5 +114,5 @@ void fragment() {
 	vec3 col = mix(rim_color.rgb, energy_color.rgb, clamp(energy * 1.6, 0.0, 1.0));
 	float alpha = base_alpha + fresnel * rim_strength + energy;
 	ALBEDO = col;
-	ALPHA = clamp(alpha, 0.0, 1.0) * fade;
+	ALPHA = clamp(alpha, 0.0, 1.0) * fade * opacity;
 }

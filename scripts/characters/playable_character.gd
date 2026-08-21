@@ -948,7 +948,6 @@ func _physics_process(delta: float) -> void:
 	if not _uses_local_view():
 		_refresh_broom_visual()
 		return
-	_ward_channel.call("tick", self)
 	PlayerEmberBurnScript.tick(self, delta)
 	if is_stunned():
 		var stun := get_node("Stun")

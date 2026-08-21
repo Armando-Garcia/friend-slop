@@ -7,6 +7,7 @@ extends Node3D
 ## shader. Open scenes/fx/force_field.tscn to preview a sphere.
 
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const SHADER := preload("res://shaders/fx/force_field.gdshader")
 
 @export var rim_color: Color = Color(0.42, 0.78, 1.0, 1.0):
 	set(value):
@@ -38,7 +39,7 @@ const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 		energy_amount = value
 		_apply_params()
 
-@export_range(0.05, 2.0, 0.01) var pattern_scale: float = 0.28:
+@export_range(0.05, 8.0, 0.01) var pattern_scale: float = 0.28:
 	set(value):
 		pattern_scale = value
 		_apply_params()
@@ -53,8 +54,29 @@ const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 		proximity_fade = value
 		_apply_params()
 
+@export_range(0.0, 1.0, 0.01) var opacity: float = 1.0:
+	set(value):
+		opacity = value
+		_apply_params()
+
 var _mesh: MeshInstance3D = null
 var _material: ShaderMaterial = null
+
+
+static func make_material() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADER
+	mat.set_shader_parameter("rim_color", Color(0.42, 0.78, 1.0, 1.0))
+	mat.set_shader_parameter("energy_color", Color(0.95, 0.98, 1.0, 1.0))
+	mat.set_shader_parameter("fresnel_power", 2.8)
+	mat.set_shader_parameter("base_alpha", 0.05)
+	mat.set_shader_parameter("rim_strength", 0.92)
+	mat.set_shader_parameter("energy_amount", 1.15)
+	mat.set_shader_parameter("pattern_scale", 0.28)
+	mat.set_shader_parameter("scroll_speed", 0.11)
+	mat.set_shader_parameter("proximity_fade", 1.2)
+	mat.set_shader_parameter("opacity", 1.0)
+	return mat
 
 
 func _ready() -> void:
@@ -132,3 +154,4 @@ func _apply_params() -> void:
 	_material.set_shader_parameter("pattern_scale", pattern_scale)
 	_material.set_shader_parameter("scroll_speed", scroll_speed)
 	_material.set_shader_parameter("proximity_fade", proximity_fade)
+	_material.set_shader_parameter("opacity", opacity)
