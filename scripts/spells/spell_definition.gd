@@ -58,10 +58,10 @@ func is_channelled() -> bool:
 
 
 func get_wand_fx_kind() -> WandFxKind:
-	if is_channelled():
-		return WandFxKind.SHAKE
 	if category == Category.DEFENSIVE:
 		return WandFxKind.LIFT_DEFENSIVE
+	if is_channelled():
+		return WandFxKind.SHAKE
 	return WandFxKind.P_SHAPED
 
 
@@ -214,7 +214,7 @@ func get_cast_success_text() -> String:
 		"flare":
 			text = "A signal flare streaks toward your aim and bursts into a lasting beacon!"
 		"ward":
-			text = "A blue ward blooms ahead — ready to catch a spell."
+			text = "A blue ward beam holds with your wand, then stays and fades."
 		"flashlight_toggle":
 			text = "Your wand light toggles."
 		"light_ball":
@@ -269,9 +269,9 @@ func get_codex_effect_detail() -> String:
 			)
 		"ward":
 			text = (
-				"Say \"ward\" to cast a translucent blue 1/3-sphere shield toward "
-				+ "your crosshair. It lasts 1 second and blocks one fireball. "
-				+ "0.8 second cooldown."
+				"Hold Ward to channel a blue beam from your wand; it follows while "
+				+ "held. Release to leave the shield in place for 1 second — it "
+				+ "blocks one fireball. 0.8 second cooldown."
 			)
 		"flashlight_toggle":
 			text = (

@@ -2,6 +2,7 @@ extends RefCounted
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
+const WardScene := preload("res://scenes/spells/ward/ward.tscn")
 const ChargerWardAbilityScript := preload(
 	"res://scripts/monsters/abilities/charger_ward_ability.gd"
 )
@@ -16,6 +17,7 @@ func run() -> int:
 	failures += _test_integrity_tint_goes_red()
 	failures += _test_charger_ward_hp_is_four_fireballs()
 	failures += _test_baked_scene_keeps_mesh_when_radius_unchanged()
+	failures += _test_follow_then_plant_starts_fade()
 	return failures
 
 
@@ -82,7 +84,7 @@ func _test_baked_scene_keeps_mesh_when_radius_unchanged() -> int:
 	if tree == null:
 		push_error("Expected SceneTree to instantiate the baked ward")
 		return 1
-	var packed: PackedScene = load("res://scenes/spells/ward/ward.tscn") as PackedScene
+	var packed: PackedScene = WardScene
 	if packed == null:
 		push_error("Expected scenes/spells/ward.tscn")
 		return 1
@@ -102,5 +104,42 @@ func _test_baked_scene_keeps_mesh_when_radius_unchanged() -> int:
 		return 1
 	if not rebuilt:
 		push_error("Expected a radius change to rebuild the ward mesh")
+		return 1
+	return 0
+
+
+func _test_follow_then_plant_starts_fade() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		push_error("Expected SceneTree for ward follow")
+		return 1
+	var packed: PackedScene = WardScene
+	var ward: Node3D = packed.instantiate() as Node3D
+	tree.root.add_child(ward)
+	ward.call("start_wand_follow", Vector3.ZERO, Vector3.FORWARD, 1)
+	if not bool(ward.call("is_channel_following")):
+		tree.root.remove_child(ward)
+		ward.queue_free()
+		push_error("Expected ward to follow the wand while the slot is held")
+		return 1
+	ward.call("follow_wand", Vector3(0.0, 0.0, 1.0), Vector3.FORWARD)
+	if ward.global_position.z <= 0.5:
+		tree.root.remove_child(ward)
+		ward.queue_free()
+		push_error("Expected following ward to move with the wand origin")
+		return 1
+	ward.call("plant")
+	if bool(ward.call("is_channel_following")):
+		tree.root.remove_child(ward)
+		ward.queue_free()
+		push_error("Expected plant to stop wand follow")
+		return 1
+	var planted := ward.global_position
+	ward.call("follow_wand", Vector3(0.0, 0.0, 8.0), Vector3.FORWARD)
+	var stayed := ward.global_position.is_equal_approx(planted)
+	tree.root.remove_child(ward)
+	ward.queue_free()
+	if not stayed:
+		push_error("Expected planted ward to stay in place")
 		return 1
 	return 0

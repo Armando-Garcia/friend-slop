@@ -199,7 +199,11 @@ func begin_cast_charge_fx(spell: SpellDefinition) -> void:
 	_charge_spell_color = (
 		spell.get_display_color() if spell != null else Color(0.75, 0.7, 0.95)
 	)
-	_spawn_cast_charge_fx(spell)
+	if spell != null and spell.effect_id == "ward":
+		## Ward channels a world beam on the shield, not a wand-tip orb.
+		_clear_cast_charge_fx()
+	else:
+		_spawn_cast_charge_fx(spell)
 	visible = true
 	set_process(true)
 	_apply_cast_charge_sparks(_charge_spell_color)

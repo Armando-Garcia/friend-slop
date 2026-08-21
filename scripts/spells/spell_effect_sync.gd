@@ -815,28 +815,27 @@ static func _apply_flare(player: CharacterBody3D, params: Dictionary) -> void:
 
 
 static func _apply_ward(player: CharacterBody3D, params: Dictionary) -> void:
+	## Hold plants a following beam locally; skip a second spawn.
+	if player != null and player.has_method("consume_channel_ward"):
+		var channeled: Node = player.call("consume_channel_ward") as Node
+		if channeled != null:
+			return
 	var origin := coerce_vector3(params.get(KEY_ORIGIN, Vector3.ZERO))
 	var direction := coerce_vector3(params.get(KEY_DIRECTION, Vector3.FORWARD))
-	var charge := clampf(float(params.get(KEY_CHARGE_FACTOR, 1.0)), 0.0, 1.0)
 	var forward := direction
 	if forward.length_squared() < 0.0001:
 		forward = Vector3.FORWARD
 	else:
 		forward = forward.normalized()
 	## Nudge every ward slightly ahead of the cast point.
-	var base_origin := origin + forward * 0.4
-	## Full charge: two single-hit wards stacked along aim (near then far).
-	var ward_count := 2 if charge >= 0.999 else 1
-	const WARD_STACK_SPACING := 0.22
-	for i in ward_count:
-		var spawn_origin := base_origin + forward * (WARD_STACK_SPACING * float(i))
-		SpellEphemeralFxScript.spawn_at(
-			player,
-			spawn_origin,
-			forward,
-			func(parent: Node, placed_origin: Vector3, spawn_dir: Vector3) -> Node:
-				return WardShieldScript.spawn(parent, placed_origin, spawn_dir, 1)
-		)
+	var spawn_origin := origin + forward * 0.4
+	SpellEphemeralFxScript.spawn_at(
+		player,
+		spawn_origin,
+		forward,
+		func(parent: Node, placed_origin: Vector3, spawn_dir: Vector3) -> Node:
+			return WardShieldScript.spawn(parent, placed_origin, spawn_dir, 1)
+	)
 
 
 static func _apply_fake_wall(player: CharacterBody3D, params: Dictionary) -> void:

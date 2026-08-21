@@ -4,8 +4,8 @@ extends Node3D
 
 ## Forward-facing spherical-cap blue shield. Player wards spend spell hits;
 ## HP wards (Charger) absorb spell damage and tint red as they weaken.
-## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
-## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
+## Open scenes/spells/ward/ward.tscn (or workspace.tscn) — select Ward root to edit Dome shape.
+## Slot hold: beam from the wand follows aim; release plants the dome and fades.
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
@@ -78,6 +78,7 @@ var _block_listener: Callable = Callable()
 var _persist_through_blocks := false
 var _caster: Node3D = null
 var _held := false
+var _following := false
 
 
 func set_block_listener(listener: Callable) -> void:
@@ -197,18 +198,7 @@ func _rebuild_geometry() -> void:
 
 
 func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> void:
-	var dir := direction
-	if dir.length_squared() < 0.0001:
-		dir = Vector3.FORWARD
-	else:
-		dir = dir.normalized()
-	_wand_origin = origin
-	## Sit the dome just ahead of the cast point, bulging toward the aim (-Z).
-	var pos := origin + dir * (radius * 0.2)
-	var up := Vector3.UP
-	if absf(dir.dot(up)) > 0.95:
-		up = Vector3.RIGHT
-	global_transform = Transform3D(Basis.looking_at(dir, up), pos)
+	_place_from_aim(origin, direction)
 	_lifetime = 0.0
 	_hits_remaining = maxi(hit_capacity, 1)
 	_lifetime_active = false
@@ -218,6 +208,64 @@ func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> v
 	_ensure_runtime_material()
 	_prepare_for_cast_fx()
 	_play_cast_sequence()
+
+
+func start_wand_follow(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> void:
+	## Instant channel: beam + dome track the wand until plant().
+	_place_from_aim(origin, direction)
+	_lifetime = 0.0
+	_hits_remaining = maxi(hit_capacity, 1)
+	_lifetime_active = false
+	_following = true
+	_held = true
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(true)
+	_ensure_runtime_material()
+	_prepare_for_cast_fx()
+	_kill_cast_tween()
+	_clear_cast_fx()
+	_build_beam()
+	if _beam_mat != null:
+		_beam_mat.albedo_color.a = 0.55
+		_beam_mat.emission_energy_multiplier = 2.4
+	_update_beam(_wand_origin, global_position)
+	_snap_formed()
+
+
+func follow_wand(origin: Vector3, direction: Vector3) -> void:
+	if not _following or _is_broken():
+		return
+	_place_from_aim(origin, direction)
+	_update_beam(_wand_origin, global_position)
+
+
+func plant() -> void:
+	if not _following:
+		return
+	_following = false
+	_held = false
+	_lifetime = 0.0
+	_lifetime_active = true
+	set_process(true)
+	_fade_channel_beam()
+
+
+func is_channel_following() -> bool:
+	return _following
+
+
+func _place_from_aim(origin: Vector3, direction: Vector3) -> void:
+	var dir := direction
+	if dir.length_squared() < 0.0001:
+		dir = Vector3.FORWARD
+	else:
+		dir = dir.normalized()
+	_wand_origin = origin
+	var pos := origin + dir * (radius * 0.2)
+	var up := Vector3.UP
+	if absf(dir.dot(up)) > 0.95:
+		up = Vector3.RIGHT
+	global_transform = Transform3D(Basis.looking_at(dir, up), pos)
 
 
 func setup_sphere_cast(origin: Vector3, hit_capacity: int, sphere_radius: float) -> void:
@@ -293,8 +341,8 @@ func _build_beam() -> void:
 	_beam = MeshInstance3D.new()
 	_beam.name = "Beam"
 	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.008
-	cyl.bottom_radius = 0.018
+	cyl.top_radius = 0.012
+	cyl.bottom_radius = 0.045
 	cyl.height = 1.0
 	_beam.mesh = cyl
 	_beam_mat = StandardMaterial3D.new()
@@ -400,6 +448,29 @@ func _spawn_rim_bloom() -> void:
 	_rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_rim.layers = WorldVisualLayersScript.WORLD
 	add_child(_rim)
+
+
+func _snap_formed() -> void:
+	_enable_collision()
+	if _mesh_instance != null:
+		_mesh_instance.visible = true
+		_mesh_instance.scale = Vector3.ONE
+	if _material != null:
+		_material.albedo_color.a = SHIELD_BLUE.a
+		_material.emission = SHIELD_EDGE
+		_material.emission_energy_multiplier = 0.75
+	_apply_integrity_color()
+
+
+func _fade_channel_beam() -> void:
+	if _beam == null or not is_instance_valid(_beam) or _beam_mat == null:
+		_clear_cast_fx()
+		return
+	_kill_cast_tween()
+	_cast_tween = _make_cast_tween()
+	_cast_tween.tween_property(_beam_mat, "albedo_color:a", 0.0, 0.18)
+	_cast_tween.parallel().tween_property(_beam_mat, "emission_energy_multiplier", 0.0, 0.18)
+	_cast_tween.tween_callback(_clear_cast_fx)
 
 
 func _finish_form() -> void:
