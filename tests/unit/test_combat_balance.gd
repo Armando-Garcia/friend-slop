@@ -213,7 +213,10 @@ func _test_ward_spell_row_exposes_shatter_scale() -> int:
 	var shatter_ok := is_equal_approx(shatter, 2.0)
 	if not (hp_ok and delay_ok and regen_ok and cd_ok and shatter_ok):
 		push_error(
-			"Expected Ward row: 40 HP, 0 CD, regen 10/s after 1s, shatter regen ×2; got hp=%s delay=%s regen=%s cd=%s shatter=%s"
+			(
+				"Expected Ward row: 40 HP, 0 CD, regen 10/s after 1s, shatter regen ×2; "
+				+ "got hp=%s delay=%s regen=%s cd=%s shatter=%s"
+			)
 			% [hp, delay, regen, cd, shatter]
 		)
 		return 1
