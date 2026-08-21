@@ -33,7 +33,7 @@ const SHIELD_STRESS := Color(0.92, 0.12, 0.08, 0.42)
 const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 
 @export_group("Dome shape")
-@export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = 1.35:
+@export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = RADIUS:
 	set(value):
 		var next := maxf(value, 0.05)
 		if is_equal_approx(radius, next):
@@ -87,7 +87,10 @@ const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 ## Mean visual width of the wand cylinder. Mesh taper is kept.
 @export_range(0.01, 0.2, 0.005, "suffix:m") var beam_diameter: float = DEFAULT_BEAM_DIAMETER:
 	set(value):
-		beam_diameter = maxf(value, 0.005)
+		var next := maxf(value, 0.005)
+		if is_equal_approx(beam_diameter, next):
+			return
+		beam_diameter = next
 		_sync_lookdev_beam()
 
 var _body: StaticBody3D
@@ -101,9 +104,8 @@ var _lifetime := 0.0
 var _lifetime_active := false
 var _wand_origin := Vector3.ZERO
 var _body_collision_layer := 1
-var _beam: Node3D
 var _beam_fx: ForceField
-var _beam_mat: ShaderMaterial
+var _beam_mean_radius := DEFAULT_BEAM_DIAMETER * 0.5
 var _rim: MeshInstance3D
 var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
@@ -120,7 +122,6 @@ func set_block_listener(listener: Callable) -> void:
 
 
 func set_persist_through_blocks(enabled: bool) -> void:
-	## When true, blocked spells feed listeners but the dome stays until duration ends.
 	_persist_through_blocks = enabled
 
 
@@ -208,15 +209,12 @@ func _cache_nodes() -> void:
 		_collision_shape = _body.get_node_or_null("CollisionShape3D") as CollisionShape3D
 	_beam_fx = get_node_or_null("Beam") as ForceField
 	if _beam_fx != null:
-		_beam = _beam_fx
 		_beam_fx.process_mode = Node.PROCESS_MODE_ALWAYS
 		if not Engine.is_editor_hint():
 			## Scene pose is look-dev (along the dome). Game poses world-space.
 			_beam_fx.visible = false
-		var mesh := _beam_fx.get_node_or_null("Mesh") as MeshInstance3D
-		if mesh != null:
-			_beam_mat = mesh.material_override as ShaderMaterial
 		_ensure_beam_cylinder()
+		_cache_beam_mean_radius()
 
 
 func _ensure_beam_cylinder() -> void:
@@ -237,20 +235,21 @@ func _ensure_beam_cylinder() -> void:
 	_beam_fx.scale = Vector3.ONE
 
 
-func _authored_beam_radius() -> float:
+func _cache_beam_mean_radius() -> void:
+	_beam_mean_radius = DEFAULT_BEAM_DIAMETER * 0.5
 	if _beam_fx == null:
-		return DEFAULT_BEAM_DIAMETER * 0.5
+		return
 	var mesh := _beam_fx.get_node_or_null("Mesh") as MeshInstance3D
 	if mesh == null:
-		return DEFAULT_BEAM_DIAMETER * 0.5
+		return
 	var cyl := mesh.mesh as CylinderMesh
 	if cyl == null:
-		return DEFAULT_BEAM_DIAMETER * 0.5
-	return (cyl.top_radius + cyl.bottom_radius) * 0.5
+		return
+	_beam_mean_radius = (cyl.top_radius + cyl.bottom_radius) * 0.5
 
 
 func _beam_xy_scale() -> float:
-	return (beam_diameter * 0.5) / maxf(_authored_beam_radius(), 0.001)
+	return (beam_diameter * 0.5) / maxf(_beam_mean_radius, 0.001)
 
 
 func _sync_lookdev_beam() -> void:
@@ -263,6 +262,7 @@ func _sync_lookdev_beam() -> void:
 	if _beam_fx == null:
 		return
 	_ensure_beam_cylinder()
+	_cache_beam_mean_radius()
 	_beam_fx.visible = true
 	_beam_fx.top_level = false
 	var to := _beam_end_local()
@@ -496,8 +496,6 @@ func _set_field_opacity(mat: ShaderMaterial, amount: float) -> void:
 func _set_beam_fade(amount: float) -> void:
 	if _beam_fx != null:
 		_beam_fx.opacity = clampf(amount, 0.0, 1.0)
-	else:
-		_set_field_opacity(_beam_mat, amount)
 
 
 func _set_dome_fade(amount: float) -> void:
@@ -541,10 +539,6 @@ func _build_beam() -> void:
 		_cache_nodes()
 	if _beam_fx == null:
 		return
-	_beam = _beam_fx
-	var mesh := _beam_fx.get_node_or_null("Mesh") as MeshInstance3D
-	if mesh != null:
-		_beam_mat = mesh.material_override as ShaderMaterial
 	_beam_fx.opacity = 1.0
 	_beam_fx.visible = true
 	_beam_fx.top_level = true
@@ -563,7 +557,7 @@ func _orient_channel_beam(wand_tip: Vector3) -> void:
 
 
 func _orient_beam(from_pos: Vector3, to_pos: Vector3) -> void:
-	if _beam == null or not is_instance_valid(_beam):
+	if _beam_fx == null or not is_instance_valid(_beam_fx):
 		return
 	var length := maxf(from_pos.distance_to(to_pos), 0.04)
 	var to := to_pos
@@ -573,14 +567,11 @@ func _orient_beam(from_pos: Vector3, to_pos: Vector3) -> void:
 	var dir := (to - from_pos).normalized()
 	if absf(dir.dot(up)) > 0.92:
 		up = Vector3.RIGHT
-	_beam.visible = true
-	_beam.top_level = true
-	_beam.scale = Vector3.ONE
-	_beam.global_position = from_pos.lerp(to, 0.5)
+	_beam_fx.global_position = from_pos.lerp(to, 0.5)
 	## Mesh is baked along local -Z (look_at forward). Stretch Z, not Y.
-	_beam.look_at(to, up)
+	_beam_fx.look_at(to, up)
 	var xy := _beam_xy_scale()
-	_beam.scale = Vector3(xy, xy, length)
+	_beam_fx.scale = Vector3(xy, xy, length)
 
 
 func _form_shield() -> void:
@@ -678,7 +669,7 @@ func _enable_collision() -> void:
 
 func _process(delta: float) -> void:
 	if _following:
-		_refresh_follow_beam()
+		_orient_channel_beam(_wand_tip())
 		return
 	if _held or not _lifetime_active or _is_broken():
 		return
@@ -691,12 +682,7 @@ func _process(delta: float) -> void:
 		_dissolve()
 
 
-func _refresh_follow_beam() -> void:
-	_orient_channel_beam(_wand_tip())
-
-
 func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) -> void:
-	## Hit-count wards spend one cast. HP wards subtract spell damage and tint red.
 	if _is_broken():
 		return
 	if incoming_from != null and not is_instance_valid(incoming_from):

@@ -306,7 +306,7 @@ func _start_cast_charge_visuals() -> void:
 		SpellDefinition.WandFxKind.SHAKE:
 			_play_shake_wand_fx(false)
 		SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
-			if _cast_charge_spell == null or _cast_charge_spell.effect_id != "ward":
+			if not _ward_skips_defensive_lift():
 				_apply_lift_defensive_progress(get_cast_power_factor())
 		_:
 			_start_p_shaped_charge_lift()
@@ -344,8 +344,12 @@ func _tick_cast_charge(delta: float) -> void:
 	if _cast_fx_started and _listen_fx != null and _listen_fx.has_method("set_cast_charge_progress"):
 		_listen_fx.set_cast_charge_progress(power)
 	if _cast_fx_started and _cast_fx_kind == SpellDefinition.WandFxKind.LIFT_DEFENSIVE:
-		if _cast_charge_spell == null or _cast_charge_spell.effect_id != "ward":
+		if not _ward_skips_defensive_lift():
 			_apply_lift_defensive_progress(power)
+
+
+func _ward_skips_defensive_lift() -> bool:
+	return _cast_charge_spell != null and _cast_charge_spell.effect_id == "ward"
 
 
 func is_cast_charge_ready() -> bool:

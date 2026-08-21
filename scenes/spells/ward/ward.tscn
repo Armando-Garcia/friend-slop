@@ -56,6 +56,7 @@ editor_description = "Ward root: Lifetime, Hold pose (distance + beam width), Do
 script = ExtResource("1_ward")
 radius = 0.7
 segment_count = 26
+duration_sec = 0.6
 hold_forward = 1.3
 beam_diameter = 0.02
 
