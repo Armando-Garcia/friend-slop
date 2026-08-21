@@ -16,6 +16,7 @@ const MonsterCombatSpacingScript := preload("res://scripts/monsters/monster_comb
 const MonsterCasterCombatScript := preload("res://scripts/monsters/monster_caster_combat.gd")
 const MonsterRangeGizmosScript := preload("res://scripts/monsters/monster_range_gizmos.gd")
 const MonsterPatrolScript := preload("res://scripts/monsters/monster_patrol.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 
 const DEFAULT_TINT := Color(0.72, 0.28, 0.22, 1.0)
 const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
@@ -932,9 +933,11 @@ func _cancel_cast() -> void:
 
 
 func _try_touch_damage(target: Node3D) -> void:
-	if is_chase_retreating() or target == null or not target.has_method("take_damage"):
+	if is_chase_retreating() or target == null:
 		return
-	target.call("take_damage", touch_damage * get_physics_process_delta_time(), self)
+	if touch_damage <= 0.0:
+		return
+	CombatHealthScript.apply_hit(target, touch_damage * get_physics_process_delta_time(), self)
 
 
 func _face_horizontal(desired_vel: Vector3) -> void:

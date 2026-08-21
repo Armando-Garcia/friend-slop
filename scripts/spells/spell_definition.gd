@@ -19,12 +19,23 @@ const CAST_GROWING_ORB := preload("res://scenes/spells/_shared/growing_orb_cast.
 @export var syllable_cadence_ms: PackedInt32Array = PackedInt32Array()
 @export var pitch_targets_hz: PackedFloat32Array = PackedFloat32Array()
 @export var require_rhythm: bool = false
-@export var cooldown_sec: float = 8.0
+@export_range(0.0, 30.0, 0.05) var cooldown_sec: float = 8.0
+## After this spell's ward shatters, multiply the next ward's regen delay by this.
+@export_range(1.0, 8.0, 0.05) var shatter_regen_scale: float = 1.0
+## Authored max HP for each new ward. Live HP lives on per-actor WardRuntime.
+@export_range(0.0, 400.0, 1.0) var max_health: float = 0.0
+## Seconds after the last cast before ward HP starts regenerating.
+## Mirrored on scenes/spells/ward/ward.tscn (Ward root).
+@export_range(0.0, 10.0, 0.05) var regen_delay_sec: float = 0.0
+## Ward HP restored per second after regen_delay_sec.
+@export_range(0.0, 50.0, 0.5) var regen_per_sec: float = 0.0
 ## 0 = no ammo bucket (cooldown-only). Flare uses a refillable magazine.
 @export_range(0, 20, 1) var ammo_max: int = 0
 ## Seconds between ammo refills while below ammo_max. Ignored if ammo_max is 0.
 @export_range(0.0, 30.0, 0.05) var ammo_refill_sec: float = 0.0
 @export var effect_id: String = ""
+## Hit damage applied when this spell connects. 0 = no HP damage (utility).
+@export_range(0.0, 200.0, 1.0) var damage: float = 0.0
 ## Shared hue for mana bar, spell-word HUD, and cast / recognition FX.
 @export var color: Color = Color(0.55, 0.28, 0.72, 1.0)
 @export var category: Category = Category.UTILITY
@@ -101,6 +112,26 @@ func get_charge_time_sec() -> float:
 	if effect_id == "fireball":
 		return FireballProjectile.authored_charge_time_sec()
 	return maxf(charge_time_sec, 0.0)
+
+
+func get_base_damage() -> float:
+	if damage > 0.0:
+		return damage
+	if effect_id == "fireball":
+		return FireballProjectile.DEFAULT_HIT_DAMAGE
+	return 0.0
+
+
+func get_fire_interval_sec() -> float:
+	if uses_ammo() and ammo_refill_sec > 0.0:
+		return ammo_refill_sec
+	var charge := get_charge_time_sec()
+	var cd := maxf(cooldown_sec, 0.0)
+	if requires_full_charge():
+		return maxf(charge, 0.05)
+	if is_channelled():
+		return maxf(cd, 0.05)
+	return maxf(cd, charge) if cd > 0.0 or charge > 0.0 else 0.05
 
 
 func get_incantation_text() -> String:
@@ -270,8 +301,10 @@ func get_codex_effect_detail() -> String:
 		"ward":
 			text = (
 				"Hold Ward to channel a blue beam from your wand; it follows while "
-				+ "held. Release to leave the shield in place for 1 second — it "
-				+ "blocks one fireball. 0.8 second cooldown."
+				+ "held. Release to leave the shield in place. It has a health pool, "
+				+ "tints red as it weakens, and shatters when emptied. After one "
+				+ "second it regenerates. No recast cooldown; a shatter doubles "
+				+ "the next ward's regen delay."
 			)
 		"flashlight_toggle":
 			text = (

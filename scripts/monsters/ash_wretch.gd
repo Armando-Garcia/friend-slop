@@ -149,7 +149,7 @@ static func build_far_combo_steps() -> Array:
 
 static func _combo_step(
 	ability_id: String,
-	step_type: int,
+	step_type: MonsterComboStepScript.StepType,
 	delay_sec: float = 0.0,
 	variant: String = ""
 ) -> Resource:

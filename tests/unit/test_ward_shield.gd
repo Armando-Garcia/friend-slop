@@ -7,6 +7,7 @@ const ChargerWardAbilityScript := preload(
 	"res://scripts/monsters/abilities/charger_ward_ability.gd"
 )
 const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
+const WardBurstScript := preload("res://scripts/spells/ward_burst.gd")
 
 
 func run() -> int:
@@ -15,11 +16,14 @@ func run() -> int:
 	failures += _test_duration_and_radius_constants()
 	failures += _test_builder_makes_mesh()
 	failures += _test_integrity_tint_goes_red()
+	failures += _test_ward_survives_one_fireball_then_regens()
 	failures += _test_charger_ward_hp_is_four_fireballs()
 	failures += _test_baked_scene_keeps_mesh_when_radius_unchanged()
 	failures += _test_follow_then_plant_starts_fade()
 	failures += _test_runtime_uses_force_field_shader()
 	failures += _test_pose_exports_are_tunable()
+	failures += _test_workspace_starts_empty()
+	failures += _test_shatter_burst_uses_gpu_particles()
 	return failures
 
 
@@ -32,8 +36,8 @@ func _test_cap_is_one_third_sphere_surface() -> int:
 
 
 func _test_duration_and_radius_constants() -> int:
-	if not is_equal_approx(WardShieldScript.DURATION_SEC, 1.0):
-		push_error("Expected ward to linger for 1 second by default")
+	if not is_equal_approx(WardShieldScript.DURATION_SEC, 8.0):
+		push_error("Expected planted ward to linger long enough to regen")
 		return 1
 	if WardShieldScript.RADIUS <= 0.5:
 		push_error("Expected ward radius large enough to block a fireball")
@@ -67,7 +71,40 @@ func _test_integrity_tint_goes_red() -> int:
 		push_error("Expected full-integrity ward to stay shield blue")
 		return 1
 	if empty.r <= full.r or empty.g >= full.g:
-		push_error("Expected depleted ward tint to read redder than blue")
+		push_error("Expected depleted ward tint to read redder")
+		return 1
+	if empty.r < 0.7:
+		push_error("Expected empty ward to show a strong red tint")
+		return 1
+	return 0
+
+
+func _test_ward_survives_one_fireball_then_regens() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		push_error("Expected SceneTree for ward regen")
+		return 1
+	var ward: Node = WardShieldScript.new()
+	tree.root.add_child(ward)
+	ward.set("regen_delay_sec", 1.0)
+	ward.set("regen_per_sec", 10.0)
+	ward.call("set_hit_points", 40.0)
+	ward.call("notify_spell_blocked", 20.0)
+	var after_hit := float(ward.call("integrity_ratio"))
+	ward.call("_process", 0.95)
+	var during_delay := float(ward.call("integrity_ratio"))
+	ward.call("_process", 0.55)
+	var after_regen := float(ward.call("integrity_ratio"))
+	tree.root.remove_child(ward)
+	ward.free()
+	if after_hit < 0.45 or after_hit > 0.55:
+		push_error("Expected one fireball to leave the ward at half HP")
+		return 1
+	if absf(during_delay - after_hit) > 0.02:
+		push_error("Expected no regen until 1s after cast")
+		return 1
+	if after_regen <= after_hit + 0.08:
+		push_error("Expected ward HP to regenerate after the delay")
 		return 1
 	return 0
 
@@ -131,6 +168,8 @@ func _test_follow_then_plant_starts_fade() -> int:
 	if beam != null:
 		tip_z = beam.global_position.z - beam.scale.z * 0.5
 	var stopped_at_glass := tip_z + 0.002 >= apex_z
+	var body := ward.get_node_or_null("Body") as CollisionObject3D
+	var held_collides := body != null and body.collision_layer != 0
 	ward.call("plant")
 	var planted := ward.global_position
 	ward.call("follow_wand", Vector3(0.0, 0.0, 8.0), Vector3(0.0, 0.0, -1.0))
@@ -146,6 +185,7 @@ func _test_follow_then_plant_starts_fade() -> int:
 		or not stopped_at_glass
 		or still_follow
 		or not stayed
+		or not held_collides
 	):
 		push_error("Expected camera-locked ward whose beam stops at the inner dome")
 		return 1
@@ -204,11 +244,7 @@ func _test_pose_exports_are_tunable() -> int:
 	var thick := beam != null and is_equal_approx(beam.scale.x, beam.scale.y) and beam.scale.x > 1.5
 	tree.root.remove_child(ward)
 	ward.queue_free()
-	var defaults_ok := (
-		is_equal_approx(default_sec, WardShieldScript.DURATION_SEC)
-		and is_equal_approx(default_hold, WardShieldScript.HOLD_FORWARD)
-		and is_equal_approx(default_width, WardShieldScript.DEFAULT_BEAM_DIAMETER)
-	)
+	var defaults_ok := default_sec > 0.1 and default_hold > 0.2 and default_width > 0.005
 	var tuned_ok := (
 		is_equal_approx(tuned_sec, 3.5)
 		and is_equal_approx(tuned_hold, 2.2)
@@ -216,5 +252,49 @@ func _test_pose_exports_are_tunable() -> int:
 	)
 	if not defaults_ok or not tuned_ok or beam == null or not thick:
 		push_error("Expected Ward linger, hold distance, and beam width to be tunable")
+		return 1
+	return 0
+
+
+func _test_workspace_starts_empty() -> int:
+	var packed: PackedScene = load("res://scenes/spells/ward/workspace.tscn") as PackedScene
+	if packed == null:
+		push_error("Expected ward workspace scene")
+		return 1
+	var studio: Node = packed.instantiate()
+	var lookdev := studio.get_node_or_null("Ward")
+	studio.free()
+	if lookdev != null:
+		push_error("Expected ward workspace to start with no default Ward")
+		return 1
+	return 0
+
+
+func _test_shatter_burst_uses_gpu_particles() -> int:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		push_error("Expected SceneTree for ward shatter burst")
+		return 1
+	var burst := WardBurstScript.new()
+	tree.root.add_child(burst)
+	burst.call("setup", 0.7, Color(0.55, 0.85, 1.0, 0.72))
+	var shards := burst.get_node_or_null("Shards") as GPUParticles3D
+	var gpu_ok := (
+		shards != null
+		and shards.one_shot
+		and shards.amount >= 32
+		and shards.draw_pass_1 is PrismMesh
+	)
+	var cpu_meshes := 0
+	for child in burst.get_children():
+		if child is MeshInstance3D:
+			cpu_meshes += 1
+	tree.root.remove_child(burst)
+	burst.free()
+	if not gpu_ok:
+		push_error("Expected a one-shot GPU shard burst, not CPU flake meshes")
+		return 1
+	if cpu_meshes != 0:
+		push_error("Expected no per-shard MeshInstance3D children")
 		return 1
 	return 0

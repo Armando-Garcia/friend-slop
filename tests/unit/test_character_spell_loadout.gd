@@ -12,6 +12,7 @@ func run() -> int:
 	failures += _test_unlearn()
 	failures += _test_starting_vs_learned_sets()
 	failures += _test_flare_ammo_bucket()
+	failures += _test_ward_runtime_is_per_loadout()
 	return failures
 
 
@@ -136,3 +137,34 @@ func _test_flare_ammo_bucket() -> int:
 		push_error("Expected spend_ammo to fail when empty")
 		failures += 1
 	return failures
+
+
+func _test_ward_runtime_is_per_loadout() -> int:
+	var shared := SpellDefinitionScript.new()
+	shared.id = "ward"
+	shared.effect_id = "ward"
+	shared.cooldown_sec = 0.0
+	shared.shatter_regen_scale = 2.0
+	shared.max_health = 40.0
+	var a := LoadoutScript.new()
+	var b := LoadoutScript.new()
+	a.configure([shared])
+	b.configure([shared])
+	if a.get_spell_definition("ward") != shared:
+		push_error("Expected loadouts to share the authored ward template")
+		return 1
+	if a.get_ward_runtime() == null or a.get_ward_runtime() == b.get_ward_runtime():
+		push_error("Expected each character to own a distinct ward runtime")
+		return 1
+	a.get_ward_runtime().hp = 11.0
+	if is_equal_approx(float(b.get_ward_runtime().hp), 11.0):
+		push_error("Expected ward HP to stay on one character")
+		return 1
+	a.arm_ward_shatter_penalty()
+	if not a.is_ward_shatter_penalty_armed():
+		push_error("Expected player A shatter regen penalty to apply")
+		return 1
+	if b.is_ward_shatter_penalty_armed():
+		push_error("Expected player B ward regen delay to stay independent")
+		return 1
+	return 0

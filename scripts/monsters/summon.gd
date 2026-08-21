@@ -12,6 +12,7 @@ const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.
 const MonsterCorpseScript := preload("res://scripts/monsters/monster_corpse.gd")
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 
 const FORCED_HUNT_SOURCE := &"forced_hunt"
 const FORCED_INVESTIGATE_SOURCE := &"forced_investigate"
@@ -674,11 +675,11 @@ func _cancel_cast() -> void:
 
 
 func _try_touch_damage(target: Node3D) -> void:
-	if target == null or not target.has_method("take_damage"):
+	if target == null:
 		return
 	if touch_damage <= 0.0:
 		return
-	target.call("take_damage", touch_damage * get_physics_process_delta_time(), self)
+	CombatHealthScript.apply_hit(target, touch_damage * get_physics_process_delta_time(), self)
 
 
 func _face_horizontal(desired_vel: Vector3) -> void:

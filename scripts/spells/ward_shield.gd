@@ -2,8 +2,7 @@
 class_name WardShield
 extends Node3D
 
-## Forward-facing spherical-cap blue shield. Player wards spend spell hits;
-## HP wards (Charger) absorb spell damage and tint red as they weaken.
+## HP wards absorb spell damage. Low HP tints the dome red; empty HP GPU-shatters.
 ## Open scenes/spells/ward/ward.tscn — Ward root: linger, hold distance, beam width, dome shape.
 ## Select child Beam only for force-field shader knobs (rim, veins, scroll).
 
@@ -11,9 +10,13 @@ const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.g
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
 const ForceFieldScript := preload("res://scripts/fx/force_field.gd")
+const WardBurstScript := preload("res://scripts/spells/ward_burst.gd")
 
 const GROUP := "spell_ward"
-const DURATION_SEC := 1.0
+const DURATION_SEC := 8.0
+const DEFAULT_BLOCK_HP := 40.0
+const DEFAULT_REGEN_DELAY_SEC := 1.0
+const DEFAULT_REGEN_PER_SEC := 10.0
 ## Kept for tests / callers that expect a class-level default size.
 const RADIUS := 1.35
 ## Beam must read as immediate once the voice match resolves.
@@ -71,6 +74,18 @@ const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 	set(value):
 		duration_sec = maxf(value, 0.05)
 
+@export_group("Block")
+## Incoming spell damage absorbed before shatter.
+@export_range(1.0, 400.0, 1.0) var block_hp: float = DEFAULT_BLOCK_HP:
+	set(value):
+		block_hp = maxf(value, 1.0)
+
+@export_group("Regen")
+## Seconds after the most recent cast before HP starts restoring.
+@export_range(0.0, 10.0, 0.05, "suffix:s") var regen_delay_sec: float = DEFAULT_REGEN_DELAY_SEC
+## HP restored per second after the timeout, up to block_hp.
+@export_range(0.0, 50.0, 0.5) var regen_per_sec: float = DEFAULT_REGEN_PER_SEC
+
 @export_group("Hold pose")
 ## Camera-forward meters from the view to the dome while the slot is held.
 ## Beam runs wand tip → dome, so this also sets beam length.
@@ -115,6 +130,11 @@ var _caster: Node3D = null
 var _held := false
 var _following := false
 var _follow_attached := false
+var _follow_home: Node = null
+var _dissolving := false
+var _time_since_cast := 0.0
+var _regen_wait_sec := DEFAULT_REGEN_DELAY_SEC
+var _runtime: Resource = null
 
 
 func set_block_listener(listener: Callable) -> void:
@@ -148,7 +168,7 @@ static func spawn(
 	origin: Vector3,
 	direction: Vector3,
 	hit_capacity: int = 1,
-	duration_sec: float = -1.0
+	linger_sec: float = -1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
 	var packed: PackedScene = load(SpellDefinition.world_scene_path("ward")) as PackedScene
@@ -157,8 +177,8 @@ static func spawn(
 		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)
 	elif parent != null:
 		parent.add_child(ward)
-	if duration_sec > 0.0 and ward.has_method("set_duration_sec"):
-		ward.call("set_duration_sec", duration_sec)
+	if linger_sec > 0.0 and ward.has_method("set_duration_sec"):
+		ward.call("set_duration_sec", linger_sec)
 	if ward.has_method("setup_cast"):
 		ward.call("setup_cast", origin, direction, hit_capacity)
 	return ward
@@ -175,18 +195,38 @@ func hold_until_broken() -> void:
 
 
 func set_hit_points(hp: float) -> void:
-	## Damage-absorb mode. Survives until HP is spent; ignores hit-count.
 	_max_hp = maxf(hp, 0.01)
 	_hp = _max_hp
+	_time_since_cast = 0.0
+	_sync_runtime()
+	_apply_integrity_color()
+
+
+func bind_runtime(runtime: Resource) -> void:
+	_runtime = runtime
+	if runtime == null:
+		return
+	runtime.regen_per_sec = regen_per_sec
+	if runtime.has_method("apply_shatter_regen_delay"):
+		_regen_wait_sec = float(runtime.call("apply_shatter_regen_delay", regen_delay_sec))
+	else:
+		_regen_wait_sec = regen_delay_sec
+		runtime.regen_delay_sec = regen_delay_sec
+	runtime.reset_hp()
+	block_hp = maxf(float(runtime.get("max_hp")), 1.0)
+	_max_hp = block_hp
+	_hp = float(runtime.get("hp"))
+	_time_since_cast = float(runtime.get("time_since_cast"))
 	_apply_integrity_color()
 
 
 func shatter() -> void:
 	_held = false
-	_dissolve()
+	_dissolve(false)
 
 
 func _ready() -> void:
+	_regen_wait_sec = regen_delay_sec
 	_cache_nodes()
 	if not _has_baked_geometry():
 		_rebuild_geometry()
@@ -301,6 +341,9 @@ func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> v
 	_place_from_aim(origin, direction)
 	_lifetime = 0.0
 	_hits_remaining = maxi(hit_capacity, 1)
+	if _max_hp <= 0.0:
+		set_hit_points(block_hp)
+	_time_since_cast = 0.0
 	_lifetime_active = false
 	## Editor look-dev trees are often paused; keep cast FX + lifetime ticking.
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -316,9 +359,13 @@ func start_wand_follow(
 	hit_capacity: int = 1,
 	attach_to: Node3D = null
 ) -> void:
-	## Instant channel: dome rides the camera; cylinder runs wand-tip → dome center.
+	## Instant channel: dome rides the hold host; cylinder runs wand-tip → dome.
 	_lifetime = 0.0
+	_wand_origin = origin
 	_hits_remaining = maxi(hit_capacity, 1)
+	if _max_hp <= 0.0:
+		set_hit_points(block_hp)
+	_time_since_cast = 0.0
 	_lifetime_active = false
 	_following = true
 	_held = true
@@ -326,8 +373,6 @@ func start_wand_follow(
 	set_process(true)
 	_ensure_runtime_material()
 	_prepare_for_cast_fx()
-	if _body != null:
-		_body.collision_layer = 0
 	_kill_cast_tween()
 	_clear_cast_fx()
 	if attach_to != null:
@@ -338,6 +383,7 @@ func start_wand_follow(
 	_build_beam()
 	_snap_formed(false)
 	_orient_channel_beam(_wand_tip())
+	_enable_collision()
 
 
 func follow_wand(origin: Vector3, direction: Vector3, wand_tip: Vector3 = Vector3.INF) -> void:
@@ -399,6 +445,7 @@ func _attach_to_follow_host(host: Node3D) -> void:
 	if host == null:
 		_follow_attached = false
 		return
+	_follow_home = get_parent()
 	if get_parent() != host:
 		var xf := global_transform
 		if get_parent() != null:
@@ -411,14 +458,17 @@ func _attach_to_follow_host(host: Node3D) -> void:
 
 
 func _detach_follow_host() -> void:
-	if _caster == null or not is_instance_valid(_caster):
-		return
-	var parent: Node = SpellEphemeralFxScript.resolve_parent(_caster)
-	if parent == null or get_parent() == parent:
+	var home := _follow_home
+	if home == null or not is_instance_valid(home):
+		if _caster != null and is_instance_valid(_caster):
+			home = SpellEphemeralFxScript.resolve_parent(_caster)
+	_follow_home = null
+	_follow_attached = false
+	if home == null or get_parent() == home:
 		return
 	var xf := global_transform
 	get_parent().remove_child(self)
-	parent.add_child(self)
+	home.add_child(self)
 	global_transform = xf
 
 
@@ -433,8 +483,11 @@ func _dome_center() -> Vector3:
 
 
 func _wand_tip() -> Vector3:
-	if _caster != null and is_instance_valid(_caster) and _caster.has_method("get_wand_cast_origin"):
-		return _caster.call("get_wand_cast_origin") as Vector3
+	if _caster != null and is_instance_valid(_caster):
+		if _caster.has_method("get_wand_cast_origin"):
+			return _caster.call("get_wand_cast_origin") as Vector3
+		if _caster.has_method("get_cast_origin"):
+			return _caster.call("get_cast_origin") as Vector3
 	return _wand_origin
 
 
@@ -446,6 +499,9 @@ func setup_sphere_cast(origin: Vector3, hit_capacity: int, sphere_radius: float)
 	global_transform = Transform3D(Basis.IDENTITY, origin)
 	_lifetime = 0.0
 	_hits_remaining = maxi(hit_capacity, 1)
+	if _max_hp <= 0.0:
+		set_hit_points(block_hp)
+	_time_since_cast = 0.0
 	_lifetime_active = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process(true)
@@ -471,6 +527,7 @@ func _ensure_runtime_material() -> void:
 	_material = _make_field_material(DOME_PATTERN_SCALE, FIELD_ENERGY, 0.9)
 	_mesh_instance.material_override = _material
 	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_apply_integrity_color()
 
 
 func _make_field_material(
@@ -668,6 +725,7 @@ func _enable_collision() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_regen(delta)
 	if _following:
 		_orient_channel_beam(_wand_tip())
 		return
@@ -679,7 +737,21 @@ func _process(delta: float) -> void:
 		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
 		_set_field_opacity(_material, fade)
 	if _lifetime >= duration and not _is_broken():
-		_dissolve()
+		_dissolve(false)
+
+
+func _tick_regen(delta: float) -> void:
+	if _dissolving or _is_broken() or _max_hp <= 0.0:
+		return
+	_time_since_cast += delta
+	_sync_runtime()
+	if regen_per_sec <= 0.0 or _time_since_cast < _regen_wait_sec:
+		return
+	if _hp >= _max_hp:
+		return
+	_hp = minf(_max_hp, _hp + regen_per_sec * delta)
+	_sync_runtime()
+	_apply_integrity_color()
 
 
 func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) -> void:
@@ -690,9 +762,10 @@ func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) ->
 	if _max_hp > 0.0:
 		if damage > 0.0:
 			_hp -= damage
+			_sync_runtime()
 			_apply_integrity_color()
 		if _hp <= 0.0:
-			_dissolve()
+			_dissolve(true)
 			return
 		if _block_listener.is_valid():
 			_block_listener.call(damage)
@@ -707,7 +780,7 @@ func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) ->
 		return
 	_hits_remaining -= 1
 	if _hits_remaining <= 0:
-		_dissolve()
+		_dissolve(true)
 
 
 func _notify_owner_blocked(incoming_from: Node) -> void:
@@ -739,6 +812,13 @@ static func integrity_edge(integrity: float) -> Color:
 	return SHIELD_EDGE.lerp(SHIELD_STRESS_EDGE, t)
 
 
+func _sync_runtime() -> void:
+	if _runtime == null:
+		return
+	_runtime.hp = _hp
+	_runtime.time_since_cast = _time_since_cast
+
+
 func _apply_integrity_color() -> void:
 	if _material == null or _max_hp <= 0.0:
 		return
@@ -747,17 +827,24 @@ func _apply_integrity_color() -> void:
 	_material.set_shader_parameter("rim_color", fill)
 	_material.set_shader_parameter("energy_color", integrity_edge(integrity))
 	_material.set_shader_parameter(
-		"energy_amount", lerpf(FIELD_ENERGY, FIELD_ENERGY * 1.7, 1.0 - integrity)
+		"energy_amount", lerpf(FIELD_ENERGY, FIELD_ENERGY * 0.22, 1.0 - integrity)
 	)
 
 
-func _dissolve() -> void:
+func _dissolve(from_shatter: bool = false) -> void:
+	if _dissolving:
+		return
+	_dissolving = true
 	_hits_remaining = 0
 	_hp = 0.0
+	_sync_runtime()
 	_lifetime_active = false
 	set_process(false)
 	_kill_cast_tween()
 	_clear_cast_fx()
+	if from_shatter:
+		_notify_owner_shattered()
+		_spawn_shatter_burst()
 	if _rim != null and is_instance_valid(_rim):
 		_free_node(_rim)
 		_rim = null
@@ -767,6 +854,31 @@ func _dissolve() -> void:
 	if _material != null:
 		tween.tween_method(_set_dome_fade, 1.0, 0.0, 0.12)
 	tween.tween_callback(_free_self)
+
+
+func _notify_owner_shattered() -> void:
+	if _caster == null or not is_instance_valid(_caster):
+		return
+	var loadout: Node = null
+	if _caster.has_method("get_spell_loadout"):
+		loadout = _caster.call("get_spell_loadout") as Node
+	if loadout != null and loadout.has_method("arm_ward_shatter_penalty"):
+		loadout.call("arm_ward_shatter_penalty")
+	elif _runtime != null:
+		_runtime.shatter_regen_scale = 2.0
+
+
+func _spawn_shatter_burst() -> void:
+	if not is_inside_tree():
+		return
+	var parent := get_parent()
+	if parent == null:
+		return
+	var burst := WardBurstScript.new()
+	parent.add_child(burst)
+	burst.global_transform = global_transform
+	if burst.has_method("setup"):
+		burst.call("setup", radius, SHIELD_EDGE)
 
 
 func _kill_cast_tween() -> void:
