@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Post merged-PR changelogs and GitHub release notices to a Discord webhook."""
+"""Discord webhook helpers for FriendSlop notifications."""
 
 from __future__ import annotations
 
@@ -12,8 +12,12 @@ import urllib.request
 
 EMBED_DESCRIPTION_LIMIT = 4096
 EMBED_TITLE_LIMIT = 256
+EMBED_FIELD_NAME_LIMIT = 256
+EMBED_FIELD_VALUE_LIMIT = 1024
+EMBED_FIELD_LIMIT = 25
 PR_COLOR = 0x57F287  # Discord green
 RELEASE_COLOR = 0xFEE75C  # Discord yellow
+DIGEST_COLOR = 0x1C2833
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -21,6 +25,46 @@ def _truncate(text: str, limit: int) -> str:
     if len(stripped) <= limit:
         return stripped
     return stripped[: max(limit - 1, 0)].rstrip() + "…"
+
+
+def load_article(raw: str) -> dict:
+    """Accept article JSON or plain text (plain text becomes a single-lede article)."""
+    text = (raw or "").strip()
+    if not text:
+        return {"lede": "", "sections": []}
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return {"lede": text, "sections": []}
+    if not isinstance(data, dict):
+        return {"lede": text, "sections": []}
+    lede = str(data.get("lede") or "").strip()
+    sections: list[dict] = []
+    for item in data.get("sections") or []:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        body = str(item.get("body") or "").strip()
+        if title and body:
+            sections.append({"title": title, "body": body})
+    if not lede and not sections:
+        return {"lede": text, "sections": []}
+    return {"lede": lede, "sections": sections}
+
+
+def article_to_embed_parts(article: dict) -> tuple[str, list[dict]]:
+    """Turn an article into Discord description + full-width fields."""
+    lede = _truncate(str(article.get("lede") or ""), EMBED_DESCRIPTION_LIMIT)
+    fields: list[dict] = []
+    for section in article.get("sections") or []:
+        if len(fields) >= EMBED_FIELD_LIMIT:
+            break
+        title = _truncate(str(section.get("title") or ""), EMBED_FIELD_NAME_LIMIT)
+        body = _truncate(str(section.get("body") or ""), EMBED_FIELD_VALUE_LIMIT)
+        if not title or not body:
+            continue
+        fields.append({"name": title, "value": body, "inline": False})
+    return lede, fields
 
 
 def build_pr_payload(
@@ -47,6 +91,27 @@ def build_pr_payload(
     }
 
 
+def build_digest_payload(*, date_label: str, article: dict, pr_count: int) -> dict:
+    title = f"The Wand Street Journal — {date_label}"
+    footer = (
+        f"Daily closing · {pr_count} pull request"
+        f"{'s' if pr_count != 1 else ''} merged"
+    )
+    lede, fields = article_to_embed_parts(article)
+    embed: dict = {
+        "title": _truncate(title, EMBED_TITLE_LIMIT),
+        "color": DIGEST_COLOR,
+        "footer": {"text": footer},
+    }
+    if lede:
+        embed["description"] = lede
+    elif not fields:
+        embed["description"] = "_No copy._"
+    if fields:
+        embed["fields"] = fields
+    return {"username": "The Wand Street Journal", "embeds": [embed]}
+
+
 def build_release_payload(
     *,
     name: str,
@@ -58,19 +123,22 @@ def build_release_payload(
     if tag and tag not in release_label:
         release_label = f"{release_label} ({tag})"
     heading = f"The Wand Street Journal — Special Edition: {release_label}"
-    description = _truncate(body, EMBED_DESCRIPTION_LIMIT) or "_No release notes._"
-    embed = {
+    article = load_article(body)
+    lede, fields = article_to_embed_parts(article)
+    if not lede and not fields:
+        lede = "_No release notes._"
+    embed: dict = {
         "title": _truncate(heading, EMBED_TITLE_LIMIT),
-        "description": description,
         "color": RELEASE_COLOR,
         "footer": {"text": "Special Edition"},
     }
+    if lede:
+        embed["description"] = lede
+    if fields:
+        embed["fields"] = fields
     if url:
         embed["url"] = url
-    return {
-        "username": "FriendSlop",
-        "embeds": [embed],
-    }
+    return {"username": "The Wand Street Journal", "embeds": [embed]}
 
 
 def post_webhook(webhook_url: str, payload: dict) -> None:
