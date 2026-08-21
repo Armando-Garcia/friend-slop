@@ -3,11 +3,10 @@ class_name FireballProjectile
 extends Area3D
 
 ## Forward-moving fireball that explodes on impact and knocks combat targets back.
-## Open scenes/spells/fireball.tscn / fireball_workspace.tscn to tune look + preview FX.
+## Open scenes/spells/fireball/fireball.tscn to tune look + preview FX.
 
 const SPEED := 28.0
 const DEFAULT_HIT_DAMAGE := 20.0
-const SCENE_PATH := "res://scenes/spells/fireball.tscn"
 const DEFAULT_CHARGE_TIME_SEC := 0.8
 const DEFAULT_WAND_CHARGE_POSE_SEC := 0.14
 ## Min charge combat values; max uses authored hit_damage / splash / radii.
@@ -261,7 +260,7 @@ static func spawn(
 	charge_factor: float = 1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with fireball.tscn.
-	var packed: PackedScene = load("res://scenes/spells/fireball.tscn") as PackedScene
+	var packed: PackedScene = load("res://scenes/spells/fireball/fireball.tscn") as PackedScene
 	var projectile: Node = packed.instantiate()
 	if lookdev_flight:
 		projectile.set_meta("lookdev_flight", true)
@@ -288,7 +287,7 @@ static func authored_wand_charge_pose_sec() -> float:
 
 
 static func _authored_float(property_name: String, fallback: float, min_value: float) -> float:
-	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	var packed: PackedScene = load(SpellDefinition.world_scene_path("fireball")) as PackedScene
 	if packed == null:
 		return maxf(fallback, min_value)
 	var state := packed.get_state()

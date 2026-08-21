@@ -4,12 +4,13 @@ extends Node3D
 
 ## Forward-facing spherical-cap blue shield. Player wards spend spell hits;
 ## HP wards (Charger) absorb spell damage and tint red as they weaken.
-## Open scenes/spells/ward.tscn (or ward_workspace.tscn) — select Ward root to edit Dome shape.
-## Cast: tip beam (instant on detect) → rim bloom → dome form (see setup_cast).
+## Open scenes/spells/ward/ward.tscn — Ward root: linger, hold distance, beam width, dome shape.
+## Select child Beam only for force-field shader knobs (rim, veins, scroll).
 
 const WardMeshBuilderScript := preload("res://scripts/spells/ward_mesh_builder.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
+const ForceFieldScript := preload("res://scripts/fx/force_field.gd")
 
 const GROUP := "spell_ward"
 const DURATION_SEC := 1.0
@@ -18,13 +19,21 @@ const RADIUS := 1.35
 ## Beam must read as immediate once the voice match resolves.
 const CAST_TRAVEL_SEC := 0.05
 const FORM_SEC := 0.08
+## Camera-forward distance of the dome while the slot is held.
+const HOLD_FORWARD := 1.55
+const DEFAULT_BEAM_DIAMETER := 0.05
+## Keep-in wall shader, but thinner so the dome stays mostly see-through.
+const FIELD_BASE_ALPHA := 0.02
+const FIELD_RIM_STRENGTH := 0.42
+const FIELD_ENERGY := 0.48
+const DOME_PATTERN_SCALE := 1.45
 const SHIELD_BLUE := Color(0.35, 0.65, 1.0, 0.38)
 const SHIELD_EDGE := Color(0.55, 0.85, 1.0, 0.72)
 const SHIELD_STRESS := Color(0.92, 0.12, 0.08, 0.42)
 const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 
 @export_group("Dome shape")
-@export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = 1.35:
+@export_range(0.25, 4.0, 0.05, "or_greater") var radius: float = RADIUS:
 	set(value):
 		var next := maxf(value, 0.05)
 		if is_equal_approx(radius, next):
@@ -56,21 +65,47 @@ const SHIELD_STRESS_EDGE := Color(1.0, 0.25, 0.1, 1.0)
 		segment_count = next
 		_rebuild_geometry()
 
+@export_group("Lifetime")
+## Seconds the planted dome stays up after you release the slot.
+@export_range(0.15, 8.0, 0.05, "or_greater", "suffix:s") var duration_sec: float = DURATION_SEC:
+	set(value):
+		duration_sec = maxf(value, 0.05)
+
+@export_group("Hold pose")
+## Camera-forward meters from the view to the dome while the slot is held.
+## Beam runs wand tip → dome, so this also sets beam length.
+@export_range(0.4, 4.0, 0.05, "or_greater", "suffix:m") var hold_forward: float = HOLD_FORWARD:
+	set(value):
+		var next := maxf(value, 0.2)
+		if is_equal_approx(hold_forward, next):
+			return
+		hold_forward = next
+		if _follow_attached:
+			position = Vector3(0.0, 0.0, -hold_forward)
+		_sync_lookdev_beam()
+
+## Mean visual width of the wand cylinder. Mesh taper is kept.
+@export_range(0.01, 0.2, 0.005, "suffix:m") var beam_diameter: float = DEFAULT_BEAM_DIAMETER:
+	set(value):
+		var next := maxf(value, 0.005)
+		if is_equal_approx(beam_diameter, next):
+			return
+		beam_diameter = next
+		_sync_lookdev_beam()
+
 var _body: StaticBody3D
 var _mesh_instance: MeshInstance3D
 var _collision_shape: CollisionShape3D
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
 var _hits_remaining := 1
 var _max_hp := 0.0
 var _hp := 0.0
 var _lifetime := 0.0
 var _lifetime_active := false
-## Instance duration; defaults to DURATION_SEC (player ward). Monster casts may extend.
-var _duration_sec: float = DURATION_SEC
 var _wand_origin := Vector3.ZERO
 var _body_collision_layer := 1
-var _beam: MeshInstance3D
-var _beam_mat: StandardMaterial3D
+var _beam_fx: ForceField
+var _beam_mean_radius := DEFAULT_BEAM_DIAMETER * 0.5
 var _rim: MeshInstance3D
 var _rim_mat: StandardMaterial3D
 var _cast_tween: Tween
@@ -78,6 +113,8 @@ var _block_listener: Callable = Callable()
 var _persist_through_blocks := false
 var _caster: Node3D = null
 var _held := false
+var _following := false
+var _follow_attached := false
 
 
 func set_block_listener(listener: Callable) -> void:
@@ -85,7 +122,6 @@ func set_block_listener(listener: Callable) -> void:
 
 
 func set_persist_through_blocks(enabled: bool) -> void:
-	## When true, blocked spells feed listeners but the dome stays until duration ends.
 	_persist_through_blocks = enabled
 
 
@@ -115,7 +151,7 @@ static func spawn(
 	duration_sec: float = -1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
-	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
+	var packed: PackedScene = load(SpellDefinition.world_scene_path("ward")) as PackedScene
 	var ward: Node = packed.instantiate()
 	if parent != null and ward is Node3D:
 		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)
@@ -129,7 +165,7 @@ static func spawn(
 
 
 func set_duration_sec(seconds: float) -> void:
-	_duration_sec = maxf(seconds, 0.05)
+	duration_sec = seconds
 
 
 func hold_until_broken() -> void:
@@ -161,6 +197,7 @@ func _ready() -> void:
 	if Engine.is_editor_hint() and not _lifetime_active:
 		## Look-dev instance: stay static until setup_cast runs (workspace preview).
 		set_process(false)
+		_sync_lookdev_beam()
 		return
 	_ensure_runtime_material()
 
@@ -170,6 +207,70 @@ func _cache_nodes() -> void:
 	_body = get_node_or_null("Body") as StaticBody3D
 	if _body != null:
 		_collision_shape = _body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	_beam_fx = get_node_or_null("Beam") as ForceField
+	if _beam_fx != null:
+		_beam_fx.process_mode = Node.PROCESS_MODE_ALWAYS
+		if not Engine.is_editor_hint():
+			## Scene pose is look-dev (along the dome). Game poses world-space.
+			_beam_fx.visible = false
+		_ensure_beam_cylinder()
+		_cache_beam_mean_radius()
+
+
+func _ensure_beam_cylinder() -> void:
+	if _beam_fx == null:
+		return
+	var mesh_inst := _beam_fx.get_node_or_null("Mesh") as MeshInstance3D
+	if mesh_inst == null:
+		return
+	if mesh_inst.mesh is CylinderMesh:
+		return
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.018
+	cyl.bottom_radius = 0.032
+	cyl.height = 1.0
+	cyl.radial_segments = 16
+	mesh_inst.mesh = cyl
+	mesh_inst.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
+	_beam_fx.scale = Vector3.ONE
+
+
+func _cache_beam_mean_radius() -> void:
+	_beam_mean_radius = DEFAULT_BEAM_DIAMETER * 0.5
+	if _beam_fx == null:
+		return
+	var mesh := _beam_fx.get_node_or_null("Mesh") as MeshInstance3D
+	if mesh == null:
+		return
+	var cyl := mesh.mesh as CylinderMesh
+	if cyl == null:
+		return
+	_beam_mean_radius = (cyl.top_radius + cyl.bottom_radius) * 0.5
+
+
+func _beam_xy_scale() -> float:
+	return (beam_diameter * 0.5) / maxf(_beam_mean_radius, 0.001)
+
+
+func _sync_lookdev_beam() -> void:
+	if not Engine.is_editor_hint() or _following:
+		return
+	if not is_inside_tree():
+		return
+	if _beam_fx == null:
+		_beam_fx = get_node_or_null("Beam") as ForceField
+	if _beam_fx == null:
+		return
+	_ensure_beam_cylinder()
+	_cache_beam_mean_radius()
+	_beam_fx.visible = true
+	_beam_fx.top_level = false
+	var to := _beam_end_local()
+	var length := maxf(absf(to.z), 0.04)
+	var xy := _beam_xy_scale()
+	_beam_fx.position = Vector3(0.0, 0.0, to.z * 0.5)
+	_beam_fx.rotation = Vector3.ZERO
+	_beam_fx.scale = Vector3(xy, xy, length)
 
 
 func _has_baked_geometry() -> bool:
@@ -197,18 +298,7 @@ func _rebuild_geometry() -> void:
 
 
 func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> void:
-	var dir := direction
-	if dir.length_squared() < 0.0001:
-		dir = Vector3.FORWARD
-	else:
-		dir = dir.normalized()
-	_wand_origin = origin
-	## Sit the dome just ahead of the cast point, bulging toward the aim (-Z).
-	var pos := origin + dir * (radius * 0.2)
-	var up := Vector3.UP
-	if absf(dir.dot(up)) > 0.95:
-		up = Vector3.RIGHT
-	global_transform = Transform3D(Basis.looking_at(dir, up), pos)
+	_place_from_aim(origin, direction)
 	_lifetime = 0.0
 	_hits_remaining = maxi(hit_capacity, 1)
 	_lifetime_active = false
@@ -218,6 +308,134 @@ func setup_cast(origin: Vector3, direction: Vector3, hit_capacity: int = 1) -> v
 	_ensure_runtime_material()
 	_prepare_for_cast_fx()
 	_play_cast_sequence()
+
+
+func start_wand_follow(
+	origin: Vector3,
+	direction: Vector3,
+	hit_capacity: int = 1,
+	attach_to: Node3D = null
+) -> void:
+	## Instant channel: dome rides the camera; cylinder runs wand-tip → dome center.
+	_lifetime = 0.0
+	_hits_remaining = maxi(hit_capacity, 1)
+	_lifetime_active = false
+	_following = true
+	_held = true
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	set_process(true)
+	_ensure_runtime_material()
+	_prepare_for_cast_fx()
+	if _body != null:
+		_body.collision_layer = 0
+	_kill_cast_tween()
+	_clear_cast_fx()
+	if attach_to != null:
+		_attach_to_follow_host(attach_to)
+	else:
+		_follow_attached = false
+		_place_from_camera_aim(origin, direction)
+	_build_beam()
+	_snap_formed(false)
+	_orient_channel_beam(_wand_tip())
+
+
+func follow_wand(origin: Vector3, direction: Vector3, wand_tip: Vector3 = Vector3.INF) -> void:
+	if not _following or _is_broken():
+		return
+	if not _follow_attached:
+		_place_from_camera_aim(origin, direction)
+	var tip := _wand_tip()
+	if not is_inf(wand_tip.x):
+		tip = wand_tip
+	_orient_channel_beam(tip)
+
+
+func plant() -> void:
+	if not _following:
+		return
+	_following = false
+	_held = false
+	_follow_attached = false
+	_detach_follow_host()
+	_lifetime = 0.0
+	_lifetime_active = true
+	set_process(true)
+	_enable_collision()
+	_fade_channel_beam()
+
+
+func is_channel_following() -> bool:
+	return _following
+
+
+func _place_from_aim(origin: Vector3, direction: Vector3) -> void:
+	var dir := _aim_dir(direction)
+	_wand_origin = origin
+	var pos := origin + dir * (radius * 0.2)
+	global_transform = Transform3D(_aim_basis(dir), pos)
+
+
+func _place_from_camera_aim(origin: Vector3, direction: Vector3) -> void:
+	var dir := _aim_dir(direction)
+	_wand_origin = origin
+	global_transform = Transform3D(_aim_basis(dir), origin + dir * hold_forward)
+
+
+func _aim_dir(direction: Vector3) -> Vector3:
+	if direction.length_squared() < 0.0001:
+		return Vector3(0.0, 0.0, -1.0)
+	return direction.normalized()
+
+
+func _aim_basis(dir: Vector3) -> Basis:
+	var up := Vector3.UP
+	if absf(dir.dot(up)) > 0.95:
+		up = Vector3.RIGHT
+	return Basis.looking_at(dir, up)
+
+
+func _attach_to_follow_host(host: Node3D) -> void:
+	if host == null:
+		_follow_attached = false
+		return
+	if get_parent() != host:
+		var xf := global_transform
+		if get_parent() != null:
+			get_parent().remove_child(self)
+		host.add_child(self)
+		global_transform = xf
+	_follow_attached = true
+	position = Vector3(0.0, 0.0, -hold_forward)
+	rotation = Vector3.ZERO
+
+
+func _detach_follow_host() -> void:
+	if _caster == null or not is_instance_valid(_caster):
+		return
+	var parent: Node = SpellEphemeralFxScript.resolve_parent(_caster)
+	if parent == null or get_parent() == parent:
+		return
+	var xf := global_transform
+	get_parent().remove_child(self)
+	parent.add_child(self)
+	global_transform = xf
+
+
+func _beam_end_local() -> Vector3:
+	## Inner pole of the cap. Pull back so the cylinder does not pierce the mesh.
+	var inset := maxf(beam_diameter * 0.35, 0.02)
+	return Vector3(0.0, 0.0, -maxf(radius - inset, 0.05))
+
+
+func _dome_center() -> Vector3:
+	return global_transform * _beam_end_local()
+
+
+func _wand_tip() -> Vector3:
+	if _caster != null and is_instance_valid(_caster) and _caster.has_method("get_wand_cast_origin"):
+		return _caster.call("get_wand_cast_origin") as Vector3
+	return _wand_origin
 
 
 func setup_sphere_cast(origin: Vector3, hit_capacity: int, sphere_radius: float) -> void:
@@ -248,10 +466,40 @@ func _ensure_runtime_material() -> void:
 		_cache_nodes()
 	if _mesh_instance == null:
 		return
-	if _mesh_instance.material_override is StandardMaterial3D:
-		## Duplicate so fade/dissolve does not mutate the shared scene material.
-		_material = (_mesh_instance.material_override as StandardMaterial3D).duplicate()
-		_mesh_instance.material_override = _material
+	if _material != null:
+		return
+	_material = _make_field_material(DOME_PATTERN_SCALE, FIELD_ENERGY, 0.9)
+	_mesh_instance.material_override = _material
+	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _make_field_material(
+	pattern_scale: float, energy_amount: float, proximity: float
+) -> ShaderMaterial:
+	var mat := ForceFieldScript.make_material()
+	mat.set_shader_parameter("rim_color", SHIELD_EDGE)
+	mat.set_shader_parameter("energy_color", Color(0.95, 0.98, 1.0, 1.0))
+	mat.set_shader_parameter("base_alpha", FIELD_BASE_ALPHA)
+	mat.set_shader_parameter("rim_strength", FIELD_RIM_STRENGTH)
+	mat.set_shader_parameter("energy_amount", energy_amount)
+	mat.set_shader_parameter("pattern_scale", pattern_scale)
+	mat.set_shader_parameter("proximity_fade", proximity)
+	mat.set_shader_parameter("opacity", 1.0)
+	return mat
+
+
+func _set_field_opacity(mat: ShaderMaterial, amount: float) -> void:
+	if mat != null:
+		mat.set_shader_parameter("opacity", clampf(amount, 0.0, 1.0))
+
+
+func _set_beam_fade(amount: float) -> void:
+	if _beam_fx != null:
+		_beam_fx.opacity = clampf(amount, 0.0, 1.0)
+
+
+func _set_dome_fade(amount: float) -> void:
+	_set_field_opacity(_material, amount)
 
 
 func _prepare_for_cast_fx() -> void:
@@ -261,9 +509,7 @@ func _prepare_for_cast_fx() -> void:
 	if _mesh_instance != null:
 		_mesh_instance.visible = true
 		_mesh_instance.scale = Vector3.ONE * 0.05
-	if _material != null:
-		_material.albedo_color.a = 0.0
-		_material.emission_energy_multiplier = 0.0
+	_set_field_opacity(_material, 0.0)
 
 
 func _play_cast_sequence() -> void:
@@ -289,58 +535,43 @@ func _play_cast_sequence() -> void:
 
 
 func _build_beam() -> void:
-	var world := get_parent()
-	_beam = MeshInstance3D.new()
-	_beam.name = "Beam"
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.008
-	cyl.bottom_radius = 0.018
-	cyl.height = 1.0
-	_beam.mesh = cyl
-	_beam_mat = StandardMaterial3D.new()
-	_beam_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_beam_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_beam_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_beam_mat.albedo_color = Color(0.45, 0.75, 1.0, 0.45)
-	_beam_mat.emission_enabled = true
-	_beam_mat.emission = Color(0.5, 0.82, 1.0)
-	_beam_mat.emission_energy_multiplier = 2.0
-	_beam.material_override = _beam_mat
-	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_beam.layers = WorldVisualLayersScript.WORLD
-	_beam.process_mode = Node.PROCESS_MODE_ALWAYS
-	if world != null:
-		world.add_child(_beam)
-	else:
-		add_child(_beam)
-	_update_beam(_wand_origin, _wand_origin)
+	if _beam_fx == null:
+		_cache_nodes()
+	if _beam_fx == null:
+		return
+	_beam_fx.opacity = 1.0
+	_beam_fx.visible = true
+	_beam_fx.top_level = true
+	_beam_fx.process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _set_beam_progress(t: float) -> void:
 	var pos := _wand_origin.lerp(global_position, clampf(t, 0.0, 1.0))
-	_update_beam(_wand_origin, pos)
-	if _beam_mat != null:
-		_beam_mat.albedo_color.a = lerpf(0.5, 0.06, t)
-		_beam_mat.emission_energy_multiplier = lerpf(2.4, 0.6, t)
+	_orient_beam(_wand_origin, pos)
+	_set_beam_fade(lerpf(0.9, 0.2, t))
 
 
-func _update_beam(from_pos: Vector3, to_pos: Vector3) -> void:
-	if _beam == null or not is_instance_valid(_beam):
+func _orient_channel_beam(wand_tip: Vector3) -> void:
+	_wand_origin = wand_tip
+	_orient_beam(wand_tip, _dome_center())
+
+
+func _orient_beam(from_pos: Vector3, to_pos: Vector3) -> void:
+	if _beam_fx == null or not is_instance_valid(_beam_fx):
 		return
-	var delta := to_pos - from_pos
-	var length := delta.length()
-	if length < 0.001:
-		_beam.visible = false
-		return
-	_beam.visible = true
-	_beam.global_position = from_pos.lerp(to_pos, 0.5)
-	_beam.scale = Vector3(1.0, length, 1.0)
-	var dir := delta.normalized()
+	var length := maxf(from_pos.distance_to(to_pos), 0.04)
+	var to := to_pos
+	if from_pos.distance_squared_to(to_pos) < 0.0001:
+		to = from_pos + Vector3(0.0, 0.0, -length)
 	var up := Vector3.UP
-	if absf(dir.dot(up)) > 0.95:
+	var dir := (to - from_pos).normalized()
+	if absf(dir.dot(up)) > 0.92:
 		up = Vector3.RIGHT
-	_beam.basis = Basis.looking_at(dir, up)
-	_beam.rotate_object_local(Vector3.RIGHT, -PI * 0.5)
+	_beam_fx.global_position = from_pos.lerp(to, 0.5)
+	## Mesh is baked along local -Z (look_at forward). Stretch Z, not Y.
+	_beam_fx.look_at(to, up)
+	var xy := _beam_xy_scale()
+	_beam_fx.scale = Vector3(xy, xy, length)
 
 
 func _form_shield() -> void:
@@ -374,11 +605,7 @@ func _form_shield() -> void:
 
 
 func _set_form_material(t: float) -> void:
-	if _material == null:
-		return
-	_material.albedo_color.a = SHIELD_BLUE.a * clampf(t, 0.0, 1.0)
-	_material.emission = SHIELD_EDGE
-	_material.emission_energy_multiplier = lerpf(0.0, 0.75, t)
+	_set_field_opacity(_material, clampf(t, 0.0, 1.0))
 
 
 func _spawn_rim_bloom() -> void:
@@ -402,6 +629,26 @@ func _spawn_rim_bloom() -> void:
 	add_child(_rim)
 
 
+func _snap_formed(enable_collision: bool = true) -> void:
+	if enable_collision:
+		_enable_collision()
+	if _mesh_instance != null:
+		_mesh_instance.visible = true
+		_mesh_instance.scale = Vector3.ONE
+	_set_field_opacity(_material, 1.0)
+	_apply_integrity_color()
+
+
+func _fade_channel_beam() -> void:
+	if _beam_fx == null or not is_instance_valid(_beam_fx):
+		_clear_cast_fx()
+		return
+	_kill_cast_tween()
+	_cast_tween = _make_cast_tween()
+	_cast_tween.tween_method(_set_beam_fade, 1.0, 0.0, 0.18)
+	_cast_tween.tween_callback(_clear_cast_fx)
+
+
 func _finish_form() -> void:
 	if _rim != null and is_instance_valid(_rim):
 		_free_node(_rim)
@@ -409,10 +656,7 @@ func _finish_form() -> void:
 	_rim_mat = null
 	if _mesh_instance != null:
 		_mesh_instance.scale = Vector3.ONE
-	if _material != null:
-		_material.albedo_color.a = SHIELD_BLUE.a
-		_material.emission = SHIELD_EDGE
-		_material.emission_energy_multiplier = 0.75
+	_set_field_opacity(_material, 1.0)
 	_apply_integrity_color()
 	_enable_collision()
 
@@ -424,20 +668,21 @@ func _enable_collision() -> void:
 
 
 func _process(delta: float) -> void:
+	if _following:
+		_orient_channel_beam(_wand_tip())
+		return
 	if _held or not _lifetime_active or _is_broken():
 		return
 	_lifetime += delta
-	var duration := maxf(_duration_sec, 0.05)
+	var duration := maxf(duration_sec, 0.05)
 	if _material != null:
 		var fade := clampf(1.0 - (_lifetime / duration), 0.0, 1.0)
-		_material.albedo_color.a = SHIELD_BLUE.a * fade
-		_material.emission = SHIELD_EDGE * (0.35 + 0.4 * fade)
+		_set_field_opacity(_material, fade)
 	if _lifetime >= duration and not _is_broken():
 		_dissolve()
 
 
 func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) -> void:
-	## Hit-count wards spend one cast. HP wards subtract spell damage and tint red.
 	if _is_broken():
 		return
 	if incoming_from != null and not is_instance_valid(incoming_from):
@@ -499,10 +744,11 @@ func _apply_integrity_color() -> void:
 		return
 	var integrity := integrity_ratio()
 	var fill := integrity_tint(integrity)
-	var alpha := _material.albedo_color.a
-	_material.albedo_color = Color(fill.r, fill.g, fill.b, alpha)
-	_material.emission = integrity_edge(integrity)
-	_material.emission_energy_multiplier = lerpf(0.75, 1.8, 1.0 - integrity)
+	_material.set_shader_parameter("rim_color", fill)
+	_material.set_shader_parameter("energy_color", integrity_edge(integrity))
+	_material.set_shader_parameter(
+		"energy_amount", lerpf(FIELD_ENERGY, FIELD_ENERGY * 1.7, 1.0 - integrity)
+	)
 
 
 func _dissolve() -> void:
@@ -519,7 +765,7 @@ func _dissolve() -> void:
 		_body.collision_layer = 0
 	var tween := _make_cast_tween()
 	if _material != null:
-		tween.tween_property(_material, "albedo_color:a", 0.0, 0.12)
+		tween.tween_method(_set_dome_fade, 1.0, 0.0, 0.12)
 	tween.tween_callback(_free_self)
 
 
@@ -530,10 +776,9 @@ func _kill_cast_tween() -> void:
 
 
 func _clear_cast_fx() -> void:
-	if _beam != null and is_instance_valid(_beam):
-		_free_node(_beam)
-		_beam = null
-	_beam_mat = null
+	if _beam_fx != null and is_instance_valid(_beam_fx):
+		_beam_fx.visible = false
+		_beam_fx.opacity = 1.0
 
 
 func _free_node(node: Node) -> void:

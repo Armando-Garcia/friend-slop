@@ -234,3 +234,7 @@ scale_amount_min = 0.75
 scale_amount_max = 1.25
 color = Color(0.05, 0.03, 0.08, 1)
 color_ramp = SubResource("Gradient_b63be")
+
+[node name="CastChargeHost" type="Node3D" parent="."]
+editor_description = "Per-spell wand-tip charge animation is instanced here from SpellDefinition.cast_charge_scene."
+

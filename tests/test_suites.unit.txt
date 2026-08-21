@@ -34,6 +34,7 @@ res://tests/unit/test_spell_grammar_builder.gd
 res://tests/unit/test_spell_cast_validator.gd
 res://tests/unit/test_character_spell_loadout.gd
 res://tests/unit/test_spell_hotbar.gd
+res://tests/unit/test_cast_charge.gd
 res://tests/unit/test_gdvosk_adapter.gd
 res://tests/unit/test_spell_validation_codec.gd
 res://tests/unit/test_game_state.gd

@@ -4,9 +4,9 @@ extends RefCounted
 ## Integration tests for SpellCastingSession state machine (stub mode, no real mic).
 ## Requires a SceneTree so nodes can be added; drives _process directly.
 
-const FireballSpell := preload("res://resources/spells/fireball.tres")
-const ShowMeSpell := preload("res://resources/spells/show_me.tres")
-const HasteSpell := preload("res://resources/spells/haste.tres")
+const FireballSpell := preload("res://scenes/spells/fireball/fireball.tres")
+const ShowMeSpell := preload("res://scenes/spells/show_me/show_me.tres")
+const HasteSpell := preload("res://scenes/spells/haste/haste.tres")
 const WorkerScript := preload("res://scripts/spells/spell_validation_worker.gd")
 const SpellSttConfigScript := preload("res://scripts/spells/spell_stt_config.gd")
 const CharacterSpellLoadoutScript := preload("res://scripts/spells/character_spell_loadout.gd")

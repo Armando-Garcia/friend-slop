@@ -5,7 +5,7 @@ extends Node3D
 ## Select WardWorkspace → Cast preview → Cast Ward (button or cast_now).
 
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
-const WardSpell := preload("res://resources/spells/ward.tres")
+const WardSpell := preload("res://scenes/spells/ward/ward.tres")
 
 @export_group("Cast preview")
 @export var hide_lookdev_ward_during_cast := true:

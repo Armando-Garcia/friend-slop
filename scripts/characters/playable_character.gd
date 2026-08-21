@@ -28,6 +28,7 @@ const PlayableCharacterPreviewScript := preload(
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 const PlayerEmberBurnScript := preload("res://scripts/characters/player_ember_burn.gd")
+const WardSlotChannelScript := preload("res://scripts/spells/ward_slot_channel.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -85,6 +86,7 @@ var _spell_fire_charging := false
 var _spell_fire_releasing := false
 var _spell_fire_slot := -1
 var _spell_fire_cancel_token := 0
+var _ward_channel: RefCounted = WardSlotChannelScript.new()
 var _fake_wall_placement: Node
 var _knockback_vel := Vector3.ZERO
 var _knockback_timer := 0.0
@@ -607,6 +609,8 @@ func _try_begin_slot_fire(slot_index: int) -> bool:
 	_refill_mana()
 	if _wand != null:
 		_wand.begin_cast_charge(_armed_spell)
+	if _armed_spell != null and _armed_spell.effect_id == "ward":
+		_ward_channel.call("begin", self)
 	return true
 
 
@@ -623,6 +627,7 @@ func _try_release_slot_fire(slot_index: int) -> bool:
 		_wand.fizzle_cast_charge()
 		_cancel_slot_cast()
 		return false
+	_ward_channel.call("plant")
 	_spell_fire_releasing = true
 	_fire_armed_spell()
 	return true
@@ -638,6 +643,13 @@ func _cancel_spell_fire_charge(instant: bool = false) -> void:
 			_wand.cancel_cast_charge(instant)
 	elif instant and _wand != null:
 		_wand.cancel_cast_charge(true)
+	_ward_channel.call("drop")
+
+
+func consume_channel_ward() -> Node:
+	if _ward_channel == null:
+		return null
+	return _ward_channel.call("consume") as Node
 
 
 func _fire_armed_spell() -> void:

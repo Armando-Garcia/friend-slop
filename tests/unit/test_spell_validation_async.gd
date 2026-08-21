@@ -6,7 +6,7 @@ extends RefCounted
 const RunnerScript := preload("res://scripts/spells/spell_validation_runner.gd")
 const WorkerScript := preload("res://scripts/spells/spell_validation_worker.gd")
 const SpellLogScript := preload("res://scripts/spells/spell_log.gd")
-const FireballSpell := preload("res://resources/spells/fireball.tres")
+const FireballSpell := preload("res://scenes/spells/fireball/fireball.tres")
 
 
 func run(tree: SceneTree) -> int:
