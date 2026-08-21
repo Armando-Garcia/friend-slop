@@ -67,11 +67,20 @@ def _strip_code_fence(text: str) -> str:
     return stripped
 
 
+def _extract_json_object(text: str) -> str:
+    """Pull the outermost JSON object from a model reply."""
+    cleaned = _strip_code_fence(text)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("LLM reply contained no JSON object")
+    return cleaned[start : end + 1]
+
+
 def parse_article(raw: str) -> dict:
     """Parse model JSON into {lede: str, sections: [{title, body}, ...]}."""
-    text = _strip_code_fence(raw)
     try:
-        data = json.loads(text)
+        data = json.loads(_extract_json_object(raw))
     except json.JSONDecodeError as exc:
         raise ValueError(f"LLM did not return JSON: {exc}") from exc
     if not isinstance(data, dict):
@@ -93,24 +102,22 @@ def parse_article(raw: str) -> dict:
     return {"lede": lede, "sections": sections}
 
 
-def summarize(*, system_prompt: str, briefing: str) -> dict:
-    key = _api_key()
-    if not key:
-        raise SystemExit(
-            "Set GROQ_API_KEY (free at https://console.groq.com) or DISCORD_LLM_API_KEY. "
-            "GitHub Copilot credits are not required."
-        )
+def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
+    # Avoid Groq response_format=json_object: Qwen often fails validation with
+    # empty failed_generation. Ask for JSON in the prompt and parse it ourselves.
     body = {
         "model": _model(),
-        "temperature": 0.65,
-        "max_tokens": 1200,
-        "response_format": {"type": "json_object"},
+        "temperature": 0.4,
+        "max_tokens": 1600,
         "messages": [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": (
-                    "Source material follows. Reply with JSON only.\n\n"
+                    "Source material follows.\n\n"
+                    "Reply with one JSON object only. No markdown fences. No prose "
+                    "outside the JSON. Example shape:\n"
+                    '{"lede":"...","sections":[{"title":"...","body":"..."}]}\n\n'
                     f"{briefing}"
                 ),
             },
@@ -132,7 +139,17 @@ def summarize(*, system_prompt: str, briefing: str) -> dict:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise SystemExit(f"LLM request failed ({exc.code}): {detail}") from exc
-    return parse_article(extract_assistant_text(payload))
+    return extract_assistant_text(payload)
+
+
+def summarize(*, system_prompt: str, briefing: str) -> dict:
+    key = _api_key()
+    if not key:
+        raise SystemExit(
+            "Set GROQ_API_KEY (free at https://console.groq.com) or DISCORD_LLM_API_KEY. "
+            "GitHub Copilot credits are not required."
+        )
+    return parse_article(_chat(key=key, system_prompt=system_prompt, briefing=briefing))
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -43,7 +43,7 @@ _ARTICLE_RULES = (
     '{"lede":"1-2 sentence opening dek","sections":[{"title":"Section head","body":"1-3 short paragraphs"}]}\n'
     "Use 2-5 sections when the source supports it. Keep titles short. Keep each body "
     "under 900 characters. Plain prose only inside strings — no markdown headings or "
-    "bullet lists."
+    "bullet lists. Do not wrap the JSON in code fences."
 )
 VOICE_PROMPT = (
     _ARTICLE_RULES

@@ -161,6 +161,16 @@ class DiscordDigestTests(unittest.TestCase):
         self.assertEqual(article["lede"], "Wards closed higher.")
         self.assertEqual(article["sections"][0]["title"], "Combat")
 
+    def test_parse_article_from_fenced_noise(self) -> None:
+        raw = (
+            "Here you go:\n```json\n"
+            '{"lede":"Hello.","sections":[{"title":"A","body":"B"}]}\n'
+            "```\n"
+        )
+        article = parse_article(raw)
+        self.assertEqual(article["lede"], "Hello.")
+        self.assertEqual(article["sections"][0]["body"], "B")
+
     def test_load_article_accepts_plain_text(self) -> None:
         article = load_article("Just a dek.")
         self.assertEqual(article["lede"], "Just a dek.")
