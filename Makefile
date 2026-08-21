@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks discord-test discord-preview
+.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks discord-test discord-preview discord-groq-vcr discord-groq-record
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= python
@@ -35,6 +35,8 @@ help:
 	@echo "  make test                  Godot unit tests"
 	@echo "  make discord-test          Discord digest Python unit tests (offline)"
 	@echo "  make discord-preview       Print pasteable Discord digest from fixtures"
+	@echo "  make discord-groq-vcr      Replay recorded Groq cassette (offline)"
+	@echo "  make discord-groq-record   Live Groq call + rewrite VCR cassette (needs GROQ_API_KEY)"
 	@echo "  make test-ci               smoke-test the GitHub Actions test job locally"
 	@echo "  make release-ci            smoke-test the GitHub Actions release export (Linux)"
 	@echo "  make check                 lint + warnings + test"
@@ -81,6 +83,16 @@ discord-test:
 
 discord-preview:
 	$(RUN_PYTHON) tools/discord_preview.py
+
+discord-groq-vcr:
+	$(RUN_PYTHON) tools/test_discord_groq_vcr.py
+
+discord-groq-record:
+ifeq ($(OS),Windows_NT)
+	powershell -NoProfile -Command "$$env:DISCORD_VCR_RECORD='1'; & '$(RUN_PYTHON)' tools/test_discord_groq_vcr.py"
+else
+	DISCORD_VCR_RECORD=1 $(RUN_PYTHON) tools/test_discord_groq_vcr.py
+endif
 
 warnings:
 	$(RUN_PYTHON) tools/run_checks.py --warnings-only --require-godot-warnings

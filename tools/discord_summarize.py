@@ -8,8 +8,8 @@ import json
 import os
 import re
 import sys
-import urllib.error
-import urllib.request
+
+import requests
 
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MODEL = "qwen/qwen3.6-27b"
@@ -128,23 +128,22 @@ def _chat(*, key: str, system_prompt: str, briefing: str) -> str:
     # Avoid Groq response_format=json_object: Qwen often fails validation with
     # empty failed_generation. Ask for JSON in the prompt and parse it ourselves.
     body = build_chat_request_body(system_prompt=system_prompt, briefing=briefing)
-    request = urllib.request.Request(
-        f"{_base_url()}/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        method="POST",
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-            "User-Agent": "friend-slop-discord-digest",
-        },
-    )
     try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"LLM request failed ({exc.code}): {detail}") from exc
-    return extract_assistant_text(payload)
+        response = requests.post(
+            f"{_base_url()}/chat/completions",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "User-Agent": "friend-slop-discord-digest",
+            },
+            timeout=90,
+        )
+    except requests.RequestException as exc:
+        raise SystemExit(f"LLM request failed: {exc}") from exc
+    if not response.ok:
+        raise SystemExit(f"LLM request failed ({response.status_code}): {response.text}")
+    return extract_assistant_text(response.json())
 
 
 def summarize(
