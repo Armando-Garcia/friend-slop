@@ -11,7 +11,8 @@ import urllib.error
 import urllib.request
 
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+# llama-3.3-70b-versatile shut down on Groq free/dev tier (2026-08-16).
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 
 
 def _api_key() -> str:
