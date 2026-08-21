@@ -7,6 +7,7 @@ import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from discord_summarize import extract_assistant_text
 from discord_digest import (
     build_digest_payload,
     digest_window,
@@ -94,6 +95,12 @@ class DiscordDigestTests(unittest.TestCase):
         self.assertIn("Special Edition", text)
         self.assertIn("v0.2.0", text)
         self.assertIn("Ships Windows builds.", text)
+
+    def test_extract_assistant_text(self) -> None:
+        text = extract_assistant_text(
+            {"choices": [{"message": {"content": "Wards closed higher."}}]}
+        )
+        self.assertEqual(text, "Wards closed higher.")
 
 
 if __name__ == "__main__":

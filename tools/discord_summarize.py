@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Summarize digest briefings via a free OpenAI-compatible chat API (Groq by default)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+
+def _api_key() -> str:
+    return (
+        os.environ.get("DISCORD_LLM_API_KEY", "").strip()
+        or os.environ.get("GROQ_API_KEY", "").strip()
+    )
+
+
+def _base_url() -> str:
+    return (
+        os.environ.get("DISCORD_LLM_BASE_URL", "").strip()
+        or os.environ.get("LLM_BASE_URL", "").strip()
+        or DEFAULT_BASE_URL
+    ).rstrip("/")
+
+
+def _model() -> str:
+    return (
+        os.environ.get("DISCORD_LLM_MODEL", "").strip()
+        or os.environ.get("LLM_MODEL", "").strip()
+        or DEFAULT_MODEL
+    )
+
+
+def extract_assistant_text(payload: dict) -> str:
+    choices = payload.get("choices") or []
+    if not choices:
+        raise ValueError("LLM response had no choices")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(str(item.get("text") or ""))
+            elif isinstance(item, str):
+                parts.append(item)
+        text = "\n".join(part for part in parts if part).strip()
+    else:
+        text = str(content or "").strip()
+    if not text:
+        raise ValueError("LLM response was empty")
+    return text
+
+
+def summarize(*, system_prompt: str, briefing: str) -> str:
+    key = _api_key()
+    if not key:
+        raise SystemExit(
+            "Set GROQ_API_KEY (free at https://console.groq.com) or DISCORD_LLM_API_KEY. "
+            "GitHub Copilot credits are not required."
+        )
+    body = {
+        "model": _model(),
+        "temperature": 0.7,
+        "max_tokens": 900,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": (
+                    "Briefing source material follows. Write only the Discord copy.\n\n"
+                    f"{briefing}"
+                ),
+            },
+        ],
+    }
+    request = urllib.request.Request(
+        f"{_base_url()}/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+            "User-Agent": "friend-slop-discord-digest",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"LLM request failed ({exc.code}): {detail}") from exc
+    return extract_assistant_text(payload)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--prompt-file", required=True)
+    parser.add_argument("--briefing-file", required=True)
+    parser.add_argument("--output-file", required=True)
+    args = parser.parse_args(argv if argv is not None else sys.argv[1:])
+    with open(args.prompt_file, encoding="utf-8") as handle:
+        prompt = handle.read()
+    with open(args.briefing_file, encoding="utf-8") as handle:
+        briefing = handle.read()
+    summary = summarize(system_prompt=prompt, briefing=briefing)
+    with open(args.output_file, "w", encoding="utf-8") as handle:
+        handle.write(summary)
+        if not summary.endswith("\n"):
+            handle.write("\n")
+    print(f"Wrote summary to {args.output_file}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
