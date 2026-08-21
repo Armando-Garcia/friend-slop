@@ -22,7 +22,6 @@ on:
 permissions:
   contents: read
   pull-requests: read
-  copilot-requests: write
 
 jobs:
   daily-digest:
@@ -55,32 +54,15 @@ jobs:
         if: steps.collect.outputs.skip == 'true'
         run: echo "No digest today."
 
-      - name: Install Copilot CLI
-        if: steps.collect.outputs.skip != 'true'
-        run: npm install -g @github/copilot
-
       - name: Summarize for The Wand Street Journal
         if: steps.collect.outputs.skip != 'true'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          set -euo pipefail
-          DIGEST_PROMPT="$(cat "${RUNNER_TEMP}/digest-prompt.txt")"
-          copilot -p "$DIGEST_PROMPT" \
-            --attachment "${RUNNER_TEMP}/digest-briefing.md" \
-            --available-tools=view \
-            --deny-tool=shell \
-            --deny-tool=write \
-            --deny-tool=url \
-            --disable-builtin-mcps \
-            --no-ask-user \
-            --no-custom-instructions \
-            --no-banner \
-            --silent \
-            --max-ai-credits=8 \
-            --model=claude-haiku-4.5 \
-            > "${RUNNER_TEMP}/digest-summary.md"
+          python3 tools/discord_summarize.py \
+            --prompt-file "${RUNNER_TEMP}/digest-prompt.txt" \
+            --briefing-file "${RUNNER_TEMP}/digest-briefing.md" \
+            --output-file "${RUNNER_TEMP}/digest-summary.md"
 
       - name: Post digest to Discord
         if: steps.collect.outputs.skip != 'true'
@@ -170,30 +152,14 @@ jobs:
             --prompt-path "${RUNNER_TEMP}/release-prompt.txt" \
             --github-output "${GITHUB_OUTPUT}"
 
-      - name: Install Copilot CLI
-        run: npm install -g @github/copilot
-
       - name: Write Special Edition copy
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          set -euo pipefail
-          RELEASE_PROMPT="$(cat "${RUNNER_TEMP}/release-prompt.txt")"
-          copilot -p "$RELEASE_PROMPT" \
-            --attachment "${RUNNER_TEMP}/release-briefing.md" \
-            --available-tools=view \
-            --deny-tool=shell \
-            --deny-tool=write \
-            --deny-tool=url \
-            --disable-builtin-mcps \
-            --no-ask-user \
-            --no-custom-instructions \
-            --no-banner \
-            --silent \
-            --max-ai-credits=8 \
-            --model=claude-haiku-4.5 \
-            > "${RUNNER_TEMP}/release-summary.md"
+          python3 tools/discord_summarize.py \
+            --prompt-file "${RUNNER_TEMP}/release-prompt.txt" \
+            --briefing-file "${RUNNER_TEMP}/release-briefing.md" \
+            --output-file "${RUNNER_TEMP}/release-summary.md"
 
       - name: Post Special Edition to Discord
         env:
