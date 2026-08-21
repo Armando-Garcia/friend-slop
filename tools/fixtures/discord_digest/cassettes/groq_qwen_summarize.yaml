@@ -1,0 +1,220 @@
+interactions:
+- request:
+    body: '{"model": "qwen/qwen3.6-27b", "temperature": 0.3, "max_tokens": 200, "messages":
+      [{"role": "system", "content": "You name newspaper section headlines for The
+      Wand Street Journal covering the FriendSlop codebase.\n\nRead the source material.
+      Invent 2-5 short thematic section titles that group related changes (examples:
+      Combat, Spells, Tooling, Publishing Desk). Do not list every pull request as
+      its own title unless there is only one story.\n\nUse only themes grounded in
+      the source. Hard bans \u2014 never include any of these:\n- GitHub authors,
+      usernames, or committers\n- Cursor, Copilot, or other AI/tooling attribution\n-
+      Fake finance (bids, spreads, market stability, undisclosed metrics)\n- Meta
+      commentary about the briefing itself\n- Chain-of-thought, planning, or apologies
+      \u2014 output only the requested format\n\nOutput format \u2014 titles only:\n-
+      One title per line\n- No numbering, bullets, markdown, or other prose\n- Each
+      title under 40 characters\n\nThis is the daily closing edition covering pull
+      requests merged into FriendSlop in the last day."}, {"role": "user", "content":
+      "Source material follows. Reply with section titles only.\n\nWindow (America/New_York):
+      2026-08-21T15:45:00-04:00 to 2026-08-21T15:45:00-04:00\nMerged PR count: 2\n\nSummarize
+      the substance of these changes for readers. Group related work.\nIgnore authors
+      and tooling attribution.\n\n#42 Add combat HP, ward HoT, and an editor balance
+      table.\nMerged: 2026-08-21T12:00:00+00:00\nURL: https://github.com/iamemilio/friend-slop/pull/42\nDescription:\n##
+      Summary\n- Players and monsters now have CombatHealth\n- Wards regen after 1s;
+      shatter doubles next regen delay\n- Combat Balance dock edits spell and monster
+      kit numbers\n\n#43 Post Wand Street Journal digests to Discord\nMerged: 2026-08-21T18:00:00+00:00\nURL:
+      https://github.com/iamemilio/friend-slop/pull/43\nDescription:\n## Summary\n-
+      Daily Discord digest at 3:45pm Eastern when PRs merge\n- Special Editions for
+      published releases\n"}], "reasoning_effort": "none"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '2023'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - friend-slop-discord-digest
+      authorization:
+      - REDACTED
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: '{"id":"chatcmpl-07d41b5a-9fcc-4b58-a2a5-1fc3be7c98cb","object":"chat.completion","created":1787338828,"model":"qwen/qwen3.6-27b","choices":[{"index":0,"message":{"role":"assistant","content":"Combat
+        \u0026 Balance\nPublishing Pipeline"},"logprobs":null,"finish_reason":"stop"}],"usage":{"queue_time":0.128065967,"prompt_tokens":525,"prompt_time":0.042517539,"completion_tokens":8,"completion_time":0.019475364,"total_tokens":533,"total_time":0.061992903},"usage_breakdown":null,"system_fingerprint":"fp_5603f4a04e","x_groq":{"id":"req_01m0jv4a91exj8xqwt2jkph4yp","seed":147393928},"service_tier":"on_demand"}
+
+        '
+    headers:
+      CF-RAY:
+      - a2ebe17b38be90e1-BOS
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 21 Aug 2026 19:00:28 GMT
+      Server:
+      - cloudflare
+      Strict-Transport-Security:
+      - max-age=15552000
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '609'
+      set-cookie:
+      - __cf_bm=en2mjD9wRa8udvzx_DPJMJda3NvUwAUZ6QyjCjXFzEQ-1787338828.0384958-1.0.1.1-3tstqfsjwtL3HwGxKviE4N9l5T81nw83p5JYvqdi24CLtdwL0L3lp12yaj6s4S3CxCXfUKGPu0OTWBcwOCllJPYAJ0KIQhO8GVfXHrptST3LGI2vBsx3tyLJVamg5Ae9;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=groq.com; Expires=Fri, 21
+        Aug 2026 19:30:28 GMT
+      vary:
+      - Origin
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '1000'
+      x-ratelimit-limit-tokens:
+      - '8000'
+      x-ratelimit-remaining-requests:
+      - '998'
+      x-ratelimit-remaining-tokens:
+      - '7275'
+      x-ratelimit-reset-requests:
+      - 2m52.8s
+      x-ratelimit-reset-tokens:
+      - 5.437s
+      x-request-id:
+      - req_01m0jv4a91exj8xqwt2jkph4yp
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"model": "qwen/qwen3.6-27b", "temperature": 0.3, "max_tokens": 1200, "messages":
+      [{"role": "system", "content": "You are a correspondent for The Wand Street
+      Journal \u2014 a serious newspaper for magical wizards covering the FriendSlop
+      codebase as if it were an enchanted market. Tone: dry, specific, slightly wry,
+      and whimsical without tipping into parody. Take the subject seriously the way
+      a real paper would.\n\nYou are given fixed section titles and source material.
+      Write the opening lede and one short body for each title. Do not invent new
+      section titles. Do not emit a markdown bullet list of pull requests. Do not
+      walk PR-by-PR unless a single PR is the whole story.\n\nUse only facts from
+      the source material. Do not invent features, metrics, market moves, or spells
+      that are not in the source. Hard bans \u2014 never include any of these:\n-
+      GitHub authors, usernames, or committers\n- Cursor, Copilot, or other AI/tooling
+      attribution\n- Fake finance (bids, spreads, market stability, undisclosed metrics)\n-
+      Meta commentary about the briefing itself\n- Chain-of-thought, planning, or
+      apologies \u2014 output only the requested format\n\nOutput format (plain text,
+      no JSON, no code fences):\nLEDE: <1-2 sentence opening dek>\n\n=== <exact section
+      title> ===\n<1-3 short paragraphs, under 900 characters, plain prose only>\n\nRepeat
+      the === title === block once per provided title, in the same order.\n\nThis
+      is the daily closing edition covering pull requests merged into FriendSlop in
+      the last day."}, {"role": "user", "content": "Section titles (use these exact
+      strings, same order):\nCombat & Balance\nPublishing Pipeline\n\nSource material
+      follows.\n\nWindow (America/New_York): 2026-08-21T15:45:00-04:00 to 2026-08-21T15:45:00-04:00\nMerged
+      PR count: 2\n\nSummarize the substance of these changes for readers. Group related
+      work.\nIgnore authors and tooling attribution.\n\n#42 Add combat HP, ward HoT,
+      and an editor balance table.\nMerged: 2026-08-21T12:00:00+00:00\nURL: https://github.com/iamemilio/friend-slop/pull/42\nDescription:\n##
+      Summary\n- Players and monsters now have CombatHealth\n- Wards regen after 1s;
+      shatter doubles next regen delay\n- Combat Balance dock edits spell and monster
+      kit numbers\n\n#43 Post Wand Street Journal digests to Discord\nMerged: 2026-08-21T18:00:00+00:00\nURL:
+      https://github.com/iamemilio/friend-slop/pull/43\nDescription:\n## Summary\n-
+      Daily Discord digest at 3:45pm Eastern when PRs merge\n- Special Editions for
+      published releases\n"}], "reasoning_effort": "none"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '2529'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - friend-slop-discord-digest
+      authorization:
+      - REDACTED
+    method: POST
+    uri: https://api.groq.com/openai/v1/chat/completions
+  response:
+    body:
+      string: "{\"id\":\"chatcmpl-9c477781-2a9e-468a-bd01-6c536b59b6cb\",\"object\":\"chat.completion\",\"created\":1787338829,\"model\":\"qwen/qwen3.6-27b\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"LEDE:
+        The FriendSlop ledger closed with two entries, introducing a new vitality
+        metric for combatants and automating the distribution of this very digest
+        to the Discord commons.\\n\\n=== Combat \\u0026 Balance ===\\nThe arena has
+        acquired a new vital statistic. Players and monsters alike now track CombatHealth,
+        replacing previous abstractions with a concrete measure of survivability.
+        Defensive wards have also been refined; they regenerate after a one-second
+        interval, though shattering a ward doubles the delay for the next regeneration,
+        punishing reckless aggression.\\n\\nBehind the scenes, the Combat Balance
+        dock has been updated to allow editors to tweak spell and monster kit numbers
+        directly. This interface provides a centralized ledger for adjusting the delicate
+        equilibrium between offensive potency and defensive resilience, ensuring that
+        the numerical foundations of the skirmish remain transparent and adjustable.\\n\\n===
+        Publishing Pipeline ===\\nThe dissemination of news has been mechanized. The
+        system now automatically posts daily digests to Discord at 3:45 p.m. Eastern,
+        triggered specifically when pull requests merge into the main branch. This
+        ensures that the community receives timely updates without manual intervention
+        from the editorial staff.\\n\\nAdditionally, the pipeline now supports Special
+        Editions for published releases. These distinct notifications separate routine
+        code merges from significant version drops, allowing subscribers to distinguish
+        between incremental maintenance and major enchantments. The automation streamlines
+        the flow of information from the codebase to the reader\u2019s feed.\"},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"queue_time\":0.045904626,\"prompt_tokens\":645,\"prompt_time\":0.055856232,\"completion_tokens\":279,\"completion_time\":0.623416036,\"total_tokens\":924,\"total_time\":0.679272268},\"usage_breakdown\":null,\"system_fingerprint\":\"fp_b545673577\",\"x_groq\":{\"id\":\"req_01m0jv4aqvekfrnac9fphg05sz\",\"seed\":163325398},\"service_tier\":\"on_demand\"}\n"
+    headers:
+      CF-RAY:
+      - a2ebe17e383db39b-BOS
+      Cache-Control:
+      - private, max-age=0, no-store, no-cache, must-revalidate
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Fri, 21 Aug 2026 19:00:29 GMT
+      Server:
+      - cloudflare
+      Strict-Transport-Security:
+      - max-age=15552000
+      Transfer-Encoding:
+      - chunked
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      content-length:
+      - '2193'
+      set-cookie:
+      - __cf_bm=dyEAzwLHTkrkgmdK5CEuQGOg18Cw_4O0r.i80ggTcO0-1787338828.511146-1.0.1.1-87n1qt2S2drnQyJKZ50cCq5jgH6QljqBNuPo4Sg0I7Z1iT9o5YDTWDXvFZff7t8rXyrFF7KaOj.aDhiDnRp0TUtKM2R9GhPwOehJCiM7_4drBLCKUXkaXkX9HZQbV9qI;
+        HttpOnly; SameSite=None; Secure; Path=/; Domain=groq.com; Expires=Fri, 21
+        Aug 2026 19:30:29 GMT
+      vary:
+      - Origin
+      x-groq-region:
+      - yul
+      x-ratelimit-limit-requests:
+      - '1000'
+      x-ratelimit-limit-tokens:
+      - '8000'
+      x-ratelimit-remaining-requests:
+      - '997'
+      x-ratelimit-remaining-tokens:
+      - '5684'
+      x-ratelimit-reset-requests:
+      - 4m19.2s
+      x-ratelimit-reset-tokens:
+      - 17.369s
+      x-request-id:
+      - req_01m0jv4aqvekfrnac9fphg05sz
+    status:
+      code: 200
+      message: OK
+version: 1

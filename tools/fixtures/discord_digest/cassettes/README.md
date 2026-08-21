@@ -6,10 +6,10 @@ Replay offline with:
 make discord-groq-vcr
 ```
 
-Record or refresh (uses your local `GROQ_API_KEY`, never committed):
+Record or refresh (uses your local `GROQ_API_KEY`, never committed).
+The cassette captures **two** HTTP calls: titles, then article.
 
-```bash
-# PowerShell
+```powershell
 $env:GROQ_API_KEY = "gsk_..."
 $env:DISCORD_VCR_RECORD = "1"
 python tools/test_discord_groq_vcr.py

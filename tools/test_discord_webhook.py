@@ -10,7 +10,9 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from discord_digest import (
+    VOICE_ARTICLE_PROMPT,
     VOICE_PROMPT,
+    VOICE_TITLE_PROMPT,
     digest_window,
     format_briefing,
     format_release_briefing,
@@ -21,6 +23,7 @@ from discord_summarize import (
     build_chat_request_body,
     extract_assistant_text,
     parse_article,
+    parse_titles,
     summarize,
 )
 from discord_webhook import (
@@ -166,43 +169,35 @@ class DiscordDigestTests(unittest.TestCase):
             "GitHub authors",
             "Cursor",
             "Fake finance",
-            "markdown bullet list",
+            "Chain-of-thought",
         ):
+            self.assertIn(banned, VOICE_TITLE_PROMPT)
+            self.assertIn(banned, VOICE_ARTICLE_PROMPT)
             self.assertIn(banned, VOICE_PROMPT)
 
+    def test_parse_titles_strips_bullets(self) -> None:
+        titles = parse_titles("1. Combat\n- Spells\n* Tooling\n")
+        self.assertEqual(titles, ["Combat", "Spells", "Tooling"])
+
     def test_extract_and_parse_article(self) -> None:
-        text = extract_assistant_text(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "lede": "Wards closed higher.",
-                                    "sections": [
-                                        {
-                                            "title": "Combat",
-                                            "body": "Regen delay doubled after shatter.",
-                                        }
-                                    ],
-                                }
-                            )
-                        }
-                    }
-                ]
-            }
+        text = (
+            "LEDE: Wards closed higher.\n\n"
+            "=== Combat ===\n"
+            "Regen delay doubled after shatter.\n"
         )
-        article = parse_article(text)
+        article = parse_article(text, expected_titles=["Combat"])
         self.assertEqual(article["lede"], "Wards closed higher.")
         self.assertEqual(article["sections"][0]["title"], "Combat")
 
     def test_parse_article_from_fenced_noise(self) -> None:
         raw = (
-            "Here you go:\n```json\n"
-            '{"lede":"Hello.","sections":[{"title":"A","body":"B"}]}\n'
+            "Sure.\n```\n"
+            "LEDE: Hello.\n\n"
+            "=== A ===\n"
+            "B\n"
             "```\n"
         )
-        article = parse_article(raw)
+        article = parse_article(raw, expected_titles=["A"])
         self.assertEqual(article["lede"], "Hello.")
         self.assertEqual(article["sections"][0]["body"], "B")
 
@@ -212,27 +207,48 @@ class DiscordDigestTests(unittest.TestCase):
         self.assertEqual(article["sections"], [])
 
     def test_chat_request_omits_groq_json_mode(self) -> None:
-        body = build_chat_request_body(system_prompt="sys", briefing="src")
+        body = build_chat_request_body(system_prompt="sys", user_content="src")
         self.assertNotIn("response_format", body)
         self.assertEqual(body["messages"][0]["content"], "sys")
         self.assertIn("src", body["messages"][1]["content"])
+        self.assertEqual(body.get("reasoning_effort"), "none")
+
+    def test_strip_unclosed_think_blocks(self) -> None:
+        from discord_summarize import strip_model_noise
+
+        raw = "<think>\nplanning forever\nCombat\nSpells\n"
+        self.assertEqual(strip_model_noise(raw), "")
+        raw_closed = "<think>plan</think>\nCombat\nSpells\n"
+        self.assertEqual(strip_model_noise(raw_closed), "Combat\nSpells")
+        with self.assertRaises(ValueError):
+            parse_titles(raw)
 
     def test_fixture_llm_response_to_webhook_payload(self) -> None:
         briefing = (FIXTURES / "sample_briefing.md").read_text(encoding="utf-8")
-        llm_payload = json.loads(
-            (FIXTURES / "sample_llm_response.json").read_text(encoding="utf-8")
+        titles_payload = json.loads(
+            (FIXTURES / "sample_llm_titles.json").read_text(encoding="utf-8")
         )
+        article_payload = json.loads(
+            (FIXTURES / "sample_llm_article.json").read_text(encoding="utf-8")
+        )
+        calls = {"n": 0}
 
-        def chat_fn(prompt: str, got_briefing: str) -> str:
+        def chat_fn(prompt: str, user: str) -> str:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                self.assertIn("section titles", prompt.lower())
+                self.assertIn(briefing.strip(), user)
+                return extract_assistant_text(titles_payload)
             self.assertIn("Wand Street Journal", prompt)
-            self.assertEqual(got_briefing, briefing)
-            return extract_assistant_text(llm_payload)
+            self.assertIn("Combat", user)
+            return extract_assistant_text(article_payload)
 
         article = summarize(
-            system_prompt=VOICE_PROMPT,
             briefing=briefing,
+            edition="daily",
             chat_fn=chat_fn,
         )
+        self.assertEqual(calls["n"], 2)
         payload = build_digest_payload(
             date_label="Friday, August 21, 2026",
             article=article,

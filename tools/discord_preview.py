@@ -11,7 +11,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 FIXTURES = ROOT / "fixtures" / "discord_digest"
 
-from discord_digest import VOICE_PROMPT  # noqa: E402
 from discord_summarize import extract_assistant_text, summarize  # noqa: E402
 from discord_webhook import (  # noqa: E402
     build_digest_payload,
@@ -32,10 +31,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Merged-PR briefing text",
     )
     parser.add_argument(
-        "--llm-response",
+        "--titles-response",
         type=Path,
-        default=FIXTURES / "sample_llm_response.json",
-        help="Fixture chat-completions JSON (no live Groq call)",
+        default=FIXTURES / "sample_llm_titles.json",
+        help="Fixture chat-completions JSON for the titles step",
+    )
+    parser.add_argument(
+        "--article-response",
+        type=Path,
+        default=FIXTURES / "sample_llm_article.json",
+        help="Fixture chat-completions JSON for the article step",
     )
     parser.add_argument(
         "--date-label",
@@ -55,16 +60,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     briefing = _load_text(args.briefing)
-    llm_payload = json.loads(_load_text(args.llm_response))
+    titles_payload = json.loads(_load_text(args.titles_response))
+    article_payload = json.loads(_load_text(args.article_response))
+    calls = {"n": 0}
 
-    def chat_fn(_prompt: str, _briefing: str) -> str:
-        return extract_assistant_text(llm_payload)
+    def chat_fn(_prompt: str, _user: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return extract_assistant_text(titles_payload)
+        return extract_assistant_text(article_payload)
 
-    article = summarize(
-        system_prompt=VOICE_PROMPT,
-        briefing=briefing,
-        chat_fn=chat_fn,
-    )
+    article = summarize(briefing=briefing, edition="daily", chat_fn=chat_fn)
     payload = build_digest_payload(
         date_label=args.date_label,
         article=article,

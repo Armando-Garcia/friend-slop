@@ -22,39 +22,83 @@ from discord_webhook import (
 
 EASTERN = ZoneInfo("America/New_York")
 GITHUB_API = "https://api.github.com"
+
+_SHARED_BANS = (
+    "Hard bans — never include any of these:\n"
+    "- GitHub authors, usernames, or committers\n"
+    "- Cursor, Copilot, or other AI/tooling attribution\n"
+    "- Fake finance (bids, spreads, market stability, undisclosed metrics)\n"
+    "- Meta commentary about the briefing itself\n"
+    "- Chain-of-thought, planning, or apologies — output only the requested format\n"
+)
+
+_TITLE_RULES = (
+    "You name newspaper section headlines for The Wand Street Journal covering the "
+    "FriendSlop codebase.\n\n"
+    "Read the source material. Invent 2-5 short thematic section titles that group "
+    "related changes (examples: Combat, Spells, Tooling, Publishing Desk). Do not "
+    "list every pull request as its own title unless there is only one story.\n\n"
+    "Use only themes grounded in the source. "
+    + _SHARED_BANS
+    + "\nOutput format — titles only:\n"
+    "- One title per line\n"
+    "- No numbering, bullets, markdown, or other prose\n"
+    "- Each title under 40 characters\n"
+)
+
 _ARTICLE_RULES = (
     "You are a correspondent for The Wand Street Journal — a serious newspaper for "
     "magical wizards covering the FriendSlop codebase as if it were an enchanted market. "
     "Tone: dry, specific, slightly wry, and whimsical without tipping into parody. "
     "Take the subject seriously the way a real paper would.\n\n"
-    "Write a newspaper article, not a changelog. Aggregate related changes into a few "
-    "thematic sections (for example Combat, Spells, Tooling). Do not emit a markdown "
-    "bullet list of pull requests. Do not walk PR-by-PR unless a single PR is the whole "
-    "story. You may mention a PR number inline once if it helps, but the story is the "
-    "substance of the changes.\n\n"
+    "You are given fixed section titles and source material. Write the opening lede and "
+    "one short body for each title. Do not invent new section titles. Do not emit a "
+    "markdown bullet list of pull requests. Do not walk PR-by-PR unless a single PR is "
+    "the whole story.\n\n"
     "Use only facts from the source material. Do not invent features, metrics, market "
-    "moves, or spells that are not in the source.\n\n"
-    "Hard bans — never include any of these:\n"
-    "- GitHub authors, usernames, or committers\n"
-    "- Cursor, Copilot, or other AI/tooling attribution\n"
-    "- Fake finance (bids, spreads, market stability, undisclosed metrics)\n"
-    "- Meta commentary about the briefing itself\n\n"
-    "Return JSON only with this shape:\n"
-    '{"lede":"1-2 sentence opening dek","sections":[{"title":"Section head","body":"1-3 short paragraphs"}]}\n'
-    "Use 2-5 sections when the source supports it. Keep titles short. Keep each body "
-    "under 900 characters. Plain prose only inside strings — no markdown headings or "
-    "bullet lists. Do not wrap the JSON in code fences."
+    "moves, or spells that are not in the source. "
+    + _SHARED_BANS
+    + "\nOutput format (plain text, no JSON, no code fences):\n"
+    "LEDE: <1-2 sentence opening dek>\n"
+    "\n"
+    "=== <exact section title> ===\n"
+    "<1-3 short paragraphs, under 900 characters, plain prose only>\n"
+    "\n"
+    "Repeat the === title === block once per provided title, in the same order.\n"
 )
-VOICE_PROMPT = (
+
+VOICE_TITLE_PROMPT = (
+    _TITLE_RULES
+    + "\nThis is the daily closing edition covering pull requests merged into FriendSlop "
+    "in the last day."
+)
+VOICE_ARTICLE_PROMPT = (
     _ARTICLE_RULES
     + "\nThis is the daily closing edition covering pull requests merged into FriendSlop "
     "in the last day."
 )
-SPECIAL_EDITION_PROMPT = (
+SPECIAL_TITLE_PROMPT = (
+    _TITLE_RULES
+    + "\nThis is an off-schedule Special Edition covering a newly published FriendSlop "
+    "GitHub release."
+)
+SPECIAL_ARTICLE_PROMPT = (
     _ARTICLE_RULES
     + "\nThis is an off-schedule Special Edition covering a newly published FriendSlop "
     "GitHub release. Mention the release name and tag in the lede."
 )
+
+# Back-compat aliases used by local tests / preview docs.
+VOICE_PROMPT = VOICE_ARTICLE_PROMPT
+SPECIAL_EDITION_PROMPT = SPECIAL_ARTICLE_PROMPT
+
+
+def prompts_for_edition(edition: str) -> tuple[str, str]:
+    """Return (title_prompt, article_prompt) for daily or special."""
+    kind = (edition or "daily").strip().lower()
+    if kind in {"special", "special_edition", "release"}:
+        return SPECIAL_TITLE_PROMPT, SPECIAL_ARTICLE_PROMPT
+    return VOICE_TITLE_PROMPT, VOICE_ARTICLE_PROMPT
 
 
 def now_eastern(now: datetime | None = None) -> datetime:
@@ -185,7 +229,7 @@ def _cmd_collect(args: argparse.Namespace) -> int:
     prs = fetch_merged_prs(repo, since=since, until=until)
     briefing = format_briefing(prs, since=since, until=until)
     _write_output(args.briefing_path, briefing)
-    _write_output(args.prompt_path, VOICE_PROMPT)
+    _write_output(args.prompt_path, VOICE_ARTICLE_PROMPT)
     date_label = until.strftime("%A %B %d %Y")
     skip = "true" if not prs else "false"
     output = f"skip={skip}\ncount={len(prs)}\ndate_label={date_label}\n"
@@ -234,7 +278,7 @@ def _cmd_prepare_release(args: argparse.Namespace) -> int:
         body=args.body,
     )
     _write_output(args.briefing_path, briefing)
-    _write_output(args.prompt_path, SPECIAL_EDITION_PROMPT)
+    _write_output(args.prompt_path, SPECIAL_ARTICLE_PROMPT)
     label = args.name.strip() or args.tag.strip() or "New release"
     if args.tag and args.tag not in label:
         label = f"{label} ({args.tag})"

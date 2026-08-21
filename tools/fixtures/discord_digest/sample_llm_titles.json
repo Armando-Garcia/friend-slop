@@ -1,0 +1,14 @@
+{
+  "id": "chatcmpl-fixture-titles",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Combat\nPublishing Desk\n"
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}

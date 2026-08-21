@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Groq integration test with VCR cassette replay.
+"""Groq integration test with VCR cassette replay (two-step titles → article).
 
 Replay (default, offline):
   python tools/test_discord_groq_vcr.py
@@ -18,7 +18,6 @@ from pathlib import Path
 
 import vcr
 
-from discord_digest import VOICE_PROMPT
 from discord_summarize import summarize
 from discord_webhook import build_digest_payload, format_discord_preview
 
@@ -33,9 +32,9 @@ VCR = vcr.VCR(
     filter_headers=[("authorization", "REDACTED")],
     match_on=["method", "scheme", "host", "port", "path", "query"],
     decode_compressed_response=True,
-    # Body is matched loosely so temperature/model tweaks don't break replay;
-    # the fixture briefing keeps the prompt payload stable enough for CI.
-    record_mode="all" if os.environ.get("DISCORD_VCR_RECORD", "").strip() in {"1", "true", "yes"} else "none",
+    record_mode="all"
+    if os.environ.get("DISCORD_VCR_RECORD", "").strip() in {"1", "true", "yes"}
+    else "none",
 )
 
 
@@ -54,7 +53,7 @@ class GroqVcrTests(unittest.TestCase):
 
         briefing = BRIEFING.read_text(encoding="utf-8")
         with VCR.use_cassette("groq_qwen_summarize"):
-            article = summarize(system_prompt=VOICE_PROMPT, briefing=briefing)
+            article = summarize(briefing=briefing, edition="daily")
 
         self.assertTrue(article["lede"])
         self.assertGreaterEqual(len(article["sections"]), 1)
