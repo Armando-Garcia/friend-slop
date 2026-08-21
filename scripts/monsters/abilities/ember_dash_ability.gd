@@ -222,7 +222,8 @@ func _spawn_trail_along_path(monster: Node3D, delta: float, speed: float) -> voi
 		trail_lifetime_sec,
 		burn_dps,
 		burn_slow_multiplier,
-		burn_refresh_sec
+		burn_refresh_sec,
+		monster
 	)
 
 

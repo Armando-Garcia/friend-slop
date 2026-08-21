@@ -10,6 +10,10 @@ const AshFrostBreathFlightScript := preload(
 const CloudMeshBuilderScript := preload("res://scripts/environment/cloud_mesh_builder.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
 const PlayerFrostBreathScript := preload("res://scripts/characters/player_frost_breath.gd")
+const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+
+@export_range(0.0, 200.0, 1.0) var hit_damage: float = AshFrostBreathFlightScript.HIT_DAMAGE
 
 var _caster: Node3D = null
 var _direction: Vector3 = Vector3.FORWARD
@@ -48,8 +52,7 @@ func setup(origin: Vector3, toward: Vector3, caster: Node3D = null) -> void:
 	global_position = origin
 	monitoring = true
 	monitorable = false
-	collision_layer = 0
-	collision_mask = 1 | 2
+	MonsterSpellHitScript.apply_mask(self)
 
 	var shape_node := CollisionShape3D.new()
 	_sphere = SphereShape3D.new()
@@ -58,8 +61,8 @@ func setup(origin: Vector3, toward: Vector3, caster: Node3D = null) -> void:
 	add_child(shape_node)
 
 	_mesh = MeshInstance3D.new()
-	var seed := randi()
-	_mesh.mesh = CloudMeshBuilderScript.build_combat(seed, _max_radius)
+	var mesh_seed := randi()
+	_mesh.mesh = CloudMeshBuilderScript.build_combat(mesh_seed, _max_radius)
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -117,31 +120,35 @@ func _physics_process(delta: float) -> void:
 		var fade_t := clampf((_age - grow_end) / maxf(_linger_sec, 0.01), 0.0, 1.0)
 		_mat.albedo_color.a = lerpf(0.62, 0.0, fade_t)
 
-	_check_player_overlaps()
+	_resolve_overlaps()
 
 
-func _check_player_overlaps() -> void:
+func _resolve_overlaps() -> void:
 	for body in get_overlapping_bodies():
-		if body == null or body == _caster or not body.is_in_group("player"):
-			continue
 		if not body is Node3D:
 			continue
-		var player := body as Node3D
-		var id := player.get_instance_id()
+		var hit := body as Node3D
+		var kind := MonsterSpellHitScript.kind(hit, _caster)
+		if kind == MonsterSpellHitScript.Kind.WARD:
+			if _block_if_ward(hit):
+				return
+			continue
+		if kind == MonsterSpellHitScript.Kind.WALL:
+			_finish()
+			return
+		if kind != MonsterSpellHitScript.Kind.COMBAT:
+			continue
+		var id := hit.get_instance_id()
 		if _hit_bodies.has(id):
 			continue
-		if _block_if_ward(body):
-			continue
 		_hit_bodies[id] = true
-		_apply_hit(player)
+		_apply_hit(hit)
 		_finish()
 		return
 
 
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(
-		body, AshFrostBreathFlightScript.HIT_DAMAGE, _caster
-	):
+	if not SpellWardBlockScript.try_block(body, hit_damage, _caster):
 		return false
 	_finish()
 	return true
@@ -157,8 +164,8 @@ func _apply_hit(body: Node3D) -> void:
 		away = Vector3(_direction.x, 0.0, _direction.z)
 	if apply_local:
 		PlayerFrostBreathScript.apply(body, away)
-	if body.has_method("take_damage") and AshFrostBreathFlightScript.HIT_DAMAGE > 0.0:
-		body.call("take_damage", AshFrostBreathFlightScript.HIT_DAMAGE, self)
+	if hit_damage > 0.0:
+		CombatHealthScript.apply_hit(body, hit_damage, self)
 
 
 func _should_apply_local(body: Node) -> bool:

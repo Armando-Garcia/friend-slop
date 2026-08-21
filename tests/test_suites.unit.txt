@@ -1,4 +1,5 @@
 res://tests/unit/test_combat_balance.gd
+res://tests/unit/test_monster_spell_hit.gd
 res://tests/unit/test_maze_carver.gd
 res://tests/unit/test_maze_wall_mesh.gd
 res://tests/unit/test_slide_surface.gd
