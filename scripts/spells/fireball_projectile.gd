@@ -18,6 +18,7 @@ const CHARGE_SPEED_MAX_MULT := 1.5625
 const FireballExplosionEffectScript := preload("res://scripts/spells/fireball_explosion_effect.gd")
 const FireballSmokeTrailScript := preload("res://scripts/spells/fireball_smoke_trail.gd")
 const FireballParticlesScript := preload("res://scripts/spells/fireball_particles.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
@@ -820,8 +821,8 @@ func _apply_splash_to_body(body: Node3D, impact_pos: Vector3) -> void:
 			apply_local = apply_local or (body as Node).is_multiplayer_authority()
 		if apply_local:
 			body.call("apply_fireball_knockback", dir)
-	if body.has_method("take_damage") and hit_damage > 0.0:
-		body.call("take_damage", hit_damage, self)
+	if hit_damage > 0.0:
+		CombatHealthScript.apply_hit(body, hit_damage, self)
 
 
 func _find_ward_hit() -> Node:

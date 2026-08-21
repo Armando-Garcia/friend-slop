@@ -6,6 +6,9 @@ extends Area3D
 
 signal hit_target(target: Node3D)
 
+const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
+const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
+
 const GLOW := Color(0.35, 1.0, 0.4, 1.0)
 const DEFAULT_SPEED := 28.0
 const HIT_RADIUS := 0.45
@@ -80,8 +83,7 @@ func _setup(
 	_speed = maxf(8.0, speed)
 	monitoring = true
 	monitorable = false
-	collision_layer = 0
-	collision_mask = 1 | 2
+	MonsterSpellHitScript.apply_mask(self)
 
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
@@ -135,11 +137,22 @@ func _physics_process(delta: float) -> void:
 		_finish_at_aim()
 		return
 	var step := to_aim.normalized() * _speed * delta
+	var prev := global_position
 	if step.length() >= to_aim.length():
 		global_position = aim
+		if SpellWardBlockScript.try_block_along_path(
+			get_tree(), prev, global_position, HIT_RADIUS, 0.0, _caster
+		):
+			_vanish()
+			return
 		_finish_at_aim()
 		return
 	global_position += step
+	if SpellWardBlockScript.try_block_along_path(
+		get_tree(), prev, global_position, HIT_RADIUS, 0.0, _caster
+	):
+		_vanish()
+		return
 
 
 func _locked_aim() -> Vector3:
@@ -149,10 +162,30 @@ func _locked_aim() -> Vector3:
 
 
 func _on_body_entered(body: Node3D) -> void:
-	if _finished or body == null or body == _caster:
+	if _finished or body == null:
 		return
-	if body.is_in_group("player") or body == _intended_target:
+	var kind := MonsterSpellHitScript.kind(body, _caster)
+	if kind == MonsterSpellHitScript.Kind.IGNORE:
+		return
+	if kind == MonsterSpellHitScript.Kind.WARD:
+		SpellWardBlockScript.try_block(body, 0.0, _caster)
+		_vanish()
+		return
+	if kind == MonsterSpellHitScript.Kind.COMBAT:
 		_finish(body)
+		return
+	if kind == MonsterSpellHitScript.Kind.WALL:
+		_aim_position = body.global_position if body is Node3D else global_position
+		_has_aim_position = true
+		_finish_at_aim()
+
+
+func _vanish() -> void:
+	if _finished:
+		return
+	_finished = true
+	set_physics_process(false)
+	queue_free()
 
 
 func _finish_at_aim() -> void:

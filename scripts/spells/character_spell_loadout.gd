@@ -10,7 +10,9 @@ signal loadout_changed()
 
 const SOURCE_STARTING := "starting"
 const SOURCE_TOME := "tome"
+const WARD_SHATTER_REGEN_SCALE := 2.0
 const FlareEffectScript := preload("res://scripts/spells/flare_effect.gd")
+const WardRuntimeScript := preload("res://scripts/spells/ward_runtime.gd")
 
 var _spell_defs: Dictionary = {}
 ## spell_id -> { "learned_at": int }
@@ -21,6 +23,7 @@ var _learned: Dictionary = {}
 var _cooldown_until_msec: Dictionary = {}
 ## spell_id -> { "count": int, "next_msec": int }
 var _ammo: Dictionary = {}
+var _ward_runtime: Resource = null
 
 
 func configure(spells: Array[SpellDefinition]) -> void:
@@ -28,6 +31,8 @@ func configure(spells: Array[SpellDefinition]) -> void:
 	for spell in spells:
 		if spell != null:
 			_spell_defs[spell.id] = spell
+	_ward_runtime = WardRuntimeScript.new()
+	_ward_runtime.seed_from_spell(get_spell_definition("ward"))
 
 
 func reset() -> void:
@@ -35,6 +40,8 @@ func reset() -> void:
 	_learned.clear()
 	_cooldown_until_msec.clear()
 	_ammo.clear()
+	if _ward_runtime != null:
+		_ward_runtime.seed_from_spell(get_spell_definition("ward"))
 	loadout_changed.emit()
 
 
@@ -49,6 +56,8 @@ func remaining_cooldown_sec(spell_id: String) -> float:
 		if ammo_count(spell_id) > 0:
 			return 0.0
 		return remaining_ammo_refill_sec(spell_id)
+	if _is_ward_id(spell_id) and _ward_runtime != null:
+		return _ward_runtime.remaining_cooldown_sec()
 	if not _cooldown_until_msec.has(spell_id):
 		return 0.0
 	var remaining_msec: int = int(_cooldown_until_msec[spell_id]) - Time.get_ticks_msec()
@@ -63,11 +72,36 @@ func start_cooldown(spell_id: String) -> void:
 		spend_ammo(spell_id)
 		return
 	var spell: SpellDefinition = get_spell_definition(spell_id)
-	if spell == null or spell.cooldown_sec <= 0.0:
+	if spell == null:
 		return
-	_cooldown_until_msec[spell_id] = (
-		Time.get_ticks_msec() + int(round(spell.cooldown_sec * 1000.0))
-	)
+	var cd := maxf(spell.cooldown_sec, 0.0)
+	if cd <= 0.0:
+		return
+	if _is_ward_id(spell_id) and _ward_runtime != null:
+		_ward_runtime.cooldown_until_msec = (
+			Time.get_ticks_msec() + int(round(cd * 1000.0))
+		)
+		return
+	_cooldown_until_msec[spell_id] = Time.get_ticks_msec() + int(round(cd * 1000.0))
+
+
+func arm_ward_shatter_penalty() -> void:
+	if _ward_runtime == null:
+		_ward_runtime = WardRuntimeScript.new()
+		_ward_runtime.seed_from_spell(get_spell_definition("ward"))
+	var scale := WARD_SHATTER_REGEN_SCALE
+	var spell: SpellDefinition = get_spell_definition("ward")
+	if spell != null:
+		scale = maxf(spell.shatter_regen_scale, 1.0)
+	_ward_runtime.shatter_regen_scale = scale
+
+
+func is_ward_shatter_penalty_armed() -> bool:
+	return _ward_runtime != null and _ward_runtime.shatter_regen_scale > 1.001
+
+
+func get_ward_runtime() -> Resource:
+	return _ward_runtime
 
 
 func ammo_max(spell_id: String) -> int:
@@ -251,6 +285,13 @@ func get_known_spells() -> Array[SpellDefinition]:
 
 func get_spell_definition(spell_id: String) -> SpellDefinition:
 	return _spell_defs.get(spell_id)
+
+
+func _is_ward_id(spell_id: String) -> bool:
+	if spell_id == "ward":
+		return true
+	var spell: SpellDefinition = get_spell_definition(spell_id)
+	return spell != null and spell.effect_id == "ward"
 
 
 func _add_starting_spell(spell_id: String) -> bool:

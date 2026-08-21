@@ -5,9 +5,12 @@ extends "res://scripts/monsters/monster_ability.gd"
 ## Left-hand ward: same shield as the player spell, lasting 2.5 seconds.
 
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
+const WardRuntimeScript := preload("res://scripts/spells/ward_runtime.gd")
 const GameWorldScript := preload("res://scripts/game_world.gd")
 
 @export_range(0.5, 10.0, 0.1) var ward_duration_sec: float = 2.5
+
+var _ward_runtime: Resource = null
 
 
 func _ready() -> void:
@@ -76,6 +79,15 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 	var ward: Node = WardShieldScript.spawn(parent, origin, dir, 1, ward_duration_sec)
 	if ward != null and ward.has_method("set_caster"):
 		ward.call("set_caster", monster)
+	if _ward_runtime == null:
+		_ward_runtime = WardRuntimeScript.new()
+		_ward_runtime.seed_from_max(
+			WardShieldScript.DEFAULT_BLOCK_HP,
+			WardShieldScript.DEFAULT_REGEN_DELAY_SEC,
+			WardShieldScript.DEFAULT_REGEN_PER_SEC
+		)
+	if ward != null and ward.has_method("bind_runtime"):
+		ward.call("bind_runtime", _ward_runtime)
 
 
 func fire_instant(monster: Node3D, target: Node3D) -> void:

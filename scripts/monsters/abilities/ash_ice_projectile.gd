@@ -6,9 +6,13 @@ extends Area3D
 
 const AshIceFlightScript := preload("res://scripts/monsters/abilities/ash_ice_flight.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
 
 const HIT_DAMAGE := 14.0
 const MAX_LIFE_SEC := 3.5
+
+@export_range(0.0, 200.0, 1.0) var hit_damage: float = HIT_DAMAGE
 
 var _caster: Node3D = null
 var _target: Node3D = null
@@ -77,8 +81,7 @@ func setup(target: Node3D, caster: Node3D = null, side_sign: float = 1.0) -> voi
 func _build_projectile_body() -> void:
 	monitoring = true
 	monitorable = false
-	collision_layer = 0
-	collision_mask = 1 | 2
+	MonsterSpellHitScript.apply_mask(self)
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
 	sphere.radius = 0.16
@@ -150,9 +153,13 @@ func _physics_process(delta: float) -> void:
 	var next_pos: Vector3 = step["position"]
 	var next_t: float = float(step["t"])
 	_last_dir = AshIceFlightScript.tangent(_from, _control, _to, next_t)
+	var prev := global_position
 	global_position = next_pos
 	_arc_dist = float(step["distance"])
-	if _try_block_ward_overlap():
+	if SpellWardBlockScript.try_block_along_path(
+		get_tree(), prev, global_position, 0.16, hit_damage, _caster
+	):
+		_finish()
 		return
 	var total_len := float(step["total_length"])
 	if _arc_dist >= total_len - 0.05 or next_t >= 0.999:
@@ -162,54 +169,27 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node3D) -> void:
 	if _finished:
 		return
-	if body == _caster:
+	var kind := MonsterSpellHitScript.kind(body, _caster)
+	if kind == MonsterSpellHitScript.Kind.IGNORE:
 		return
-	if _is_own_ward(body):
+	if kind == MonsterSpellHitScript.Kind.WARD:
+		_block_if_ward(body)
 		return
-	if _block_if_ward(body):
-		return
-	if _try_hit(body):
+	if kind == MonsterSpellHitScript.Kind.COMBAT:
+		_try_hit(body)
 		return
 	_finish()
 
 
-func _try_block_ward_overlap() -> bool:
-	if not monitoring or not is_inside_tree():
-		return false
-	for body in get_overlapping_bodies():
-		if body == _caster:
-			continue
-		if _is_own_ward(body):
-			continue
-		if _block_if_ward(body):
-			return true
-	return false
-
-
-func _is_own_ward(body: Node) -> bool:
-	var ward := SpellWardBlockScript.ward_from_node(body)
-	if ward == null or _caster == null:
-		return false
-	if not ward.has_method("is_owned_by"):
-		return false
-	return bool(ward.call("is_owned_by", _caster))
-
-
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE, _caster):
+	if not SpellWardBlockScript.try_block(body, hit_damage, _caster):
 		return false
 	_finish()
 	return true
 
 
 func _try_hit(body: Node3D) -> bool:
-	if body == null or body == _caster:
-		return false
-	if not (
-		body.is_in_group("player")
-		or body.is_in_group("monster")
-		or body.is_in_group("combat_target")
-	):
+	if MonsterSpellHitScript.kind(body, _caster) != MonsterSpellHitScript.Kind.COMBAT:
 		return false
 	var dir := _last_dir
 	if dir.length_squared() < 0.0001:
@@ -222,8 +202,8 @@ func _try_hit(body: Node3D) -> bool:
 		apply_local = (not mp) or (body as Node).is_multiplayer_authority()
 	if apply_local and body.has_method("apply_fireball_knockback"):
 		body.call("apply_fireball_knockback", dir)
-	if body.has_method("take_damage") and HIT_DAMAGE > 0.0:
-		body.call("take_damage", HIT_DAMAGE, self)
+	if hit_damage > 0.0:
+		CombatHealthScript.apply_hit(body, hit_damage, self)
 	return true
 
 

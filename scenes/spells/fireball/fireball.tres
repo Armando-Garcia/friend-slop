@@ -11,6 +11,7 @@ syllable_cadence_ms = PackedInt32Array(0)
 pitch_targets_hz = null
 cooldown_sec = 0.0
 effect_id = "fireball"
+damage = 20.0
 color = Color(1, 0.45, 0.12, 1)
 category = 0
 require_full_charge = true

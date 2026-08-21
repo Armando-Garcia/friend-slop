@@ -6,6 +6,7 @@ extends Area3D
 
 const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_halo_flight.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
+const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
 const MAX_LIFE_SEC := 3.5
 
 @export var travel_speed: float = EmberHaloFlightScript.TRAVEL_SPEED
@@ -52,8 +53,7 @@ func setup(toward: Vector3, caster: Node3D = null) -> void:
 	_radius = start_radius
 	monitoring = true
 	monitorable = false
-	collision_layer = 0
-	collision_mask = 1 | 2
+	MonsterSpellHitScript.apply_mask(self)
 
 	_shape = CollisionShape3D.new()
 	_cyl_shape = CylinderShape3D.new()
@@ -116,8 +116,7 @@ func _physics_process(delta: float) -> void:
 		_distance, start_radius, max_radius, expand_per_meter
 	)
 	_sync_radius_visual()
-	_try_block_ward_overlap()
-	_check_player_overlaps()
+	_resolve_overlaps()
 
 
 func _sync_radius_visual() -> void:
@@ -130,27 +129,35 @@ func _sync_radius_visual() -> void:
 		_mesh.scale.y = 1
 
 
-func _check_player_overlaps() -> void:
+func _resolve_overlaps() -> void:
 	if _finished:
 		return
 	for body in get_overlapping_bodies():
-		if body == null or body == _caster or not body.is_in_group("player"):
-			continue
 		if not body is Node3D:
 			continue
-		var player := body as Node3D
-		var flat_dist := EmberHaloFlightScript.flat_distance(global_position, player.global_position)
-		var id := player.get_instance_id()
+		var hit := body as Node3D
+		var kind := MonsterSpellHitScript.kind(hit, _caster)
+		if kind == MonsterSpellHitScript.Kind.WARD:
+			if _block_if_ward(hit):
+				return
+			continue
+		if kind == MonsterSpellHitScript.Kind.WALL:
+			_finish()
+			return
+		if kind != MonsterSpellHitScript.Kind.COMBAT:
+			continue
+		var flat_dist := EmberHaloFlightScript.flat_distance(global_position, hit.global_position)
+		var id := hit.get_instance_id()
 		if EmberHaloFlightScript.is_in_center(flat_dist, _radius):
 			if _jump_pad_bodies.has(id):
 				continue
 			_jump_pad_bodies[id] = true
-			_apply_jump_pad(player)
+			_apply_jump_pad(hit)
 		elif EmberHaloFlightScript.is_in_ring(flat_dist, _radius):
 			if _ring_hit_bodies.has(id):
 				continue
 			_ring_hit_bodies[id] = true
-			_apply_ring_hit(player)
+			_apply_ring_hit(hit)
 
 
 func _should_apply_local(body: Node) -> bool:
@@ -184,17 +191,6 @@ func _apply_ring_hit(body: Node3D) -> void:
 				EmberHaloFlightScript.SLOW_DURATION_SEC,
 				EmberHaloFlightScript.SLOW_MULTIPLIER
 			)
-
-
-func _try_block_ward_overlap() -> bool:
-	if not monitoring or not is_inside_tree():
-		return false
-	for body in get_overlapping_bodies():
-		if body == _caster:
-			continue
-		if _block_if_ward(body):
-			return true
-	return false
 
 
 func _block_if_ward(body: Node) -> bool:

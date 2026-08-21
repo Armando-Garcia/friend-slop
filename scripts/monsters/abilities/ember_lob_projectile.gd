@@ -9,8 +9,12 @@ const FireballExplosionEffectScript := preload(
 	"res://scripts/spells/fireball_explosion_effect.gd"
 )
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
+const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
 const HIT_DAMAGE := 20.0
 const MAX_LIFE_SEC := 4.0
+
+@export_range(0.0, 200.0, 1.0) var hit_damage: float = HIT_DAMAGE
 
 var _caster: Node3D = null
 var _target: Node3D = null
@@ -43,8 +47,7 @@ func setup(target: Node3D, caster: Node3D = null) -> void:
 	_caster = caster
 	monitoring = true
 	monitorable = false
-	collision_layer = 0
-	collision_mask = 1 | 2
+	MonsterSpellHitScript.apply_mask(self)
 	var shape := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
 	sphere.radius = 0.18
@@ -116,8 +119,12 @@ func _physics_process(delta: float) -> void:
 
 	if _diving:
 		_velocity = EmberLobFlightScript.dive_velocity(global_position, _dive_point)
+		var dive_prev := global_position
 		global_position += _velocity * delta
-		if _try_block_ward_overlap():
+		if SpellWardBlockScript.try_block_along_path(
+			get_tree(), dive_prev, global_position, 0.18, hit_damage, _caster
+		):
+			_finish(false)
 			return
 		if global_position.distance_to(_dive_point) <= 0.35 or global_position.y <= _dive_point.y:
 			_finish(true)
@@ -125,8 +132,12 @@ func _physics_process(delta: float) -> void:
 
 	var prev_vy := _velocity.y
 	_velocity = EmberLobFlightScript.step_lob_velocity(_velocity, delta)
+	var lob_prev := global_position
 	global_position += _velocity * delta
-	if _try_block_ward_overlap():
+	if SpellWardBlockScript.try_block_along_path(
+		get_tree(), lob_prev, global_position, 0.18, hit_damage, _caster
+	):
+		_finish(false)
 		return
 	if EmberLobFlightScript.crossed_apex(prev_vy, _velocity.y):
 		_diving = true
@@ -140,28 +151,20 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node3D) -> void:
 	if _finished:
 		return
-	if body == _caster:
+	var kind := MonsterSpellHitScript.kind(body, _caster)
+	if kind == MonsterSpellHitScript.Kind.IGNORE:
 		return
-	if _block_if_ward(body):
+	if kind == MonsterSpellHitScript.Kind.WARD:
+		_block_if_ward(body)
 		return
-	if _try_hit(body):
+	if kind == MonsterSpellHitScript.Kind.COMBAT:
+		_try_hit(body)
 		return
 	_finish(true)
 
 
-func _try_block_ward_overlap() -> bool:
-	if not monitoring or not is_inside_tree():
-		return false
-	for body in get_overlapping_bodies():
-		if body == _caster:
-			continue
-		if _block_if_ward(body):
-			return true
-	return false
-
-
 func _block_if_ward(body: Node) -> bool:
-	if not SpellWardBlockScript.try_block(body, HIT_DAMAGE, _caster):
+	if not SpellWardBlockScript.try_block(body, hit_damage, _caster):
 		return false
 	## Ward eats the spell — vanish with no ground impact burst.
 	_finish(false)
@@ -169,13 +172,7 @@ func _block_if_ward(body: Node) -> bool:
 
 
 func _try_hit(body: Node3D) -> bool:
-	if body == null or body == _caster:
-		return false
-	if not (
-		body.is_in_group("player")
-		or body.is_in_group("monster")
-		or body.is_in_group("combat_target")
-	):
+	if MonsterSpellHitScript.kind(body, _caster) != MonsterSpellHitScript.Kind.COMBAT:
 		return false
 	var dir := _velocity
 	if dir.length_squared() < 0.0001:
@@ -190,8 +187,8 @@ func _try_hit(body: Node3D) -> bool:
 		apply_local = (not mp) or (body as Node).is_multiplayer_authority()
 	if apply_local and body.has_method("apply_fireball_knockback"):
 		body.call("apply_fireball_knockback", dir)
-	if body.has_method("take_damage") and HIT_DAMAGE > 0.0:
-		body.call("take_damage", HIT_DAMAGE, self)
+	if hit_damage > 0.0:
+		CombatHealthScript.apply_hit(body, hit_damage, self)
 	return true
 
 

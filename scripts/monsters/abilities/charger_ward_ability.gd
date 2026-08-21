@@ -3,9 +3,10 @@ class_name ChargerWardAbility
 extends "res://scripts/monsters/monster_ability.gd"
 
 ## Spawns a player-style ward and parents it to the Charger's ShieldHold.
-## HP equals four full fireballs; the dome tints red as damage lands.
+## Dome tints a little red as HP drops, then bursts on shatter.
 
 const WardShieldScript := preload("res://scripts/spells/ward_shield.gd")
+const WardRuntimeScript := preload("res://scripts/spells/ward_runtime.gd")
 const FireballProjectileScript := preload("res://scripts/spells/fireball_projectile.gd")
 const GameWorldScript := preload("res://scripts/game_world.gd")
 const FIREBALL_EQUIVALENT := 4
@@ -14,6 +15,8 @@ const FIREBALL_EQUIVALENT := 4
 @export_range(0.4, 1.4, 0.05) var shield_radius: float = 0.7
 ## Ward HP. Default 80 = four fireballs at 20 damage each. Dome tints red as it drops.
 @export_range(20.0, 200.0, 1.0) var shield_hit_points: float = 80.0
+
+var _ward_runtime: Resource = null
 
 
 static func default_shield_hit_points() -> float:
@@ -56,7 +59,16 @@ func spawn_held_ward(monster: Node3D) -> Node:
 	_ignore_character_collisions(ward, monster)
 	if "radius" in ward:
 		ward.set("radius", shield_radius)
-	if ward.has_method("set_hit_points"):
+	if _ward_runtime == null:
+		_ward_runtime = WardRuntimeScript.new()
+	_ward_runtime.seed_from_max(
+		shield_hit_points,
+		WardShieldScript.DEFAULT_REGEN_DELAY_SEC,
+		WardShieldScript.DEFAULT_REGEN_PER_SEC
+	)
+	if ward.has_method("bind_runtime"):
+		ward.call("bind_runtime", _ward_runtime)
+	elif ward.has_method("set_hit_points"):
 		ward.call("set_hit_points", shield_hit_points)
 	if ward.has_method("set_duration_sec"):
 		ward.call("set_duration_sec", 30.0)

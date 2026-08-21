@@ -4,6 +4,7 @@ extends RefCounted
 ## Player-slot ward: dome rides the camera; a cylinder runs from the wand tip.
 
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
+const WardSpell := preload("res://scenes/spells/ward/ward.tres")
 
 var _ward: Node
 
@@ -42,6 +43,7 @@ func begin(player: Node3D) -> void:
 		parent.add_child(ward)
 	if ward.has_method("set_caster"):
 		ward.call("set_caster", player)
+	_apply_authored_combat(ward, player)
 	if ward.has_method("start_wand_follow"):
 		ward.call("start_wand_follow", origin, direction, 1, host)
 	_ward = ward
@@ -73,6 +75,25 @@ func drop() -> void:
 		ward.call("shatter")
 	else:
 		ward.queue_free()
+
+
+func _apply_authored_combat(ward: Node, player: Node3D) -> void:
+	if player != null and player.has_method("get_spell_loadout"):
+		var loadout: Node = player.call("get_spell_loadout") as Node
+		if loadout != null and loadout.has_method("get_ward_runtime"):
+			var runtime: Resource = loadout.call("get_ward_runtime") as Resource
+			if runtime != null and ward.has_method("bind_runtime"):
+				ward.call("bind_runtime", runtime)
+				return
+	if WardSpell == null:
+		return
+	var max_hp := float(WardSpell.get("max_health"))
+	if max_hp > 0.0:
+		ward.set("block_hp", max_hp)
+		if ward.has_method("set_hit_points"):
+			ward.call("set_hit_points", max_hp)
+	ward.set("regen_delay_sec", float(WardSpell.get("regen_delay_sec")))
+	ward.set("regen_per_sec", float(WardSpell.get("regen_per_sec")))
 
 
 func _follow_host(player: Node3D) -> Node3D:
