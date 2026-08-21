@@ -82,7 +82,7 @@ func _test_baked_scene_keeps_mesh_when_radius_unchanged() -> int:
 	if tree == null:
 		push_error("Expected SceneTree to instantiate the baked ward")
 		return 1
-	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
+	var packed: PackedScene = load("res://scenes/spells/ward/ward.tscn") as PackedScene
 	if packed == null:
 		push_error("Expected scenes/spells/ward.tscn")
 		return 1

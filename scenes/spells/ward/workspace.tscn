@@ -1,6 +1,6 @@
 [gd_scene format=4 uid="uid://beec8jpki1vlg"]
 
-[ext_resource type="PackedScene" uid="uid://beec76dllpvlg" path="res://scenes/spells/ward.tscn" id="1_ward"]
+[ext_resource type="PackedScene" uid="uid://beec76dllpvlg" path="res://scenes/spells/ward/ward.tscn" id="1_ward"]
 [ext_resource type="Script" uid="uid://dk65h8rpt4kwn" path="res://scripts/spells/ward_workspace.gd" id="1_workspace"]
 [ext_resource type="PackedScene" uid="uid://bplayerwand1" path="res://scenes/characters/player_wand.tscn" id="2_wand"]
 

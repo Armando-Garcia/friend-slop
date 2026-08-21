@@ -11,12 +11,6 @@ const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
 const WARD_BUBBLE_COLOR := Color(0.35, 0.65, 1.0, 0.38)
 const WARD_BUBBLE_EDGE := Color(0.18, 0.42, 0.85, 0.7)
 const BASEBALL_RADIUS_M := 0.037
-const GOLF_BALL_RADIUS_M := 0.0105
-const CHARGE_WARD_RADIUS_M := 0.0185
-const CHARGE_START_COLOR := Color(1.0, 1.0, 1.0, 0.4)
-const CHARGE_START_SCALE := 0.02
-const CHARGE_BUBBLE_SPIN_DEG := Vector3(52.0, 88.0, 24.0)
-const CHARGE_RIM_SPIN_DEG := Vector3(-40.0, -96.0, 30.0)
 const RECOGNITION_SHRINK_SEC := 0.14
 const RECOGNITION_GROW_SEC := 0.18
 const RECOGNITION_HOLD_SEC := 0.28
@@ -164,10 +158,8 @@ var _spark_fade: Gradient
 var _active := false
 var _recognizing := false
 var _cast_charging_fx := false
-var _charge_is_ward := false
+var _cast_charge_fx: CastChargeFx
 var _charge_spell_color := Color(1.0, 1.0, 1.0, 0.4)
-var _charge_mat: StandardMaterial3D
-var _charge_rim_mat: StandardMaterial3D
 var _pulse_phase: float = 0.0
 var _inner_base_scale := Vector3.ONE
 var _shell_base_scales: Dictionary = {}
@@ -202,115 +194,61 @@ func begin_cast_charge_fx(spell: SpellDefinition) -> void:
 		_charge_pop_tween.kill()
 		_charge_pop_tween = null
 	_cast_charging_fx = true
-	_charge_is_ward = spell != null and spell.effect_id == "ward"
 	_hide_listen_shells()
+	_hide_recognition()
 	_charge_spell_color = (
 		spell.get_display_color() if spell != null else Color(0.75, 0.7, 0.95)
 	)
-	if _charge_is_ward:
-		_setup_ward_cast_charge_meshes(_charge_spell_color)
-	elif spell != null and spell.effect_id == "fireball":
-		FireballParticles.configure_wand_charge_fireball(
-			_recognition_bubble, _recognition_rim, _world_to_local_radius(GOLF_BALL_RADIUS_M)
-		)
-		_charge_mat = _recognition_bubble.material_override as StandardMaterial3D
-		_charge_rim_mat = _recognition_rim.material_override as StandardMaterial3D
-	else:
-		_setup_generic_cast_charge_meshes(_charge_spell_color)
-	_recognition.visible = true
-	_recognition_bubble.scale = Vector3.ONE * CHARGE_START_SCALE
-	if _recognition_rim != null:
-		_recognition_rim.scale = Vector3.ONE * CHARGE_START_SCALE
+	_spawn_cast_charge_fx(spell)
 	visible = true
 	set_process(true)
 	_apply_cast_charge_sparks(_charge_spell_color)
 	set_cast_charge_progress(0.0 if spell == null or not spell.is_channelled() else 1.0)
 
-func _setup_generic_cast_charge_meshes(spell_color: Color) -> void:
-	_charge_spell_color = Color(spell_color.r, spell_color.g, spell_color.b, 0.4)
-	_charge_rim_mat = null
-	var radius := _world_to_local_radius(GOLF_BALL_RADIUS_M)
-	var sphere := SphereMesh.new()
-	sphere.radius = radius
-	sphere.height = radius * 2.0
-	_recognition_bubble.mesh = sphere
-	_charge_mat = StandardMaterial3D.new()
-	_charge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_charge_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_charge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_charge_mat.albedo_color = CHARGE_START_COLOR
-	_charge_mat.emission_enabled = true
-	_charge_mat.emission = CHARGE_START_COLOR.lightened(0.15)
-	_charge_mat.emission_energy_multiplier = 1.2
-	_recognition_bubble.material_override = _charge_mat
-	if _recognition_rim != null:
-		_recognition_rim.visible = false
+func _spawn_cast_charge_fx(spell: SpellDefinition) -> void:
+	_clear_cast_charge_fx()
+	var host := _ensure_cast_charge_host()
+	var scene := SpellDefinition.CAST_GROWING_ORB
+	if spell != null:
+		scene = spell.get_cast_charge_scene()
+	if scene == null:
+		return
+	var inst := scene.instantiate()
+	host.add_child(inst)
+	_cast_charge_fx = inst as CastChargeFx
+	if _cast_charge_fx != null:
+		_cast_charge_fx.setup_cast_charge(_charge_spell_color, _visual_layers())
+	host.visible = true
 
-func _setup_ward_cast_charge_meshes(spell_color: Color) -> void:
-	_charge_spell_color = spell_color
-	var radius := _world_to_local_radius(CHARGE_WARD_RADIUS_M)
-	var sphere := SphereMesh.new()
-	sphere.radius = radius
-	sphere.height = radius * 2.0
-	sphere.radial_segments = 28
-	sphere.rings = 14
-	_recognition_bubble.mesh = sphere
-	_charge_mat = _make_ward_bubble_material(Color.WHITE)
-	_recognition_bubble.material_override = _charge_mat
-	var rim_mesh := SphereMesh.new()
-	rim_mesh.radius = radius * 1.04
-	rim_mesh.height = radius * 2.08
-	rim_mesh.radial_segments = 28
-	rim_mesh.rings = 14
-	_recognition_rim.mesh = rim_mesh
-	_charge_rim_mat = _make_ward_rim_material(Color.WHITE)
-	_recognition_rim.material_override = _charge_rim_mat
-	_recognition_rim.visible = true
+
+func _ensure_cast_charge_host() -> Node3D:
+	var host := get_node_or_null("CastChargeHost") as Node3D
+	if host == null:
+		host = Node3D.new()
+		host.name = "CastChargeHost"
+		add_child(host)
+	return host
+
+
+func _clear_cast_charge_fx() -> void:
+	_cast_charge_fx = null
+	var host := get_node_or_null("CastChargeHost") as Node3D
+	if host == null:
+		return
+	for child in host.get_children():
+		host.remove_child(child)
+		child.queue_free()
+	host.visible = false
+
 
 func set_cast_charge_progress(t: float) -> void:
-	if _charge_popping or not _cast_charging_fx or _recognition_bubble == null:
+	if _charge_popping or not _cast_charging_fx or _cast_charge_fx == null:
 		return
-	var p := clampf(t, 0.0, 1.0)
-	var scale_v := lerpf(CHARGE_START_SCALE, 1.0, p)
-	_recognition_bubble.scale = Vector3.ONE * scale_v
-	if _recognition_rim != null and (_charge_is_ward or _charge_rim_mat != null):
-		_recognition_rim.scale = Vector3.ONE * scale_v
-	if _charge_is_ward:
-		_apply_ward_charge_colors(p)
-		return
-	if _charge_rim_mat != null:
-		FireballParticles.apply_wand_charge_fire_progress(_charge_mat, _charge_rim_mat, p)
-		return
-	var col := CHARGE_START_COLOR.lerp(_charge_spell_color, p)
-	col.a = 0.4
-	if _charge_mat == null:
-		_charge_mat = _recognition_bubble.material_override as StandardMaterial3D
-	if _charge_mat != null:
-		_charge_mat.albedo_color = col
-		_charge_mat.emission = col.lightened(0.2)
+	_cast_charge_fx.set_cast_charge_progress(t)
 
-func _apply_ward_charge_colors(p: float) -> void:
-	var target := _charge_spell_color
-	if target.a <= 0.001:
-		target = WARD_BUBBLE_COLOR
-	var col := Color.WHITE.lerp(target, p)
-	if _charge_mat != null:
-		var bubble := Color(col.r, col.g, col.b, 0.38)
-		var highlight := Color(
-			lerpf(col.r, 1.0, 0.75),
-			lerpf(col.g, 1.0, 0.75),
-			lerpf(col.b, 1.0, 0.75),
-			0.55
-		)
-		_charge_mat.albedo_color = bubble
-		_charge_mat.emission = highlight
-	if _charge_rim_mat != null:
-		var edge := Color(col.r * 0.55, col.g * 0.65, col.b * 0.85, 0.7)
-		_charge_rim_mat.albedo_color = edge
-		_charge_rim_mat.emission = edge.lightened(0.15)
 
 func pop_cast_charge_fx() -> void:
-	if _charge_popping or not _cast_charging_fx or _recognition_bubble == null:
+	if _charge_popping or not _cast_charging_fx or _cast_charge_fx == null:
 		return
 	if _charge_pop_tween != null and is_instance_valid(_charge_pop_tween):
 		_charge_pop_tween.kill()
@@ -318,18 +256,12 @@ func pop_cast_charge_fx() -> void:
 	for sparks in _sparks:
 		if sparks != null:
 			sparks.emitting = false
-	if _charge_mat != null:
-		var flash := Color(1.0, 0.93, 0.78, 0.9)
-		_charge_mat.albedo_color = flash
-		_charge_mat.emission = flash
-		_charge_mat.emission_energy_multiplier = 4.5
-	var pop_s := Vector3.ONE * maxf(_recognition_bubble.scale.x * 1.7, 1.25)
+	var pop_s := Vector3.ONE * maxf(_cast_charge_fx.scale.x * 1.7, 1.25)
 	_charge_pop_tween = create_tween()
-	_charge_pop_tween.tween_property(_recognition_bubble, "scale", pop_s, 0.08)
-	_charge_pop_tween.tween_property(
-		_recognition_bubble, "scale", Vector3.ZERO, 0.14
-	)
+	_charge_pop_tween.tween_property(_cast_charge_fx, "scale", pop_s, 0.08)
+	_charge_pop_tween.tween_property(_cast_charge_fx, "scale", Vector3.ZERO, 0.14)
 	_charge_pop_tween.tween_callback(end_cast_charge_fx)
+
 
 func end_cast_charge_fx() -> void:
 	_charge_popping = false
@@ -337,9 +269,7 @@ func end_cast_charge_fx() -> void:
 		_charge_pop_tween.kill()
 	_charge_pop_tween = null
 	_cast_charging_fx = false
-	_charge_is_ward = false
-	_charge_mat = null
-	_charge_rim_mat = null
+	_clear_cast_charge_fx()
 	_hide_recognition()
 	_apply_sparks()
 	set_process(_active)
@@ -430,8 +360,8 @@ func _visual_layers() -> int:
 	return WorldVisualLayersScript.PLAYER_SELF
 
 func _process(delta: float) -> void:
-	if _cast_charging_fx:
-		_spin_cast_charge_spheres(delta)
+	if _cast_charging_fx and _cast_charge_fx != null:
+		_cast_charge_fx.tick(delta)
 	if not _active:
 		return
 	if _outer != null:
@@ -457,18 +387,6 @@ func _process(delta: float) -> void:
 		var pulse_max := 1.0 + 0.2 * amp
 		var pulse := remap(sin(_pulse_phase), -1.0, 1.0, pulse_min, pulse_max)
 		_inner.scale = _inner_base_scale * pulse
-
-func _spin_cast_charge_spheres(delta: float) -> void:
-	_spin_node(_recognition_bubble, CHARGE_BUBBLE_SPIN_DEG, delta)
-	if _recognition_rim != null and _recognition_rim.visible:
-		_spin_node(_recognition_rim, CHARGE_RIM_SPIN_DEG, delta)
-	if not _charge_is_ward and _charge_rim_mat != null:
-		FireballParticles.scroll_wand_charge_fire(_charge_mat, delta)
-
-func _spin_node(node: Node3D, spin_deg: Vector3, delta: float) -> void:
-	node.rotate_x(deg_to_rad(spin_deg.x) * delta)
-	node.rotate_y(deg_to_rad(spin_deg.y) * delta)
-	node.rotate_z(deg_to_rad(spin_deg.z) * delta)
 
 func _queue_apply() -> void:
 	if not _ready_done or _apply_queued:

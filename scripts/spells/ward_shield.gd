@@ -115,7 +115,7 @@ static func spawn(
 	duration_sec: float = -1.0
 ) -> Node:
 	## Lazy-load avoids circular preload with ward.tscn (which attaches this script).
-	var packed: PackedScene = load("res://scenes/spells/ward.tscn") as PackedScene
+	var packed: PackedScene = load(SpellDefinition.world_scene_path("ward")) as PackedScene
 	var ward: Node = packed.instantiate()
 	if parent != null and ward is Node3D:
 		SpellEphemeralFxScript.add_child_at(parent, ward as Node3D, origin)

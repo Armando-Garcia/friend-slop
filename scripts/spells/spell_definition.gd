@@ -10,6 +10,8 @@ enum WandFxKind { P_SHAPED, SHAKE, LIFT_DEFENSIVE }
 
 const DEFAULT_ONE_WORD_DURATION_MS := 700
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
+const SPELLS_ROOT := "res://scenes/spells/"
+const CAST_GROWING_ORB := preload("res://scenes/spells/_shared/growing_orb_cast.tscn")
 
 @export var id: String = ""
 @export var display_name: String = ""
@@ -31,6 +33,8 @@ const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.g
 @export_range(0.0, 10.0, 0.05) var charge_time_sec: float = 1.0
 ## If true, releasing before charge_time_sec completes fizzles instead of casting.
 @export var require_full_charge := false
+## Optional wand-tip charge animation. Empty uses <spell_dir>/cast.tscn.
+@export var cast_charge_scene: PackedScene
 
 
 func uses_ammo() -> bool:
@@ -59,6 +63,36 @@ func get_wand_fx_kind() -> WandFxKind:
 	if category == Category.DEFENSIVE:
 		return WandFxKind.LIFT_DEFENSIVE
 	return WandFxKind.P_SHAPED
+
+
+func get_cast_charge_scene() -> PackedScene:
+	if cast_charge_scene != null:
+		return cast_charge_scene
+	var folder := _folder_name()
+	if folder.is_empty():
+		return CAST_GROWING_ORB
+	var path := "%scast.tscn" % spell_folder(folder)
+	if ResourceLoader.exists(path):
+		return load(path) as PackedScene
+	return CAST_GROWING_ORB
+
+
+static func spell_folder(spell_id: String) -> String:
+	if spell_id.is_empty():
+		return SPELLS_ROOT
+	return "%s%s/" % [SPELLS_ROOT, spell_id]
+
+
+static func world_scene_path(spell_id: String) -> String:
+	return "%s%s.tscn" % [spell_folder(spell_id), spell_id]
+
+
+func _folder_name() -> String:
+	if not id.is_empty():
+		return id
+	if effect_id == "flashlight_toggle":
+		return "light"
+	return effect_id
 
 
 func get_charge_time_sec() -> float:

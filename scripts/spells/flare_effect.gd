@@ -4,11 +4,10 @@ extends Area3D
 
 ## Signal flare: GPU comet trail while flying, then a pulsing omni beacon.
 ## Slides on walls, floors, players, and monsters with drag += contact_drag.
-## Tune on the Flare root in scenes/spells/flare.tscn (static lookdev).
-## Flight + wand launch previews live in scenes/spells/flare_workspace.tscn.
+## Tune on the Flare root in scenes/spells/flare/flare.tscn (static lookdev).
+## Flight + wand launch previews live in scenes/spells/flare/workspace.tscn.
 
 const DEFAULT_DURATION_SEC := 15.0
-const SCENE_PATH := "res://scenes/spells/flare.tscn"
 
 const FlareFlightScript := preload("res://scripts/spells/flare_flight.gd")
 const FlareParticlesScript := preload("res://scripts/spells/flare_particles.gd")
@@ -141,7 +140,7 @@ static func _invalidate_authored_ammo_cache() -> void:
 static func _ensure_authored_ammo_cache() -> void:
 	if not _authored_ammo_cache.is_empty():
 		return
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := load(SpellDefinition.world_scene_path("flare")) as PackedScene
 	if packed == null:
 		_authored_ammo_cache = {"max": 3, "refill": 2.0}
 		return
@@ -174,7 +173,7 @@ static func spawn_launched(
 	caster: Node3D = null,
 	template: FlareEffect = null
 ) -> FlareEffect:
-	var packed: PackedScene = load(SCENE_PATH) as PackedScene
+	var packed: PackedScene = load(SpellDefinition.world_scene_path("flare")) as PackedScene
 	var flare: FlareEffect = packed.instantiate() as FlareEffect
 	flare._runtime = true
 	flare.duration_sec = maxf(duration, 1.0)

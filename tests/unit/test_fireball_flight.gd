@@ -95,14 +95,14 @@ func _test_charge_ball_pop_keeps_bubble_until_tween(tree: SceneTree) -> int:
 	tree.root.add_child(fx)
 	fx.begin_cast_charge_fx(null)
 	fx.set_cast_charge_progress(0.7)
-	var rec := fx.get_node_or_null("Recognition") as Node3D
-	if rec == null or not rec.visible:
-		push_error("Expected charge ball visible before pop")
+	var host := fx.get_node_or_null("CastChargeHost") as Node3D
+	if host == null or host.get_child_count() == 0:
+		push_error("Expected charge animation under CastChargeHost before pop")
 		fx.queue_free()
 		return 1
 	fx.pop_cast_charge_fx()
-	if not rec.visible:
-		push_error("Expected charge ball to stay visible while popping")
+	if host.get_child_count() == 0:
+		push_error("Expected charge animation to stay while popping")
 		fx.queue_free()
 		return 1
 	fx.queue_free()

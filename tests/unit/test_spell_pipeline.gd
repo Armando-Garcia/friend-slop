@@ -3,7 +3,7 @@ extends RefCounted
 
 ## Simulates what SpellCastingSession + SpellValidationRunner do after listen ends.
 
-const FireballSpell := preload("res://resources/spells/fireball.tres")
+const FireballSpell := preload("res://scenes/spells/fireball/fireball.tres")
 const SpellCastValidatorScript := preload("res://scripts/spells/spell_cast_validator.gd")
 const SpellValidationRunnerScript := preload("res://scripts/spells/spell_validation_runner.gd")
 
