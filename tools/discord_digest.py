@@ -14,34 +14,46 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from discord_webhook import (
-    EMBED_DESCRIPTION_LIMIT,
-    EMBED_TITLE_LIMIT,
+    build_digest_payload,
     build_release_payload,
+    load_article,
     post_webhook,
-    _truncate,
 )
 
 EASTERN = ZoneInfo("America/New_York")
-DIGEST_COLOR = 0x1C2833
 GITHUB_API = "https://api.github.com"
+_ARTICLE_RULES = (
+    "You are a correspondent for The Wand Street Journal — a serious newspaper for "
+    "magical wizards covering the FriendSlop codebase as if it were an enchanted market. "
+    "Tone: dry, specific, slightly wry, and whimsical without tipping into parody. "
+    "Take the subject seriously the way a real paper would.\n\n"
+    "Write a newspaper article, not a changelog. Aggregate related changes into a few "
+    "thematic sections (for example Combat, Spells, Tooling). Do not emit a markdown "
+    "bullet list of pull requests. Do not walk PR-by-PR unless a single PR is the whole "
+    "story. You may mention a PR number inline once if it helps, but the story is the "
+    "substance of the changes.\n\n"
+    "Use only facts from the source material. Do not invent features, metrics, market "
+    "moves, or spells that are not in the source.\n\n"
+    "Hard bans — never include any of these:\n"
+    "- GitHub authors, usernames, or committers\n"
+    "- Cursor, Copilot, or other AI/tooling attribution\n"
+    "- Fake finance (bids, spreads, market stability, undisclosed metrics)\n"
+    "- Meta commentary about the briefing itself\n\n"
+    "Return JSON only with this shape:\n"
+    '{"lede":"1-2 sentence opening dek","sections":[{"title":"Section head","body":"1-3 short paragraphs"}]}\n'
+    "Use 2-5 sections when the source supports it. Keep titles short. Keep each body "
+    "under 900 characters. Plain prose only inside strings — no markdown headings or "
+    "bullet lists."
+)
 VOICE_PROMPT = (
-    "You are a correspondent for The Wand Street Journal. "
-    "Write a Discord briefing of pull requests that merged into FriendSlop in the "
-    "last day. Sound like a serious financial paper covering enchanted markets: "
-    "dry, specific, a little wry. Use only facts from the attached briefing. "
-    "Do not invent spells, systems, or numbers that are not in the source. "
-    "Name each PR by number. Keep the whole piece under 1800 characters. "
-    "Discord markdown is fine. Reply with the briefing only — no preamble, "
-    "no tool use, no file edits."
+    _ARTICLE_RULES
+    + "\nThis is the daily closing edition covering pull requests merged into FriendSlop "
+    "in the last day."
 )
 SPECIAL_EDITION_PROMPT = (
-    "You are a correspondent for The Wand Street Journal writing a Special Edition "
-    "bulletin for a newly published FriendSlop GitHub release. Sound like a serious "
-    "financial paper covering enchanted markets: dry, specific, a little wry. Use "
-    "only facts from the attached release briefing. Do not invent spells, systems, "
-    "or numbers that are not in the source. Mention the release name and tag. Keep "
-    "the whole piece under 1800 characters. Discord markdown is fine. Reply with "
-    "the Special Edition only — no preamble, no tool use, no file edits."
+    _ARTICLE_RULES
+    + "\nThis is an off-schedule Special Edition covering a newly published FriendSlop "
+    "GitHub release. Mention the release name and tag in the lede."
 )
 
 
@@ -80,10 +92,12 @@ def format_briefing(prs: list[dict], *, since: datetime, until: datetime) -> str
         f"Window (America/New_York): {since.isoformat()} to {until.isoformat()}",
         f"Merged PR count: {len(prs)}",
         "",
+        "Summarize the substance of these changes for readers. Group related work.",
+        "Ignore authors and tooling attribution.",
+        "",
     ]
     for pr in prs:
         lines.append(f"#{pr['number']} {pr['title']}")
-        lines.append(f"Author: {pr['author']}")
         lines.append(f"Merged: {pr['merged_at']}")
         lines.append(f"URL: {pr['url']}")
         body = (pr.get("body") or "").strip() or "(no description)"
@@ -91,26 +105,6 @@ def format_briefing(prs: list[dict], *, since: datetime, until: datetime) -> str
         lines.append(body)
         lines.append("")
     return "\n".join(lines).strip() + "\n"
-
-
-def build_digest_payload(*, date_label: str, summary: str, pr_count: int) -> dict:
-    title = f"The Wand Street Journal — {date_label}"
-    footer = (
-        f"Daily closing · {pr_count} pull request"
-        f"{'s' if pr_count != 1 else ''} merged"
-    )
-    return {
-        "username": "FriendSlop",
-        "embeds": [
-            {
-                "title": _truncate(title, EMBED_TITLE_LIMIT),
-                "description": _truncate(summary, EMBED_DESCRIPTION_LIMIT)
-                or "_No copy._",
-                "color": DIGEST_COLOR,
-                "footer": {"text": footer},
-            }
-        ],
-    }
 
 
 def _github_headers() -> dict[str, str]:
@@ -211,7 +205,7 @@ def _cmd_post_digest(args: argparse.Namespace) -> int:
             summary = handle.read()
     payload = build_digest_payload(
         date_label=args.date_label,
-        summary=summary or "",
+        article=load_article(summary or ""),
         pr_count=args.count,
     )
     post_webhook(webhook_url, payload)

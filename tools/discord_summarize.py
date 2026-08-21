@@ -6,13 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
 
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-# llama-3.3-70b-versatile shut down on Groq free/dev tier (2026-08-16).
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODEL = "qwen/qwen3.6-27b"
 
 
 def _api_key() -> str:
@@ -59,7 +59,41 @@ def extract_assistant_text(payload: dict) -> str:
     return text
 
 
-def summarize(*, system_prompt: str, briefing: str) -> str:
+def _strip_code_fence(text: str) -> str:
+    stripped = text.strip()
+    match = re.match(r"^```(?:json)?\s*(.*?)\s*```$", stripped, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return stripped
+
+
+def parse_article(raw: str) -> dict:
+    """Parse model JSON into {lede: str, sections: [{title, body}, ...]}."""
+    text = _strip_code_fence(raw)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM did not return JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ValueError("LLM JSON root must be an object")
+    lede = str(data.get("lede") or "").strip()
+    sections_raw = data.get("sections") or []
+    if not isinstance(sections_raw, list):
+        raise ValueError("LLM JSON sections must be a list")
+    sections: list[dict] = []
+    for item in sections_raw:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        body = str(item.get("body") or "").strip()
+        if title and body:
+            sections.append({"title": title, "body": body})
+    if not lede and not sections:
+        raise ValueError("LLM article had no lede or sections")
+    return {"lede": lede, "sections": sections}
+
+
+def summarize(*, system_prompt: str, briefing: str) -> dict:
     key = _api_key()
     if not key:
         raise SystemExit(
@@ -68,14 +102,15 @@ def summarize(*, system_prompt: str, briefing: str) -> str:
         )
     body = {
         "model": _model(),
-        "temperature": 0.7,
-        "max_tokens": 900,
+        "temperature": 0.65,
+        "max_tokens": 1200,
+        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": (
-                    "Briefing source material follows. Write only the Discord copy.\n\n"
+                    "Source material follows. Reply with JSON only.\n\n"
                     f"{briefing}"
                 ),
             },
@@ -92,12 +127,12 @@ def summarize(*, system_prompt: str, briefing: str) -> str:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=90) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise SystemExit(f"LLM request failed ({exc.code}): {detail}") from exc
-    return extract_assistant_text(payload)
+    return parse_article(extract_assistant_text(payload))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,12 +145,11 @@ def main(argv: list[str] | None = None) -> int:
         prompt = handle.read()
     with open(args.briefing_file, encoding="utf-8") as handle:
         briefing = handle.read()
-    summary = summarize(system_prompt=prompt, briefing=briefing)
+    article = summarize(system_prompt=prompt, briefing=briefing)
     with open(args.output_file, "w", encoding="utf-8") as handle:
-        handle.write(summary)
-        if not summary.endswith("\n"):
-            handle.write("\n")
-    print(f"Wrote summary to {args.output_file}")
+        json.dump(article, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+    print(f"Wrote article JSON to {args.output_file}")
     return 0
 
 
