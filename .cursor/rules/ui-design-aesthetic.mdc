@@ -1,0 +1,34 @@
+---
+description: UI palette and overlay/menu aesthetic — use when styling menus, HUD, and overlays
+globs: scenes/ui/**,scripts/ui/**,scenes/menu.tscn,scenes/victory.tscn
+alwaysApply: false
+---
+
+# UI design aesthetic
+
+Cursor shim — **canonical source:** [`docs/design/ui-aesthetic.md`](../../docs/design/ui-aesthetic.md) (also in [AGENTS.md](../../AGENTS.md)).
+
+Overlays, menus, settings, lobby, pause UI, and HUD chrome follow that guide.
+
+## Quick reference
+
+| Constant | Hex | Use |
+|----------|-----|-----|
+| `UiPalette.INK_BLACK` | `#06080f` | Deepest backdrop, scrim base |
+| `UiPalette.DARK_AMETHYST` | `#261342` | Primary panel / button fill |
+| `UiPalette.PRUSSIAN_BLUE` | `#14213d` | Elevated panels, nested surfaces |
+| `UiPalette.HUNTER_GREEN` | `#355e3b` | Success / live / positive |
+| `UiPalette.HONEY_BRONZE` | `#e2ab43` | Borders, focus, primary accent |
+| `UiPalette.SNOW` | `#f6efee` | Text on dark surfaces |
+
+Full palette data: `resources/ui/palette.json`
+
+## Rules
+
+- Prefer **`UiPalette`** constants and `panel_style()` / `button_style()` over hard-coded `Color(...)`.
+- Overlay pattern: scrim (`SCRIM`) → centered panel (`BACKGROUND_ELEVATED` + `BORDER_DEFAULT`, 10px radius) → margins 16–20px.
+- Buttons: `BACKGROUND_PRIMARY` + 2px bronze border, 8px radius; hover brightens border toward `BORDER_HOVER`.
+- Do not add new menu accent colors without updating `docs/design/ui-aesthetic.md` and `palette.json`.
+- World / spell / monster colors stay separate unless explicitly restyling HUD chrome.
+
+When extending the system, update the doc, JSON, and `ui_palette.gd` together.
