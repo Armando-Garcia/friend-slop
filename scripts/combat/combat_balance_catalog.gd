@@ -17,7 +17,7 @@ const AshIceProjectileScript := preload("res://scripts/monsters/abilities/ash_ic
 const AshFrostBreathFlightScript := preload(
 	"res://scripts/monsters/abilities/ash_frost_breath_flight.gd"
 )
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+const HealthScript := preload("res://scripts/combat/health.gd")
 
 const PLAYER_SCENE := "res://scenes/characters/playable_character.tscn"
 const WARD_SCENE := "res://scenes/spells/ward/ward.tscn"
@@ -60,7 +60,7 @@ static func monster_roster() -> Array[Dictionary]:
 static func player_max_health() -> float:
 	var packed: PackedScene = load(PLAYER_SCENE) as PackedScene
 	if packed == null:
-		return CombatHealthScript.DEFAULT_MAX_HEALTH
+		return HealthScript.DEFAULT_MAX_HEALTH
 	var root: Node = packed.instantiate()
 	var hp := _authored_max_health(root)
 	root.free()
@@ -69,9 +69,9 @@ static func player_max_health() -> float:
 
 ## Every character scene authors one Health child — players and monsters alike.
 static func _authored_max_health(character: Node) -> float:
-	var health := character.get_node_or_null("Health") as CombatHealth
+	var health := character.get_node_or_null("Health") as Health
 	if health == null:
-		return CombatHealthScript.DEFAULT_MAX_HEALTH
+		return HealthScript.DEFAULT_MAX_HEALTH
 	return health.max_health
 
 

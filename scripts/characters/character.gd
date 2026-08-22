@@ -36,12 +36,12 @@ const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
 
 ## This character's own HP pool, resolved from the authored Health child.
 ## Reading it binds the lifecycle, so it works on a scene that is not in the tree yet.
-var health: CombatHealth:
+var health: Health:
 	get:
 		_bind_health()
 		return _health
 
-var _health: CombatHealth = null
+var _health: Health = null
 var _character_color: Color = Color.WHITE
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
@@ -66,7 +66,7 @@ func _ready() -> void:
 func _bind_health() -> void:
 	if _health != null and is_instance_valid(_health):
 		return
-	_health = get_node_or_null("Health") as CombatHealth
+	_health = get_node_or_null("Health") as Health
 	if _health == null:
 		return
 	if not _health.damaged.is_connected(_on_damaged):

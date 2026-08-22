@@ -2,13 +2,6 @@
   "mcpServers": {
     "linear": {
       "url": "https://mcp.linear.app/mcp"
-    },
-    "godot": {
-      "command": "npx",
-      "args": ["-y", "@satelliteoflove/godot-mcp"],
-      "env": {
-        "GODOT_PATH": "C:\\Users\\iamem\\Downloads\\win64-g463-s164-gs4191-editor\\godotsteam.463.editor.win64.exe"
-      }
     }
   }
 }

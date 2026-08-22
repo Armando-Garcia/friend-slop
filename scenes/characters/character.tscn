@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://bcharacter01"]
 
 [ext_resource type="Script" uid="uid://bolwxtj4omh65" path="res://scripts/characters/character.gd" id="1_character"]
-[ext_resource type="Script" uid="uid://bcombathealth1" path="res://scripts/combat/combat_health.gd" id="2_health"]
+[ext_resource type="Script" uid="uid://bhealthpool001" path="res://scripts/combat/health.gd" id="2_health"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_character"]
 radius = 0.27

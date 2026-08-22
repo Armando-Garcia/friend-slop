@@ -3,7 +3,7 @@
   "sections": [
     {
       "title": "Combat",
-      "body": "CombatHealth now backs players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered."
+      "body": "Shared Health pools now back players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered."
     },
     {
       "title": "Publishing Desk",

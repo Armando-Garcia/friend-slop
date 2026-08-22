@@ -28,7 +28,7 @@ class FakeSummon extends Character:
 	var relay_hearing: RefCounted = null
 
 	func _init() -> void:
-		var pool := CombatHealth.new()
+		var pool := Health.new()
 		pool.name = "Health"
 		add_child(pool)
 

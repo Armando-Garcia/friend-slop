@@ -258,7 +258,7 @@ class DiscordDigestTests(unittest.TestCase):
         self.assertEqual(embed["fields"][0]["name"], "Combat")
         self.assertEqual(embed["fields"][1]["name"], "Publishing Desk")
         preview = format_discord_preview(payload)
-        self.assertIn("CombatHealth", preview)
+        self.assertIn("Shared Health pools", preview)
         self.assertNotIn("```", preview)
 
     def test_preview_cli_exits_zero(self) -> None:

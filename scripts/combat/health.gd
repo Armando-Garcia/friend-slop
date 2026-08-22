@@ -1,4 +1,4 @@
-class_name CombatHealth
+class_name Health
 extends Node
 
 ## Authored HP pool. Parent characters call take_damage; this node owns current/max.
