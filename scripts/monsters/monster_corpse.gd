@@ -17,6 +17,15 @@ var _materials: Array[StandardMaterial3D] = []
 var _fade_tween: Tween
 
 
+func _notification(what: int) -> void:
+	## A MeshInstance3D that holds the last reference to its material leaves the
+	## renderer a dangling RID when it frees (engine #67144), which spams
+	## "material_is_animated: Parameter material is null". Our fade duplicates the
+	## authored materials, so every corpse mesh is such an owner: drop them first.
+	if what == NOTIFICATION_PREDELETE:
+		_release_materials()
+
+
 func begin_death_sequence(
 	impulse: Vector3,
 	linger_sec: float = DEFAULT_LINGER_SEC,
@@ -83,11 +92,24 @@ func _find_mesh_instances(root: Node) -> Array[MeshInstance3D]:
 	return found
 
 
+func _release_materials() -> void:
+	for mesh in _find_mesh_instances(self):
+		mesh.material_override = null
+		for i in mesh.get_surface_override_material_count():
+			mesh.set_surface_override_material(i, null)
+
+
 func _start_fade() -> void:
 	if not is_inside_tree():
 		return
 	if _fade_tween != null and _fade_tween.is_valid():
 		_fade_tween.kill()
+	## Drop any materials that were freed mid-linger (can happen if meshes go away).
+	var live_mats: Array[StandardMaterial3D] = []
+	for mat in _materials:
+		if mat != null and is_instance_valid(mat):
+			live_mats.append(mat)
+	_materials = live_mats
 	if _materials.is_empty():
 		queue_free()
 		return
