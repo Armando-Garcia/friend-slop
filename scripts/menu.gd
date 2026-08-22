@@ -10,9 +10,10 @@ const UiScaleScript := preload("res://scripts/ui/ui_scale.gd")
 
 const TITLE_FONT_BASE := 48
 const BUTTON_FONT_BASE := 20
-const BUTTON_WIDTH_BASE := 240.0
-const BUTTON_HEIGHT_BASE := 48.0
+const BUTTON_WIDTH_BASE := 280.0
+const BUTTON_HEIGHT_BASE := 64.0
 const VBOX_SEPARATION_BASE := 18
+const BUTTON_ICON_MAX_WIDTH_BASE := 40.0
 
 @onready var _center_container: CenterContainer = $CenterContainer
 @onready var _menu_vbox: VBoxContainer = $CenterContainer/VBoxContainer
@@ -50,9 +51,11 @@ func _apply_menu_layout() -> void:
 	_menu_vbox.add_theme_constant_override("separation", separation)
 	_title_label.add_theme_font_size_override("font_size", title_font)
 
+	var icon_max := UiScaleScript.scaled(BUTTON_ICON_MAX_WIDTH_BASE, viewport_size, 28.0)
 	for button in [_play_button, _join_button, _settings_button, _exit_button]:
 		button.add_theme_font_size_override("font_size", button_font)
 		button.custom_minimum_size = Vector2(button_width, button_height)
+		button.add_theme_constant_override("icon_max_width", icon_max)
 
 
 func _on_exit_pressed() -> void:

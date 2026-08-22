@@ -1,26 +1,30 @@
-[gd_scene format=3 uid="uid://cmenu001"]
+[gd_scene load_steps=7 format=3 uid="uid://cmenu001"]
 
 [ext_resource type="Script" path="res://scripts/menu.gd" id="1_menu"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconhost01" path="res://assets/ui/icons/menu/host.png" id="2_icon_host"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconjoin01" path="res://assets/ui/icons/menu/join.png" id="3_icon_join"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconsetng01" path="res://assets/ui/icons/menu/settings.png" id="4_icon_settings"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconexit01" path="res://assets/ui/icons/menu/exit.png" id="5_icon_exit"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
-bg_color = Color(0.10, 0.08, 0.10, 1)
+bg_color = Color(0.078, 0.129, 0.239, 1)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.82, 0.70, 0.38, 1)
+border_color = Color(0.886, 0.671, 0.263, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
-bg_color = Color(0.16, 0.12, 0.10, 1)
+bg_color = Color(0.149, 0.075, 0.259, 1)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
-border_color = Color(0.90, 0.78, 0.42, 1)
+border_color = Color(0.925, 0.737, 0.4, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
@@ -42,7 +46,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.07, 0.05, 0.12, 1)
+color = Color(0.024, 0.031, 0.059, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -58,51 +62,59 @@ theme_override_constants/separation = 18
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.886, 0.671, 0.263, 1)
 theme_override_font_sizes/font_size = 48
-text = "FriendSlop"
+text = "Serious Wiz Biz"
 horizontal_alignment = 1
 
 [node name="PlayButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+custom_minimum_size = Vector2(280, 64)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Host"
+icon = ExtResource("2_icon_host")
+expand_icon = true
 
 [node name="JoinButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+custom_minimum_size = Vector2(280, 64)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Join"
+icon = ExtResource("3_icon_join")
+expand_icon = true
 
 [node name="SettingsButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+custom_minimum_size = Vector2(280, 64)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Settings"
+icon = ExtResource("4_icon_settings")
+expand_icon = true
 
 [node name="ExitButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(240, 48)
+custom_minimum_size = Vector2(280, 64)
 layout_mode = 2
 size_flags_horizontal = 4
-theme_override_colors/font_color = Color(1, 0.82, 0.82, 1)
+theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Exit"
+icon = ExtResource("5_icon_exit")
+expand_icon = true

@@ -5,6 +5,7 @@ Canonical docs for visual and UX conventions. Linked from [AGENTS.md](../../AGEN
 | Doc | Purpose |
 |-----|---------|
 | [ui-aesthetic.md](ui-aesthetic.md) | UI palette, mood, semantic tokens, overlay/menu patterns |
+| [mockups/](mockups/README.md) | Visual iterations by system (`menus`, `spellbook`, `hud`); files named `<element>-vN` |
 | [../resources/ui/palette.json](../../resources/ui/palette.json) | Machine-readable palette + semantic role map |
 | [../scripts/ui/ui_palette.gd](../../scripts/ui/ui_palette.gd) | Godot `UiPalette` constants and style helpers |
 
