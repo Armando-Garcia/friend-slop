@@ -595,7 +595,7 @@ func _contact_rest(
 
 func _exclude_rids() -> Array:
 	var rids: Array = [get_rid()]
-	if _caster is CollisionObject3D:
+	if is_instance_valid(_caster) and _caster is CollisionObject3D:
 		rids.append((_caster as CollisionObject3D).get_rid())
 	return rids
 

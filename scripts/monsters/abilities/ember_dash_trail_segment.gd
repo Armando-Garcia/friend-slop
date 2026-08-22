@@ -6,7 +6,6 @@ extends Area3D
 const SegmentScript := preload("res://scripts/monsters/abilities/ember_dash_trail_segment.gd")
 const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 
 const GROUND_Y := 0.045
 
@@ -77,6 +76,8 @@ func _build_visual(width: float, length: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _caster != null and not is_instance_valid(_caster):
+		_caster = null
 	_age += delta
 	if _age >= _lifetime_sec:
 		queue_free()
@@ -116,6 +117,6 @@ func _apply_burn(body: Node3D) -> void:
 		)
 		return
 	if _burn_dps > 0.0:
-		CombatHealthScript.apply_hit(body, _burn_dps * get_physics_process_delta_time(), self)
+		Character.apply_hit(body, _burn_dps * get_physics_process_delta_time(), self)
 	if body.has_method("apply_speed_boost"):
 		body.call("apply_speed_boost", _burn_refresh_sec, _burn_slow_multiplier)

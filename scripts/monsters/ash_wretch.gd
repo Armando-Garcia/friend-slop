@@ -271,7 +271,7 @@ func on_own_ward_blocked(blocked_from: Node = null) -> void:
 	caster.call("try_trigger_combo", player, WARD_BLOCK_COMBO_CHANCE, false)
 
 
-func _gather_interest() -> RefCounted:
+func _gather_interest() -> MonsterInterest:
 	_update_last_aggro_player()
 	var interest := super._gather_interest()
 	if _interest_is_actionable(interest):
@@ -281,33 +281,6 @@ func _gather_interest() -> RefCounted:
 			_last_aggro_player_pos, LAST_AGGRO_URGENCY, LAST_AGGRO_SOURCE
 		)
 	return interest
-
-
-func get_aggro_player_target() -> Node3D:
-	var tree := get_tree()
-	if tree == null:
-		return null
-	var players := tree.get_nodes_in_group("player")
-	var positions: Array = []
-	var alive_flags: Array = []
-	var nodes: Array = []
-	for node in players:
-		if node is Node3D:
-			var n3 := node as Node3D
-			positions.append(n3.global_position)
-			var alive_value = n3.get("is_alive")
-			alive_flags.append(true if alive_value == null else bool(alive_value))
-			nodes.append(n3)
-	var idx: int = MonsterAIScript.pick_nearest_target_index(
-		global_position, positions, alive_flags, chase_range
-	)
-	if idx < 0:
-		return null
-	return nodes[idx] as Node3D
-
-
-func has_aggro_player() -> bool:
-	return get_aggro_player_target() != null
 
 
 func get_last_aggro_player_aim() -> Variant:
@@ -370,7 +343,9 @@ func _get_dash_ability() -> Node:
 
 
 func _move_toward_cast_range(target: Node3D, ability: Node) -> void:
-	target = get_aggro_player_target() if get_aggro_player_target() != null else target
+	var aggro := get_aggro_player_target()
+	if aggro != null:
+		target = aggro
 	if target == null:
 		super._move_toward_cast_range(target, ability)
 		return

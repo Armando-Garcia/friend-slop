@@ -4,6 +4,8 @@ extends RefCounted
 ## One candidate goal for Monster AI (chase / investigate / flee hint).
 ## Produced by default player targeting, senses, or subclass preferencing.
 
+const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
+
 var target: Node3D = null
 var goal_position: Vector3 = Vector3.ZERO
 var has_goal_position: bool = false
@@ -15,17 +17,25 @@ var avoid_light: bool = false
 var source: StringName = &""
 
 
+func get_live_target() -> Node3D:
+	var live := MonsterAIScript.live_node3d(target)
+	if live == null:
+		target = null
+	return live
+
+
 func is_actionable() -> bool:
 	if urgency <= 0.0:
 		return false
-	if target != null and is_instance_valid(target):
+	if get_live_target() != null:
 		return true
 	return has_goal_position
 
 
 func resolved_goal_position(fallback: Vector3 = Vector3.ZERO) -> Vector3:
-	if target != null and is_instance_valid(target):
-		return target.global_position
+	var live := get_live_target()
+	if live != null:
+		return live.global_position
 	if has_goal_position:
 		return goal_position
 	return fallback

@@ -4,7 +4,6 @@ extends "res://scripts/monsters/monster_ability.gd"
 
 ## Quick backdash away from the player, then a chase strafe. 5s cooldown.
 
-const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 const PlayerFrostBreathScript := preload("res://scripts/characters/player_frost_breath.gd")
 
 const ARRIVE_EPS := 0.4
@@ -52,13 +51,13 @@ func is_dashing() -> bool:
 	return _dashing
 
 
-func fire_instant(monster: Node3D, target: Node3D) -> void:
+func fire_instant(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	try_backdash(monster, target)
 
 
-func try_backdash(monster: Node3D, target: Node3D, side_sign: float = 1.0) -> bool:
+func try_backdash(monster: Monster, target: Node3D, side_sign: float = 1.0) -> bool:
 	if _dashing:
 		return true
 	if not can_cast():
@@ -70,7 +69,7 @@ func try_backdash(monster: Node3D, target: Node3D, side_sign: float = 1.0) -> bo
 	return _dashing
 
 
-func start_backdash(monster: Node3D, target: Node3D) -> void:
+func start_backdash(monster: Monster, target: Node3D) -> void:
 	var max_dist := _monster_float(monster, "chase_range", 11.0)
 	max_dist = MonsterAIScript.max_aggro_move_distance(max_dist)
 	var goal := MonsterAIScript.pick_dash_landing_away(
@@ -79,7 +78,7 @@ func start_backdash(monster: Node3D, target: Node3D) -> void:
 	_begin_dash(monster, goal, target)
 
 
-func fire_combo_close_dash(monster: Node3D, target: Node3D) -> void:
+func fire_combo_close_dash(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	var toward := Vector3(
@@ -101,7 +100,7 @@ func fire_combo_close_dash(monster: Node3D, target: Node3D) -> void:
 		_combo_close_pending_shove = false
 
 
-func fire_combo_away_dash(monster: Node3D, target: Node3D) -> void:
+func fire_combo_away_dash(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	var inbound := _inbound_dash_dir
@@ -138,7 +137,7 @@ func tick_dash(monster: CharacterBody3D, delta: float) -> bool:
 
 
 func _begin_dash(
-	monster: Node3D, goal: Vector3, look: Node3D, spend_cooldown: bool = true
+	monster: Monster, goal: Vector3, look: Node3D, spend_cooldown: bool = true
 ) -> void:
 	_dash_goal = goal
 	var flat := _dash_goal - monster.global_position
@@ -155,12 +154,14 @@ func _begin_dash(
 		begin_cooldown()
 
 
-func _end_dash(monster: Node3D) -> void:
+func _end_dash(monster: Monster) -> void:
 	var look := _dash_look
 	var shove := _combo_close_pending_shove
 	_combo_close_pending_shove = false
 	_dashing = false
 	_dash_look = null
+	if not is_instance_valid(look):
+		look = null
 	if monster != null:
 		monster.velocity.x = 0.0
 		monster.velocity.z = 0.0
@@ -169,7 +170,7 @@ func _end_dash(monster: Node3D) -> void:
 	_start_follow_strafe(monster, look)
 
 
-func _apply_combo_shove(monster: Node3D, target: Node3D) -> void:
+func _apply_combo_shove(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	var away := Vector3(
@@ -180,7 +181,7 @@ func _apply_combo_shove(monster: Node3D, target: Node3D) -> void:
 	PlayerFrostBreathScript.apply_knockback_only(target, away)
 
 
-func _start_follow_strafe(monster: Node3D, look: Node3D) -> void:
+func _start_follow_strafe(monster: Monster, look: Node3D) -> void:
 	if monster == null or not monster.has_method("start_chase_strafe"):
 		return
 	var caster := monster.get_node_or_null("CasterCombat")
@@ -199,17 +200,14 @@ func _start_follow_strafe(monster: Node3D, look: Node3D) -> void:
 	monster.call("start_chase_strafe", target, _pending_strafe_side, duration)
 
 
-func _resolve_strafe_target(monster: Node3D, look: Node3D) -> Node3D:
-	if monster.has_method("get_aggro_player_target"):
-		var live: Variant = monster.call("get_aggro_player_target")
-		if live is Node3D and is_instance_valid(live as Node3D):
-			return live as Node3D
-	if look != null and is_instance_valid(look):
-		return look
-	return null
+func _resolve_strafe_target(monster: Monster, look: Node3D) -> Node3D:
+	var aggro := monster.get_aggro_player_target()
+	if aggro != null:
+		return aggro
+	return MonsterAIScript.live_node3d(look)
 
 
-func _face_during_dash(monster: Node3D) -> void:
+func _face_during_dash(monster: Monster) -> void:
 	if not monster.has_method("_face_horizontal"):
 		return
 	if _dash_look != null and is_instance_valid(_dash_look):

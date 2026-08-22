@@ -15,6 +15,17 @@ load_versions "$ROOT/tools/versions.env"
 CACHE="$ROOT/.cache/steam-setup"
 ADDONS_DIR="$ROOT/addons/godotsteam"
 GDE="$ADDONS_DIR/godotsteam.gdextension"
+GDE_DISABLED="$ADDONS_DIR/godotsteam.gdextension.disabled"
+EDITOR_PANEL="$ADDONS_DIR/editor/steamworks_panel.tscn"
+
+godotsteam_complete() {
+	local has_manifest=0
+	[[ -f "$GDE" || -f "$GDE_DISABLED" ]] && has_manifest=1
+	[[ "$has_manifest" -eq 1 \
+		&& -f "$EDITOR_PANEL" \
+		&& -f "$ADDONS_DIR/win64/libgodotsteam.windows.template_debug.x86_64.dll" \
+		&& -f "$ADDONS_DIR/linux64/libgodotsteam.linux.template_debug.x86_64.so" ]]
+}
 
 GODOTSTEAM_URL="https://codeberg.org/godotsteam/godotsteam/releases/download/${GODOTSTEAM_GDE_RELEASE_TAG}/${GODOTSTEAM_GDE_ZIP}"
 
@@ -65,7 +76,12 @@ find_godotsteam_root() {
 
 ZIP_PATH="$CACHE/$GODOTSTEAM_GDE_ZIP"
 
-if [[ ! -f "$GDE" ]]; then
+if godotsteam_complete; then
+	echo "GodotSteam already installed at $ADDONS_DIR"
+else
+	if [[ -d "$ADDONS_DIR" ]]; then
+		echo "GodotSteam install incomplete (missing editor panel or libs); reinstalling ..."
+	fi
 	require_unzip
 	download_if_missing "$GODOTSTEAM_URL" "$ZIP_PATH"
 	echo "Extracting GodotSteam to addons/ ..."
@@ -83,8 +99,6 @@ if [[ ! -f "$GDE" ]]; then
 		cp -R "$SOURCE" "$ADDONS_DIR"
 	fi
 	echo "GodotSteam installed to $ADDONS_DIR"
-else
-	echo "GodotSteam already installed at $ADDONS_DIR"
 fi
 
 if [[ ! -f "$ADDONS_DIR/linux64/libgodotsteam.linux.template_debug.x86_64.so" ]]; then

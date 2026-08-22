@@ -12,7 +12,6 @@
 [ext_resource type="Script" uid="uid://bcqyf4grpegj6" path="res://scripts/characters/player_stun.gd" id="10_stun"]
 [ext_resource type="PackedScene" uid="uid://7shalb8dn4r4" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
 [ext_resource type="Script" uid="uid://cg3awqqjxne53" path="res://scripts/spells/spell_hotbar.gd" id="12_hotbar"]
-[ext_resource type="Script" uid="uid://bcombathealth1" path="res://scripts/combat/combat_health.gd" id="13_health"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_d8q2a"]
 resource_local_to_scene = true
@@ -48,7 +47,6 @@ editor_description = "Shared playable base. Wand = player_wand.tscn (held pose =
 script = ExtResource("2_playable")
 player_index = 0
 gravity = null
-is_alive = true
 move_speed = 4.5
 move_friction = 50.0
 dash_distance = 4.5
@@ -138,9 +136,8 @@ unique_name_in_owner = true
 script = ExtResource("9_inventory")
 starting_items = Array[String](["", "spellbook"])
 
-[node name="Health" type="Node" parent="." index="9"]
+[node name="Health" parent="."]
 editor_description = "Player HP pool. Monster touch, fireballs, and ember burn spend this."
-script = ExtResource("13_health")
 max_health = 100.0
 
 [node name="Stun" type="Node" parent="." index="10" unique_id=796869350]

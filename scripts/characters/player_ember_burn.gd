@@ -3,7 +3,6 @@ extends RefCounted
 
 ## Burn slow + DPS while standing in Ember dash trails.
 
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 
 static var _timers: Dictionary = {}
 static var _dps: Dictionary = {}
@@ -37,7 +36,7 @@ static func tick(player: Node, delta: float) -> void:
 	timer -= delta
 	var dps := float(_dps.get(id, 0.0))
 	if dps > 0.0:
-		CombatHealthScript.apply_hit(player, dps * delta, null)
+		Character.apply_hit(player, dps * delta, null)
 	if timer <= 0.0:
 		_timers.erase(id)
 		_dps.erase(id)

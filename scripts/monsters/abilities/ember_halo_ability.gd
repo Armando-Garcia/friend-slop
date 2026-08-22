@@ -22,7 +22,7 @@ func _ready() -> void:
 	max_cast_range = 11.0
 
 
-func start_windup_fx(monster: Node3D) -> void:
+func start_windup_fx(monster: Monster) -> void:
 	stop_windup_fx()
 	var hand := resolve_hand(monster)
 	if hand == null:
@@ -61,7 +61,7 @@ func start_windup_fx(monster: Node3D) -> void:
 	_windup_fx.add_child(light)
 
 
-func _fire_cast(monster: Node3D, target: Node3D) -> void:
+func _fire_cast(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null:
 		return
 	var parent := _projectile_parent(monster)
@@ -69,7 +69,7 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 	EmberHaloProjectileScript.spawn(parent, origin, target.global_position, monster)
 
 
-func _projectile_parent(monster: Node3D) -> Node:
+func _projectile_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

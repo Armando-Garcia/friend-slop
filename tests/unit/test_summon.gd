@@ -18,16 +18,19 @@ func run() -> int:
 	return failures
 
 
-class FakeSummon extends Node:
-	var died: bool = false
+## A Character with its own HP pool, so SummonHost.kill_all spends it the same way
+## it spends a real Summon's. Command plumbing is recorded instead of driving AI.
+class FakeSummon extends Character:
 	var hunt_target: Node3D = null
 	var investigate_pos: Vector3 = Vector3.ZERO
 	var has_investigate: bool = false
 	var relay_sight: RefCounted = null
 	var relay_hearing: RefCounted = null
 
-	func die() -> void:
-		died = true
+	func _init() -> void:
+		var pool := CombatHealth.new()
+		pool.name = "Health"
+		add_child(pool)
 
 	func set_forced_hunt(target: Node3D, _free_leash: bool = true) -> void:
 		hunt_target = target
@@ -75,8 +78,8 @@ func _test_summon_host_kill_and_command() -> int:
 				err = "Expected command_investigate to set investigate goal"
 			else:
 				host.call("kill_all")
-				if not a.died or not b.died:
-					err = "Expected kill_all to call die on summons"
+				if a.is_alive() or b.is_alive():
+					err = "Expected kill_all to empty every summon HP pool"
 				elif int(host.call("summon_count")) != 0:
 					err = "Expected summon list cleared after kill_all"
 	holder.queue_free()

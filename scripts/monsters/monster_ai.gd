@@ -12,16 +12,11 @@ const MazePathGraphScript := preload("res://scripts/maze_path_graph.gd")
 const MAZE_BODY_RADIUS := 0.38
 
 
-static func apply_damage(current_health: float, amount: float) -> float:
-	return maxf(0.0, current_health - maxf(0.0, amount))
-
-
-static func apply_heal(current_health: float, amount: float, max_health: float) -> float:
-	return clampf(current_health + maxf(0.0, amount), 0.0, max_health)
-
-
-static func is_dead(health: float) -> bool:
-	return health <= 0.0
+## Safe Node3D from a stored ref. Freed objects are not null — never `as` before this.
+static func live_node3d(node: Variant) -> Node3D:
+	if not is_instance_valid(node) or not (node is Node3D):
+		return null
+	return node as Node3D
 
 
 ## Returns index of nearest living target within chase_range, or -1.

@@ -321,8 +321,6 @@ func preview_charger_knockup() -> void:
 
 func _prepare_sandbox_player(player: Node3D, playing: bool) -> void:
 	## Editor does not run PlayableCharacter._ready (script is not @tool).
-	if "is_alive" in player:
-		player.set("is_alive", true)
 	if not player.is_in_group("player"):
 		player.add_to_group("player")
 	if player is CollisionObject3D:

@@ -43,23 +43,16 @@ func take_damage(amount: float, from: Variant = null) -> void:
 		died.emit(from)
 
 
-static func apply_hit(body: Node, amount: float, from: Variant = null) -> void:
-	if body == null or not is_instance_valid(body):
-		return
-	if body.has_method("is_multiplayer_authority"):
-		var tree := body.get_tree()
-		var state := tree.root.get_node_or_null("GameState") if tree != null else null
-		var mp := state != null and bool(state.get("is_multiplayer"))
-		if mp and not body.is_multiplayer_authority():
-			return
-	var health := body.get_node_or_null("Health") as CombatHealth
-	if health != null:
-		health.take_damage(amount, from)
-		if health.is_dead() and "is_alive" in body:
-			body.set("is_alive", false)
-		return
-	if body.has_method("take_damage"):
-		body.call("take_damage", amount, from)
+## Ratio just before a hit of `amount` landed, for threshold-crossing reactions.
+func ratio_before(amount: float) -> float:
+	if max_health <= 0.001:
+		return 0.0
+	return clampf((current_health + maxf(amount, 0.0)) / max_health, 0.0, 1.0)
+
+
+## Spend the whole pool so death always travels the same signal path.
+func kill(from: Variant = null) -> void:
+	take_damage(current_health, from)
 
 
 func heal(amount: float) -> void:

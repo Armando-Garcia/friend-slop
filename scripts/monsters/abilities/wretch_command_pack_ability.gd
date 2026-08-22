@@ -37,7 +37,7 @@ func can_cast() -> bool:
 	return super.can_cast()
 
 
-func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
+func is_ready_to_cast(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	if target != null and is_instance_valid(target) and target.is_in_group("player"):
@@ -59,7 +59,7 @@ func clear_pending_aim() -> void:
 	_has_pending_aim = false
 
 
-func start_windup_fx(monster: Node3D) -> void:
+func start_windup_fx(monster: Monster) -> void:
 	stop_windup_fx()
 	var ritual := _resolve_ritual(monster)
 	if ritual != null:
@@ -76,14 +76,14 @@ func start_windup_fx(monster: Node3D) -> void:
 	hand.add_child(_windup_fx)
 
 
-func begin_cast(monster: Node3D, target: Node3D) -> void:
+func begin_cast(monster: Monster, target: Node3D) -> void:
 	stop_windup_fx()
 	begin_cooldown()
 	_fire_cast(monster, target)
 	clear_pending_aim()
 
 
-func _fire_cast(monster: Node3D, target: Node3D) -> void:
+func _fire_cast(monster: Monster, target: Node3D) -> void:
 	if monster == null:
 		return
 	var host := _resolve_summon_host(monster)
@@ -126,7 +126,7 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 		)
 
 
-func _resolve_aim_point(monster: Node3D, target: Node3D) -> Vector3:
+func _resolve_aim_point(monster: Monster, target: Node3D) -> Vector3:
 	if _has_pending_aim:
 		return _pending_aim
 	if target != null and is_instance_valid(target):
@@ -138,13 +138,13 @@ func _resolve_aim_point(monster: Node3D, target: Node3D) -> Vector3:
 	return monster.global_position + (-monster.global_transform.basis.z * 6.0)
 
 
-func _resolve_ritual(monster: Node3D) -> Node:
+func _resolve_ritual(monster: Monster) -> Node:
 	if monster == null:
 		return null
 	return monster.get_node_or_null("Ritual")
 
 
-func _resolve_summon_host(monster: Node3D) -> Node:
+func _resolve_summon_host(monster: Monster) -> Node:
 	if monster == null:
 		return null
 	if monster.has_method("get_summon_host"):
@@ -152,7 +152,7 @@ func _resolve_summon_host(monster: Node3D) -> Node:
 	return monster.get_node_or_null("SummonHost")
 
 
-func _projectile_parent(monster: Node3D) -> Node:
+func _projectile_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

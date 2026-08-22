@@ -102,7 +102,6 @@ eye_glow_color = Color(0.96, 0.96, 0.94, 1)
 lookdev_override = false
 show_combat_ranges = false
 show_sense_ranges = false
-max_health = 60.0
 move_speed = 4.0
 chase_range = 3.0
 attack_range = 1.2
@@ -129,6 +128,9 @@ chase_optimal_eps = 0.55
 editor_description = "Haunch sphere. Direct child of Charger so CharacterBody3D owns it."
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.36, 0.3)
 shape = SubResource("SphereShape3D_body")
+
+[node name="Health" parent="."]
+max_health = 60.0
 
 [node name="MidBodyCollision" type="CollisionShape3D" parent="." index="1" unique_id=910002001]
 editor_description = "Shoulder sphere. Direct child of Charger; snapped to MidBody."

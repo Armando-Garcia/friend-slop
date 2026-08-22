@@ -33,8 +33,6 @@ func _test_dummy_group_player_is_not_charge_target() -> int:
 func _test_playable_character_is_charge_target() -> int:
 	var player: Node = PlayableScene.instantiate()
 	player.add_to_group("player")
-	if "is_alive" in player:
-		player.set("is_alive", true)
 	if not ChargerScript.is_playable_charge_target(player):
 		push_error("PlayableCharacter in player group should be a charge target")
 		player.free()
@@ -44,9 +42,9 @@ func _test_playable_character_is_charge_target() -> int:
 
 
 func _test_dead_playable_is_not_charge_target() -> int:
-	var player: Node = PlayableScene.instantiate()
+	var player := PlayableScene.instantiate() as Character
 	player.add_to_group("player")
-	player.set("is_alive", false)
+	player.health.kill()
 	if ChargerScript.is_playable_charge_target(player):
 		push_error("Dead PlayableCharacter must not be a charge target")
 		player.free()
@@ -71,8 +69,6 @@ func _test_script_extends_playable() -> int:
 func _test_resolve_walks_to_playable_parent() -> int:
 	var player: Node = PlayableScene.instantiate()
 	player.add_to_group("player")
-	if "is_alive" in player:
-		player.set("is_alive", true)
 	var prop := Node.new()
 	player.add_child(prop)
 	var resolved := ChargerScript.resolve_playable_hit_body(prop)

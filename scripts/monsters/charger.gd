@@ -141,10 +141,10 @@ func apply_summon_appearance(tint: Color, p_eye_glow_color: Color = DEFAULT_EYE_
 	_sync_los_eyes()
 
 
-func die() -> void:
+func _on_death(from: Node3D) -> void:
 	_shatter_ward()
 	_set_stun_stars(false)
-	super.die()
+	super._on_death(from)
 
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
@@ -174,7 +174,7 @@ func preview_charge_pose() -> void:
 
 func preview_wall_stun() -> void:
 	## Inspector pose: wall stars, then 180° about-face and a slow search.
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	_charge.pose_only = true
 	set_process(true)
@@ -183,7 +183,7 @@ func preview_wall_stun() -> void:
 
 func preview_search() -> void:
 	## Inspector pose: turn 180°, then slowly look around. Loops until another preview.
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	_charge.pose_only = true
 	set_process(true)
@@ -192,7 +192,7 @@ func preview_search() -> void:
 
 func preview_knockup(player: Node3D = null) -> void:
 	## Launch a playable along the knockup arc from current facing.
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	var victim := player
 	if not is_playable_charge_target(victim):
@@ -209,7 +209,7 @@ func preview_charge(target: Node3D) -> void:
 
 
 func begin_lock_on(target: Node3D, pose_only: bool = false) -> void:
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	if target != null and not pose_only and not is_playable_charge_target(target):
 		return
@@ -232,7 +232,7 @@ func begin_lock_on(target: Node3D, pose_only: bool = false) -> void:
 
 
 func begin_charge_now(pose_only: bool = false, target: Node3D = null) -> void:
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	lookdev_override = false
 	_charge.pose_only = pose_only
@@ -248,7 +248,7 @@ func begin_charge_now(pose_only: bool = false, target: Node3D = null) -> void:
 
 
 func begin_wall_stun_now() -> void:
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	lookdev_override = false
 	_charge.pose_only = false
@@ -257,7 +257,7 @@ func begin_wall_stun_now() -> void:
 
 
 func begin_search_now() -> void:
-	if not is_inside_tree() or not is_alive:
+	if not is_inside_tree() or not is_alive():
 		return
 	lookdev_override = false
 	_charge.pose_only = false
@@ -327,7 +327,7 @@ func _face_horizontal(desired_vel: Vector3) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_alive or _charge.pose_only:
+	if not is_alive() or _charge.pose_only:
 		return
 	if _phase != ChargePhase.NONE:
 		if _sandbox_charge_tick():
@@ -346,7 +346,7 @@ func _tick_chase(delta: float) -> void:
 		super._tick_chase(delta)
 		return
 	if _interest_source() == SIGHT_SOURCE:
-		var target := _interest.get("target") as Node3D
+		var target := get_chase_target()
 		if is_playable_charge_target(target):
 			begin_lock_on(target, false)
 			return
@@ -520,7 +520,7 @@ func _try_search_lock() -> bool:
 	_interest = _gather_interest()
 	if _interest_source() != SIGHT_SOURCE:
 		return false
-	var target := _interest.get("target") as Node3D
+	var target := get_chase_target()
 	if not is_playable_charge_target(target):
 		return false
 	begin_lock_on(target, false)
@@ -729,6 +729,10 @@ func _interest_source() -> StringName:
 
 
 func _target_is_valid() -> bool:
+	## Freed refs are not null — check before any typed Node param call.
+	if not is_instance_valid(_charge_target):
+		_charge_target = null
+		return false
 	return is_playable_charge_target(_charge_target)
 
 
@@ -738,8 +742,7 @@ static func is_playable_charge_target(node: Node) -> bool:
 		return false
 	if not node.is_in_group("player"):
 		return false
-	var alive_value = node.get("is_alive")
-	if alive_value != null and not bool(alive_value):
+	if not Character.is_node_alive(node):
 		return false
 	if node is PlayableCharacter:
 		return true

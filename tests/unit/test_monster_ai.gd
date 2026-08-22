@@ -6,7 +6,6 @@ const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.
 
 func run() -> int:
 	var failures := 0
-	failures += _test_health_clamp_and_death()
 	failures += _test_pick_nearest_target()
 	failures += _test_resolve_state()
 	failures += _test_chase_eyes_visible()
@@ -16,25 +15,6 @@ func run() -> int:
 	failures += _test_chase_move_helpers()
 	failures += _test_lookdev_live_is_off_outside_editor()
 	return failures
-
-
-func _test_health_clamp_and_death() -> int:
-	if not is_equal_approx(MonsterAIScript.apply_damage(50.0, 12.0), 38.0):
-		push_error("Expected damage to subtract from health")
-		return 1
-	if not is_equal_approx(MonsterAIScript.apply_damage(5.0, 20.0), 0.0):
-		push_error("Expected damage to clamp at zero")
-		return 1
-	if not MonsterAIScript.is_dead(0.0) or MonsterAIScript.is_dead(0.1):
-		push_error("Expected is_dead only when health is zero or below")
-		return 1
-	if not is_equal_approx(MonsterAIScript.apply_heal(40.0, 20.0, 50.0), 50.0):
-		push_error("Expected heal to clamp at max_health")
-		return 1
-	if not is_equal_approx(MonsterAIScript.apply_damage(30.0, -5.0), 30.0):
-		push_error("Expected negative damage amounts to be ignored")
-		return 1
-	return 0
 
 
 func _test_pick_nearest_target() -> int:

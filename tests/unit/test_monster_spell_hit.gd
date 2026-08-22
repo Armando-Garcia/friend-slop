@@ -7,6 +7,7 @@ const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 func run() -> int:
 	var failures := 0
 	failures += _test_combat_and_wall_kinds()
+	failures += _test_freed_caster_is_ignored()
 	failures += _test_mask_value()
 	return failures
 
@@ -42,6 +43,20 @@ func _test_combat_and_wall_kinds() -> int:
 	wall.free()
 	floor.free()
 	caster.free()
+	return 0
+
+
+func _test_freed_caster_is_ignored() -> int:
+	## Projectiles often outlive the casting monster; kind() must not hard-error.
+	var player := Node3D.new()
+	player.add_to_group("player")
+	var caster := Node3D.new()
+	caster.free()
+	if MonsterSpellHitScript.kind(player, caster) != MonsterSpellHitScript.Kind.COMBAT:
+		push_error("Expected freed caster to be treated as null")
+		player.free()
+		return 1
+	player.free()
 	return 0
 
 

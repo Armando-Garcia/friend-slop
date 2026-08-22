@@ -17,7 +17,6 @@ script = ExtResource("2_rat")
 editor_description = "Queen's Rat Summon. Explodes on player touch while chasing; green charge light under Body."
 body_tint = Color(0.35, 0.55, 0.32, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)
-max_health = 10.0
 move_speed = 4.4
 chase_range = 10.0
 attack_range = 0.85
@@ -28,6 +27,9 @@ leash_enabled = true
 [node name="CollisionShape3D" parent="." index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.14, 0)
 shape = SubResource("CapsuleShape3D_rat")
+
+[node name="Health" parent="."]
+max_health = 10.0
 
 [node name="Body" parent="." index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)

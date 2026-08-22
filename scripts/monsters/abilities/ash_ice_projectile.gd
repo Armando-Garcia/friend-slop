@@ -6,7 +6,6 @@ extends Area3D
 
 const AshIceFlightScript := preload("res://scripts/monsters/abilities/ash_ice_flight.gd")
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
 
 const HIT_DAMAGE := 14.0
@@ -203,7 +202,7 @@ func _try_hit(body: Node3D) -> bool:
 	if apply_local and body.has_method("apply_fireball_knockback"):
 		body.call("apply_fireball_knockback", dir)
 	if hit_damage > 0.0:
-		CombatHealthScript.apply_hit(body, hit_damage, self)
+		Character.apply_hit(body, hit_damage, self)
 	return true
 
 
