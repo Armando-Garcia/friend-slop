@@ -55,7 +55,7 @@ func _test_pick_dash_landing_behind() -> int:
 
 func _test_dash_direction_locked() -> int:
 	var dash := EmberDashAbilityScript.new()
-	var monster := CharacterBody3D.new()
+	var monster := Monster.new()
 	var player := Node3D.new()
 	_attach(dash)
 	_attach(monster)

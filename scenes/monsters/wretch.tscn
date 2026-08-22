@@ -44,7 +44,6 @@ body_tint = Color(0.72, 0.28, 0.22, 1)
 eye_glow_color = Color(0.25, 1, 0.35, 1)
 lookdev_pose = 0
 show_combat_ranges = false
-max_health = 50.0
 move_speed = 3.2
 chase_range = 2.5
 attack_range = 1.4
@@ -60,6 +59,9 @@ shape = SubResource("CapsuleShape3D_tall")
 
 [node name="Body" parent="." index="1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+
+[node name="Health" parent="."]
+max_health = 50.0
 
 [node name="MidBody" type="MeshInstance3D" parent="."]
 unique_name_in_owner = true

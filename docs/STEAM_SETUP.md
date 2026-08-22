@@ -80,6 +80,7 @@ make release-ci   # ubuntu:24.04 container — Godot + GodotSteam + Linux export
 |---------|-----|
 | “GodotSteam not installed” in tests | Not required for `make test` — tests run offline. Use `make verify-steam` before export. |
 | “GodotSteam not loaded” in game | Re-run `make setup-steam`, restart Godot |
+| Failed to load `godotsteam_plugin.gd` (Parse error) | Incomplete `addons/godotsteam/` (missing `editor/`). Re-run `make setup-steam` / `tools/setup_godotsteam.ps1`, fully quit Godot, reopen. |
 | “Steam is not running” | Launch Steam client |
 | GodotSteam "already registered" spam in Output | You are on the **GodotSteam editor** with `addons/godotsteam/godotsteam.gdextension` also enabled. Run `make restore-voice` (syncs extensions) and restart Godot — the GDExtension is disabled automatically for the GodotSteam editor. Use stock Godot + `make setup-steam` if you prefer the GDExtension instead. |
 | CI fails on GodotSteam download | Check Codeberg availability; cache key uses `tools/versions.env` |

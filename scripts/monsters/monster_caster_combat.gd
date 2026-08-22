@@ -31,7 +31,7 @@ var _combo_step_index: int = 0
 var _combo_delay_left: float = 0.0
 var _combo_phase: int = ComboPhase.WAIT_DELAY
 var _combo_charge_ability: Node = null
-var _monster: Node3D = null
+var _monster: Monster = null
 var _rng := RandomNumberGenerator.new()
 var _combo_lockout_left: float = 0.0
 var _charged_retreat_rolled: bool = false
@@ -39,7 +39,7 @@ var _charged_retreat_rolled: bool = false
 
 func _ready() -> void:
 	_rng.randomize()
-	_monster = get_parent() as Node3D
+	_monster = get_parent() as Monster
 
 
 func uses_caster_combat() -> bool:
@@ -525,13 +525,10 @@ func _tick_locomotion(delta: float, target: Node3D, allow_move: bool = false) ->
 
 
 func _resolve_target(target: Node3D) -> Node3D:
-	if _monster.has_method("get_aggro_player_target"):
-		var live: Variant = _monster.call("get_aggro_player_target")
-		if live is Node3D and is_instance_valid(live as Node3D):
-			return live as Node3D
-	if target != null and is_instance_valid(target):
-		return target
-	return null
+	var aggro := _monster.get_aggro_player_target()
+	if aggro != null:
+		return aggro
+	return MonsterAIScript.live_node3d(target)
 
 
 func _interest_actionable() -> bool:
@@ -541,12 +538,13 @@ func _interest_actionable() -> bool:
 
 
 func _face_target(target: Node3D) -> void:
-	if target == null or not is_instance_valid(target):
+	var live := MonsterAIScript.live_node3d(target)
+	if not live:
 		return
 	var toward := Vector3(
-		target.global_position.x - _monster.global_position.x,
+		live.global_position.x - _monster.global_position.x,
 		0.0,
-		target.global_position.z - _monster.global_position.z
+		live.global_position.z - _monster.global_position.z
 	)
 	if toward.length_squared() < 0.0001:
 		return

@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://bcharacter01"]
 
 [ext_resource type="Script" uid="uid://bolwxtj4omh65" path="res://scripts/characters/character.gd" id="1_character"]
+[ext_resource type="Script" uid="uid://bhealthpool001" path="res://scripts/combat/health.gd" id="2_health"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_character"]
 radius = 0.27
@@ -51,3 +52,7 @@ unique_name_in_owner = true
 layers = 2
 mesh = SubResource("SphereMesh_head")
 surface_material_override/0 = SubResource("StandardMaterial3D_head")
+
+[node name="Health" type="Node" parent="." unique_id=1969475289]
+editor_description = "HP pool for this character. Every player, monster, and summon inherits its own. Set Max Health per type scene; damage, healing, and death all run through it."
+script = ExtResource("2_health")

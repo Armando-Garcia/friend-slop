@@ -1,6 +1,6 @@
 extends RefCounted
 
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+const HealthScript := preload("res://scripts/combat/health.gd")
 const CatalogScript := preload("res://scripts/combat/combat_balance_catalog.gd")
 const LoadoutScript := preload("res://scripts/spells/character_spell_loadout.gd")
 const SpellDefinitionScript := preload("res://scripts/spells/spell_definition.gd")
@@ -25,7 +25,7 @@ func run() -> int:
 
 
 func _test_health_pool_reaches_zero() -> int:
-	var health := CombatHealthScript.new()
+	var health := HealthScript.new()
 	health.max_health = 40.0
 	health.current_health = 40.0
 	health.take_damage(25.0)

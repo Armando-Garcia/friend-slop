@@ -7,6 +7,16 @@ $VersionsFile = Join-Path $Root "tools\versions.env"
 $Cache = Join-Path $Root ".cache\steam-setup"
 $AddonsDir = Join-Path $Root "addons\godotsteam"
 $Gde = Join-Path $AddonsDir "godotsteam.gdextension"
+$GdeDisabled = Join-Path $AddonsDir "godotsteam.gdextension.disabled"
+$EditorPanel = Join-Path $AddonsDir "editor\steamworks_panel.tscn"
+
+function Test-GodotSteamComplete {
+	$hasManifest = (Test-Path $Gde) -or (Test-Path $GdeDisabled)
+	$hasPanel = Test-Path $EditorPanel
+	$hasWin = Test-Path (Join-Path $AddonsDir "win64\libgodotsteam.windows.template_debug.x86_64.dll")
+	$hasLinux = Test-Path (Join-Path $AddonsDir "linux64\libgodotsteam.linux.template_debug.x86_64.so")
+	return ($hasManifest -and $hasPanel -and $hasWin -and $hasLinux)
+}
 
 function Read-VersionEnv([string]$Key) {
 	foreach ($line in Get-Content $VersionsFile) {
@@ -28,9 +38,12 @@ if ($ReleaseTag -eq "" -or $ZipName -eq "") {
 $Url = "https://codeberg.org/godotsteam/godotsteam/releases/download/$ReleaseTag/$ZipName"
 New-Item -ItemType Directory -Force -Path $Cache, (Split-Path $AddonsDir) | Out-Null
 
-if (Test-Path $Gde) {
+if (Test-GodotSteamComplete) {
 	Write-Host "GodotSteam already installed at $AddonsDir"
 } else {
+	if (Test-Path $AddonsDir) {
+		Write-Host "GodotSteam install incomplete (missing editor panel or libs); reinstalling ..."
+	}
 	$ZipPath = Join-Path $Cache $ZipName
 	if (-not (Test-Path $ZipPath)) {
 		Write-Host "Downloading $Url ..."

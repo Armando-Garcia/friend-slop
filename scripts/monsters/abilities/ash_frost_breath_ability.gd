@@ -41,17 +41,17 @@ func can_cast() -> bool:
 	return _cooldown_left <= 0.0 and is_inside_tree()
 
 
-func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
+func is_ready_to_cast(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	return _is_in_range(monster, _resolve_target_pos(monster, target))
 
 
-func is_target_in_range(monster: Node3D, target: Node3D) -> bool:
+func is_target_in_range(monster: Monster, target: Node3D) -> bool:
 	return _is_in_range(monster, _resolve_target_pos(monster, target))
 
 
-func start_retreat_telegraph(monster: Node3D) -> void:
+func start_retreat_telegraph(monster: Monster) -> void:
 	stop_retreat_telegraph(monster)
 	if monster == null:
 		return
@@ -64,7 +64,7 @@ func start_retreat_telegraph(monster: Node3D) -> void:
 		monster.set_meta(_TELEGRAPH_META, fx_nodes)
 
 
-func stop_retreat_telegraph(monster: Node3D) -> void:
+func stop_retreat_telegraph(monster: Monster) -> void:
 	if monster == null or not monster.has_meta(_TELEGRAPH_META):
 		return
 	var fx_nodes: Variant = monster.get_meta(_TELEGRAPH_META)
@@ -75,7 +75,7 @@ func stop_retreat_telegraph(monster: Node3D) -> void:
 	monster.remove_meta(_TELEGRAPH_META)
 
 
-func start_cloud_pre_fx(monster: Node3D) -> void:
+func start_cloud_pre_fx(monster: Monster) -> void:
 	stop_cloud_pre_fx(monster)
 	if monster == null:
 		return
@@ -86,7 +86,7 @@ func start_cloud_pre_fx(monster: Node3D) -> void:
 	monster.set_meta(_CLOUD_PRE_FX_META, fx)
 
 
-func stop_cloud_pre_fx(monster: Node3D) -> void:
+func stop_cloud_pre_fx(monster: Monster) -> void:
 	if monster == null or not monster.has_meta(_CLOUD_PRE_FX_META):
 		return
 	var fx: Variant = monster.get_meta(_CLOUD_PRE_FX_META)
@@ -122,7 +122,7 @@ func _build_cloud_pre_fx() -> Node3D:
 	return root
 
 
-func fire_instant(monster: Node3D, target: Node3D) -> void:
+func fire_instant(monster: Monster, target: Node3D) -> void:
 	if monster == null or not can_cast():
 		return
 	var aim := _resolve_target_pos(monster, target)
@@ -132,7 +132,7 @@ func fire_instant(monster: Node3D, target: Node3D) -> void:
 	begin_cooldown()
 
 
-func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+func fire_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	stop_cloud_pre_fx(monster)
 	if monster == null:
@@ -142,21 +142,22 @@ func fire_combo_step(monster: Node3D, target: Node3D) -> void:
 	begin_cooldown()
 
 
-func _resolve_target_pos(monster: Node3D, target: Node3D) -> Vector3:
-	if target != null and is_instance_valid(target):
-		return target.global_position
-	if monster != null and monster.has_method("get_aggro_player_target"):
-		var live: Variant = monster.call("get_aggro_player_target")
-		if live is Node3D and is_instance_valid(live as Node3D):
-			return (live as Node3D).global_position
-	if monster != null and monster.has_method("get_last_aggro_player_aim"):
-		var last = monster.call("get_last_aggro_player_aim")
-		if last is Vector3:
-			return last as Vector3
-	return monster.global_position if monster != null else Vector3.ZERO
+func _resolve_target_pos(monster: Monster, target: Node3D) -> Vector3:
+	var live := MonsterAI.live_node3d(target)
+	if live:
+		return live.global_position
+	if monster == null:
+		return Vector3.ZERO
+	var aggro := monster.get_aggro_player_target()
+	if aggro != null:
+		return aggro.global_position
+	var last: Variant = monster.get_last_aggro_player_aim()
+	if last is Vector3:
+		return last as Vector3
+	return monster.global_position
 
 
-func _is_in_range(monster: Node3D, aim: Vector3) -> bool:
+func _is_in_range(monster: Monster, aim: Vector3) -> bool:
 	if monster == null:
 		return false
 	var flat := Vector3(
@@ -168,14 +169,14 @@ func _is_in_range(monster: Node3D, aim: Vector3) -> bool:
 	return dist >= min_cast_range and dist <= max_cast_range
 
 
-func _spawn_cloud(monster: Node3D, aim: Vector3) -> void:
+func _spawn_cloud(monster: Monster, aim: Vector3) -> void:
 	var parent := _effect_parent(monster)
 	var origin := _cast_origin_between_hands(monster)
 	var launch_pos := AshFrostBreathFlightScript.launch_position(origin, aim)
 	AshFrostBreathCloudScript.spawn(parent, launch_pos, aim, monster)
 
 
-func _cast_origin_between_hands(monster: Node3D) -> Vector3:
+func _cast_origin_between_hands(monster: Monster) -> Vector3:
 	var hands := _resolve_both_hands(monster)
 	if hands.is_empty():
 		return monster.global_position + Vector3(0.0, 0.55, 0.0)
@@ -185,7 +186,7 @@ func _cast_origin_between_hands(monster: Node3D) -> Vector3:
 	return sum / float(hands.size())
 
 
-func _resolve_both_hands(monster: Node3D) -> Array[Node3D]:
+func _resolve_both_hands(monster: Monster) -> Array[Node3D]:
 	var out: Array[Node3D] = []
 	if monster == null:
 		return out
@@ -229,7 +230,7 @@ func _build_hand_telegraph_fx() -> Node3D:
 	return root
 
 
-func _effect_parent(monster: Node3D) -> Node:
+func _effect_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

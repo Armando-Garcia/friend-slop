@@ -3,9 +3,7 @@ extends CharacterBody3D
 
 ## Lookdev dummy in the `player` group so monster senses can lock on.
 ## Armed by MonsterWorkspace; stays out of the group while hidden.
-
-## Sight/hearing skip dead players. Leave on so this dummy can aggro monsters.
-@export var is_alive: bool = true
+## Not a Character, so senses treat it as always alive.
 
 
 func _enter_tree() -> void:

@@ -244,11 +244,11 @@ func _tick_alert(_delta: float) -> void:
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	## Any fireball contact kills the rat.
-	if not is_alive or _dying or _exploding or _exploded:
+	if not is_alive() or _exploding or _exploded:
 		return
 	if fireball_dir.length_squared() > 0.0001:
 		_last_hit_dir = fireball_dir.normalized()
-	die()
+	health.kill()
 
 
 func _physics_process(delta: float) -> void:
@@ -262,7 +262,7 @@ func _physics_process(delta: float) -> void:
 
 func _try_touch_damage(target: Node3D) -> void:
 	## Single power: explode on player contact while chasing.
-	if _exploding or _exploded or _dying or not is_alive:
+	if _exploding or _exploded or not is_alive():
 		return
 	if _ai_state != MonsterAIScript.State.CHASE:
 		return
@@ -316,7 +316,7 @@ func _begin_explode() -> void:
 
 
 func _tick_explode_charge(delta: float) -> void:
-	if Engine.is_editor_hint() or not is_alive:
+	if Engine.is_editor_hint() or not is_alive():
 		return
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -399,8 +399,7 @@ func _apply_explode_hits(origin: Vector3) -> void:
 		var victim := node as Node3D
 		if origin.distance_to(victim.global_position) > explode_radius:
 			continue
-		if victim.has_method("take_damage"):
-			victim.call("take_damage", explode_monster_damage, self)
+		Character.apply_hit(victim, explode_monster_damage, self)
 
 
 func _spawn_explode_flash(origin: Vector3) -> void:

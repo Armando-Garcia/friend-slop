@@ -4,7 +4,6 @@ extends "res://scripts/monsters/monster_ability.gd"
 
 ## Chase sidestep + combo dash behind the player with a burning ground trail.
 
-const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 const EmberDashTrailSegmentScript := preload(
 	"res://scripts/monsters/abilities/ember_dash_trail_segment.gd"
 )
@@ -57,7 +56,7 @@ func _ready() -> void:
 	max_cast_range = 40.0
 
 
-func try_sidestep(monster: Node3D, target: Node3D) -> bool:
+func try_sidestep(monster: Monster, target: Node3D) -> bool:
 	if _dashing:
 		return true
 	if not can_sidestep(monster, target):
@@ -66,7 +65,7 @@ func try_sidestep(monster: Node3D, target: Node3D) -> bool:
 	return _dashing
 
 
-func can_sidestep(monster: Node3D, target: Node3D) -> bool:
+func can_sidestep(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	if monster == null or target == null or not is_instance_valid(target):
@@ -84,7 +83,7 @@ func can_sidestep(monster: Node3D, target: Node3D) -> bool:
 	return flat.length_squared() > 0.25
 
 
-func can_dash(monster: Node3D, target: Node3D) -> bool:
+func can_dash(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	if monster == null or target == null or not is_instance_valid(target):
@@ -101,7 +100,7 @@ func is_dashing() -> bool:
 	return _dashing
 
 
-func fire_instant(monster: Node3D, target: Node3D) -> void:
+func fire_instant(monster: Monster, target: Node3D) -> void:
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	if not can_cast():
@@ -114,18 +113,18 @@ func fire_instant(monster: Node3D, target: Node3D) -> void:
 	start_dash(monster, target)
 
 
-func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+func fire_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	if monster == null or target == null or not is_instance_valid(target):
 		return
 	start_dash(monster, target)
 
 
-func start_dash(monster: Node3D, target: Node3D) -> void:
+func start_dash(monster: Monster, target: Node3D) -> void:
 	_begin_dash(monster, _compute_landing(monster, target), false, null)
 
 
-func start_sidestep(monster: Node3D, target: Node3D) -> void:
+func start_sidestep(monster: Monster, target: Node3D) -> void:
 	var goal := _compute_sidestep_landing(monster, target)
 	_begin_dash(monster, goal, true, target)
 	if _dashing:
@@ -133,7 +132,7 @@ func start_sidestep(monster: Node3D, target: Node3D) -> void:
 
 
 func _begin_dash(
-	monster: Node3D, goal: Vector3, sidestep: bool, look: Node3D
+	monster: Monster, goal: Vector3, sidestep: bool, look: Node3D
 ) -> void:
 	_dash_goal = goal
 	var flat := _dash_goal - monster.global_position
@@ -168,7 +167,7 @@ func tick_dash(monster: CharacterBody3D, delta: float) -> bool:
 	return true
 
 
-func _end_dash(monster: Node3D) -> void:
+func _end_dash(monster: Monster) -> void:
 	_dashing = false
 	_sidestep = false
 	_dash_look = null
@@ -177,7 +176,7 @@ func _end_dash(monster: Node3D) -> void:
 		monster.velocity.z = 0.0
 
 
-func _face_during_dash(monster: Node3D) -> void:
+func _face_during_dash(monster: Monster) -> void:
 	if not monster.has_method("_face_horizontal"):
 		return
 	if _sidestep and _dash_look != null and is_instance_valid(_dash_look):
@@ -205,7 +204,7 @@ func _is_blocked_ahead(monster: CharacterBody3D, delta: float) -> bool:
 	return not hit.is_empty()
 
 
-func _spawn_trail_along_path(monster: Node3D, delta: float, speed: float) -> void:
+func _spawn_trail_along_path(monster: Monster, delta: float, speed: float) -> void:
 	var step := speed * delta
 	_trail_dist_accum += step
 	if _trail_dist_accum < trail_segment_spacing:
@@ -227,7 +226,7 @@ func _spawn_trail_along_path(monster: Node3D, delta: float, speed: float) -> voi
 	)
 
 
-func _compute_landing(monster: Node3D, target: Node3D) -> Vector3:
+func _compute_landing(monster: Monster, target: Node3D) -> Vector3:
 	var max_cast := _max_combat_range(monster) * landing_distance_mult
 	var chase_range := _monster_float(monster, "chase_range", 12.0)
 	var max_dist := MonsterAIScript.max_aggro_move_distance(chase_range)
@@ -236,7 +235,7 @@ func _compute_landing(monster: Node3D, target: Node3D) -> Vector3:
 	)
 
 
-func _compute_sidestep_landing(monster: Node3D, target: Node3D) -> Vector3:
+func _compute_sidestep_landing(monster: Monster, target: Node3D) -> Vector3:
 	var distance := _max_combat_range(monster) * landing_distance_mult * SIDESTEP_DISTANCE_MULT
 	return pick_sidestep_landing(
 		monster.global_position, target, distance, _last_sidestep_sign
@@ -284,7 +283,7 @@ func _monster_float(monster: Object, prop: String, fallback: float) -> float:
 	return fallback
 
 
-func _max_combat_range(monster: Node3D) -> float:
+func _max_combat_range(monster: Monster) -> float:
 	var best := 13.0
 	var root := monster.get_node_or_null("Abilities")
 	if root == null:
@@ -297,7 +296,7 @@ func _max_combat_range(monster: Node3D) -> float:
 	return best
 
 
-func _trail_parent(monster: Node3D) -> Node:
+func _trail_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

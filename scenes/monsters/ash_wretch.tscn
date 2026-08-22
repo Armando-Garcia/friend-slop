@@ -22,12 +22,6 @@ roughness = 0.62
 radius = 0.06
 height = 0.12
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hand"]
-resource_local_to_scene = true
-albedo_color = Color(0.42, 0.4, 0.48, 1)
-metallic = 0.05
-roughness = 0.62
-
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jxor8"]
 albedo_color = Color(0.42, 0.4, 0.48, 1)
 metallic = 0.05
@@ -49,7 +43,6 @@ body_tint = Color(0.42, 0.4, 0.48, 1)
 eye_glow_color = Color(0.55, 0.55, 0.58, 1)
 lookdev_override = false
 show_combat_ranges = false
-max_health = 55.0
 move_speed = 2.8
 chase_range = 11.0
 attack_range = 1.35
@@ -71,9 +64,13 @@ chase_retreat_min_sec = 1.2
 chase_retreat_max_sec = 3.2
 chase_optimal_eps = 0.55
 
+[node name="Health" parent="."]
+max_health = 55.0
+
 [node name="Body" parent="." index="1" unique_id=73058391]
 layers = 2
 material_override = SubResource("StandardMaterial3D_51b5b")
+surface_material_override/0 = null
 
 [node name="Hands" type="Node3D" parent="Body" index="0" unique_id=1423862136]
 editor_description = "Cast hands. Right = Ice Bolt, Left = Ward. Frost Breath = combo cloud."
@@ -84,7 +81,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.26, 0.02, 0)
 layers = 2
 material_override = SubResource("StandardMaterial3D_ffyo6")
 mesh = SubResource("SphereMesh_hand")
-surface_material_override/0 = SubResource("StandardMaterial3D_hand")
 
 [node name="LeftHand" type="MeshInstance3D" parent="Body/Hands" index="1" unique_id=530821534]
 unique_name_in_owner = true
@@ -92,19 +88,21 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.26, 0.02, 0)
 layers = 2
 material_override = SubResource("StandardMaterial3D_jxor8")
 mesh = SubResource("SphereMesh_hand")
-surface_material_override/0 = SubResource("StandardMaterial3D_hand")
 
 [node name="HeadMesh" parent="Head" parent_id_path=PackedInt32Array(1186111743) index="0" unique_id=1294118041]
 layers = 2
 material_override = SubResource("StandardMaterial3D_n4ck0")
+surface_material_override/0 = null
 
 [node name="LeftEye" parent="Head/Eyes" parent_id_path=PackedInt32Array(910001010) index="0" unique_id=910001011]
 layers = 2
 material_override = SubResource("StandardMaterial3D_vsvc5")
+surface_material_override/0 = null
 
 [node name="RightEye" parent="Head/Eyes" parent_id_path=PackedInt32Array(910001010) index="1" unique_id=910001012]
 layers = 2
 material_override = SubResource("StandardMaterial3D_vsvc5")
+surface_material_override/0 = null
 
 [node name="Glow" parent="Head/Eyes" parent_id_path=PackedInt32Array(910001010) index="2" unique_id=910001013]
 light_color = Color(0.55, 0.55, 0.58, 1)
