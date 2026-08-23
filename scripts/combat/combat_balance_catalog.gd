@@ -17,7 +17,7 @@ const AshIceProjectileScript := preload("res://scripts/monsters/abilities/ash_ic
 const AshFrostBreathFlightScript := preload(
 	"res://scripts/monsters/abilities/ash_frost_breath_flight.gd"
 )
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
+const HealthScript := preload("res://scripts/combat/health.gd")
 
 const PLAYER_SCENE := "res://scenes/characters/playable_character.tscn"
 const WARD_SCENE := "res://scenes/spells/ward/ward.tscn"
@@ -42,37 +42,37 @@ static func monster_roster() -> Array[Dictionary]:
 		if packed == null:
 			continue
 		var node: Node = packed.instantiate()
-		var hp := 0.0
 		var touch := 0.0
-		if "max_health" in node:
-			hp = float(node.get("max_health"))
 		if "touch_damage" in node:
 			touch = float(node.get("touch_damage"))
-		var node_name := node.name
+		var row := {
+			"name": str(entry["name"]),
+			"path": str(entry["path"]),
+			"node": node.name,
+			"max_health": _authored_max_health(node),
+			"touch_dps": touch,
+		}
 		node.free()
-		rows.append(
-			{
-				"name": str(entry["name"]),
-				"path": str(entry["path"]),
-				"node": node_name,
-				"max_health": hp,
-				"touch_dps": touch,
-			}
-		)
+		rows.append(row)
 	return rows
 
 
 static func player_max_health() -> float:
 	var packed: PackedScene = load(PLAYER_SCENE) as PackedScene
 	if packed == null:
-		return CombatHealthScript.DEFAULT_MAX_HEALTH
+		return HealthScript.DEFAULT_MAX_HEALTH
 	var root: Node = packed.instantiate()
-	var health: Node = root.get_node_or_null("Health")
-	var hp := CombatHealthScript.DEFAULT_MAX_HEALTH
-	if health != null and "max_health" in health:
-		hp = float(health.get("max_health"))
+	var hp := _authored_max_health(root)
 	root.free()
 	return hp
+
+
+## Every character scene authors one Health child — players and monsters alike.
+static func _authored_max_health(character: Node) -> float:
+	var health := character.get_node_or_null("Health") as Health
+	if health == null:
+		return HealthScript.DEFAULT_MAX_HEALTH
+	return health.max_health
 
 
 static func spell_rows(spells: Array) -> Array[Dictionary]:

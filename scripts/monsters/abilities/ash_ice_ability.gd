@@ -37,7 +37,7 @@ func reset_for_combo() -> void:
 	_burst_active = false
 
 
-func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
+func is_ready_to_cast(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	var aim: Variant = _resolve_aim_point(monster, target)
@@ -46,30 +46,30 @@ func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
 	return _is_aim_in_cast_range(monster, aim as Vector3)
 
 
-func is_target_in_range(monster: Node3D, target: Node3D) -> bool:
+func is_target_in_range(monster: Monster, target: Node3D) -> bool:
 	var aim: Variant = _resolve_aim_point(monster, target)
 	if not aim is Vector3:
 		return false
 	return _is_aim_in_cast_range(monster, aim as Vector3)
 
 
-func begin_cast(monster: Node3D, target: Node3D) -> void:
+func begin_cast(monster: Monster, target: Node3D) -> void:
 	stop_windup_fx()
 	_run_burst(monster, target)
 
 
-func release_charge(monster: Node3D, target: Node3D) -> void:
+func release_charge(monster: Monster, target: Node3D) -> void:
 	stop_windup_fx()
 	_run_burst(monster, target)
 
 
-func release_combo_step(monster: Node3D, target: Node3D) -> void:
+func release_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	stop_windup_fx()
 	_run_burst(monster, target, COMBO_BURST_COUNT)
 
 
-func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+func fire_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	stop_windup_fx()
 	if monster == null:
@@ -77,7 +77,7 @@ func fire_combo_step(monster: Node3D, target: Node3D) -> void:
 	_run_burst(monster, target, COMBO_BURST_COUNT)
 
 
-func start_windup_fx(monster: Node3D) -> void:
+func start_windup_fx(monster: Monster) -> void:
 	stop_windup_fx()
 	var hand := resolve_hand(monster)
 	if hand == null:
@@ -109,12 +109,12 @@ func start_windup_fx(monster: Node3D) -> void:
 	_windup_fx.add_child(light)
 
 
-func _fire_cast(monster: Node3D, target: Node3D) -> void:
+func _fire_cast(monster: Monster, target: Node3D) -> void:
 	## Preview Cast path — fire the full burst without waiting for AI windup.
 	_run_burst(monster, target)
 
 
-func _run_burst(monster: Node3D, target: Node3D, burst_count: int = 1) -> void:
+func _run_burst(monster: Monster, target: Node3D, burst_count: int = 1) -> void:
 	if _burst_active:
 		return
 	if monster == null:
@@ -143,18 +143,18 @@ func _run_burst(monster: Node3D, target: Node3D, burst_count: int = 1) -> void:
 	_burst_active = false
 
 
-func _spawn_bolt_at(monster: Node3D, aim: Vector3, side_sign: float) -> void:
+func _spawn_bolt_at(monster: Monster, aim: Vector3, side_sign: float) -> void:
 	var parent := _projectile_parent(monster)
 	var origin := resolve_cast_origin(monster)
 	AshIceProjectileScript.spawn_toward_point(parent, origin, aim, monster, side_sign)
 
 
-func _resolve_aim_point(monster: Node3D, target: Node3D) -> Variant:
-	var live := _get_aggro_player(monster)
-	if live != null:
-		return live.global_position
-	if monster != null and monster.has_method("get_last_aggro_player_aim"):
-		var last = monster.call("get_last_aggro_player_aim")
+func _resolve_aim_point(monster: Monster, target: Node3D) -> Variant:
+	if monster != null:
+		var live := monster.get_aggro_player_target()
+		if live != null:
+			return live.global_position
+		var last: Variant = monster.get_last_aggro_player_aim()
 		if last is Vector3:
 			return last
 	if target != null and is_instance_valid(target) and target.is_in_group("player"):
@@ -162,15 +162,7 @@ func _resolve_aim_point(monster: Node3D, target: Node3D) -> Variant:
 	return null
 
 
-func _get_aggro_player(monster: Node3D) -> Node3D:
-	if monster != null and monster.has_method("get_aggro_player_target"):
-		var aggro: Variant = monster.call("get_aggro_player_target")
-		if aggro is Node3D and is_instance_valid(aggro as Node3D):
-			return aggro as Node3D
-	return null
-
-
-func _is_aim_in_cast_range(monster: Node3D, aim: Vector3) -> bool:
+func _is_aim_in_cast_range(monster: Monster, aim: Vector3) -> bool:
 	if monster == null:
 		return false
 	var flat := Vector3(
@@ -182,7 +174,7 @@ func _is_aim_in_cast_range(monster: Node3D, aim: Vector3) -> bool:
 	return dist >= min_cast_range and dist <= max_cast_range
 
 
-func _projectile_parent(monster: Node3D) -> Node:
+func _projectile_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

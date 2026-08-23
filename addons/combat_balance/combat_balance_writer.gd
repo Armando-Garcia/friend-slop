@@ -65,8 +65,9 @@ static func save_spell_resource(spell: Resource) -> bool:
 	return ResourceSaver.save(spell, path) == OK
 
 
-static func apply_player_max_health(value: float) -> bool:
-	return patch_tscn_float(PLAYER_SCENE, "Health", "max_health", value)
+## Player, monster, and summon scenes all author max_health on their Health child.
+static func apply_max_health(scene_path: String, value: float) -> bool:
+	return patch_tscn_float(scene_path, "Health", "max_health", value)
 
 
 static func apply_monster(path: String, node_name: String, field: String, value: float) -> bool:

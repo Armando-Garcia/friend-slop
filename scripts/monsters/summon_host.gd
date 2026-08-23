@@ -56,8 +56,8 @@ func kill_all() -> void:
 	for summon in snapshot:
 		if summon == null or not is_instance_valid(summon):
 			continue
-		if summon.has_method("die"):
-			summon.call("die")
+		if summon is Character:
+			(summon as Character).health.kill()
 		elif summon.is_inside_tree():
 			summon.queue_free()
 	summons_changed.emit()

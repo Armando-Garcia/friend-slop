@@ -5,7 +5,7 @@
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "Sure.\n```json\n{\n  \"lede\": \"FriendSlop closed higher on ward integrity and a new afternoon paper.\",\n  \"sections\": [\n    {\n      \"title\": \"Combat\",\n      \"body\": \"CombatHealth now backs players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered.\"\n    },\n    {\n      \"title\": \"Publishing Desk\",\n      \"body\": \"The Wand Street Journal posts a daily closing when pull requests land and Special Editions when releases publish.\"\n    }\n  ]\n}\n```\n"
+        "content": "Sure.\n```json\n{\n  \"lede\": \"FriendSlop closed higher on ward integrity and a new afternoon paper.\",\n  \"sections\": [\n    {\n      \"title\": \"Combat\",\n      \"body\": \"Shared Health pools now back players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered.\"\n    },\n    {\n      \"title\": \"Publishing Desk\",\n      \"body\": \"The Wand Street Journal posts a daily closing when pull requests land and Special Editions when releases publish.\"\n    }\n  ]\n}\n```\n"
       },
       "finish_reason": "stop"
     }

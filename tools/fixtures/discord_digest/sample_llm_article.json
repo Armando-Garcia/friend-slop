@@ -6,7 +6,7 @@
       "index": 0,
       "message": {
         "role": "assistant",
-        "content": "LEDE: FriendSlop closed higher on ward integrity and a new afternoon paper.\n\n=== Combat ===\nCombatHealth now backs players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered.\n\n=== Publishing Desk ===\nThe Wand Street Journal posts a daily closing when pull requests land and Special Editions when releases publish.\n"
+        "content": "LEDE: FriendSlop closed higher on ward integrity and a new afternoon paper.\n\n=== Combat ===\nShared Health pools now back players and monsters. Wards hold forty hit points, regenerate after a one-second pause, and double the next regen delay when shattered.\n\n=== Publishing Desk ===\nThe Wand Street Journal posts a daily closing when pull requests land and Special Editions when releases publish.\n"
       },
       "finish_reason": "stop"
     }

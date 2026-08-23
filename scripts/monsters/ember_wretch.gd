@@ -63,17 +63,13 @@ func _uses_continuous_chase_move_timer() -> bool:
 	return false
 
 
-func take_damage(amount: float, from: Node3D = null) -> void:
-	var ratio_before := get_health_ratio()
-	super.take_damage(amount, from)
-	if not is_alive:
+func _on_hurt(amount: float, from: Node3D) -> void:
+	if not is_alive():
 		return
+	var ratio_before := health.ratio_before(amount)
 	var dash := _get_dash_ability()
 	if dash != null:
-		if (
-			ratio_before >= LOW_HP_COMBO_RATIO
-			and get_health_ratio() < LOW_HP_COMBO_RATIO
-		):
+		if ratio_before >= LOW_HP_COMBO_RATIO and health_ratio() < LOW_HP_COMBO_RATIO:
 			dash.reset_cooldown()
 	_try_low_hp_combo(from, ratio_before)
 
@@ -136,7 +132,7 @@ func _start_weighted_chase_walk(target: Node3D) -> void:
 func _try_low_hp_combo(from: Node3D, ratio_before: float) -> void:
 	if _used_low_hp_combo:
 		return
-	if ratio_before < LOW_HP_COMBO_RATIO or get_health_ratio() >= LOW_HP_COMBO_RATIO:
+	if ratio_before < LOW_HP_COMBO_RATIO or health_ratio() >= LOW_HP_COMBO_RATIO:
 		return
 	var caster := get_node_or_null("CasterCombat")
 	if caster == null or not caster.has_method("try_trigger_combo"):

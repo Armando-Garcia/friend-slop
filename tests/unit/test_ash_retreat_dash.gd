@@ -172,17 +172,19 @@ func _free_nodes(nodes: Array) -> void:
 			(node as Node).queue_free()
 
 
-class _StrafeProbe extends CharacterBody3D:
-	var chase_range: float = 11.0
-	var move_speed: float = 2.8
-	var chase_strafe_min_sec: float = 1.2
-	var chase_strafe_max_sec: float = 2.0
+## Real Monster so the typed ability contract applies; records strafe requests
+## instead of running chase locomotion.
+class _StrafeProbe extends Monster:
 	var strafe_count: int = 0
 	var last_side: float = 0.0
+
+	func _init() -> void:
+		chase_range = 11.0
+		move_speed = 2.8
 
 	func start_chase_strafe(_target: Node3D, side_sign: float, _duration_sec: float) -> void:
 		strafe_count += 1
 		last_side = side_sign
 
-	func _face_horizontal(_dir: Vector3) -> void:
+	func _face_horizontal(_desired_vel: Vector3) -> void:
 		pass

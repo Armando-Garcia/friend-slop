@@ -104,7 +104,5 @@ static func _segment_distance_sq(from: Vector3, to: Vector3, point: Vector3) -> 
 ## Tell the attacking caster a live ward ate their spell.
 static func notify_caster_warded(caster: Variant = null, blocked_by: Node = null) -> void:
 	var live := live_node(caster)
-	if live == null:
-		return
-	if live.has_method("on_spell_ward_blocked"):
-		live.call("on_spell_ward_blocked", blocked_by)
+	if live is Character:
+		(live as Character).on_spell_ward_blocked(blocked_by)

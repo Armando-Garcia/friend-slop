@@ -38,7 +38,7 @@ func _ready() -> void:
 	max_cast_range = 40.0
 
 
-func spawn_held_ward(monster: Node3D) -> Node:
+func spawn_held_ward(monster: Monster) -> Node:
 	if monster == null:
 		return null
 	var holder := monster.get_node_or_null("ShieldHold") as Node3D
@@ -77,11 +77,11 @@ func spawn_held_ward(monster: Node3D) -> Node:
 	return ward
 
 
-func _fire_cast(monster: Node3D, _target: Node3D) -> void:
+func _fire_cast(monster: Monster, _target: Node3D) -> void:
 	spawn_held_ward(monster)
 
 
-func _ignore_character_collisions(ward: Node, monster: Node3D) -> void:
+func _ignore_character_collisions(ward: Node, monster: Monster) -> void:
 	var body := ward.get_node_or_null("Body") as PhysicsBody3D
 	if body == null:
 		return
@@ -95,7 +95,7 @@ func _ignore_character_collisions(ward: Node, monster: Node3D) -> void:
 			body.add_collision_exception_with(node as CollisionObject3D)
 
 
-func _attach_to_holder(ward: Node, holder: Node3D, _monster: Node3D) -> void:
+func _attach_to_holder(ward: Node, holder: Node3D, _monster: Monster) -> void:
 	if holder == null:
 		return
 	if ward.get_parent() != holder:
@@ -109,7 +109,7 @@ func _attach_to_holder(ward: Node, holder: Node3D, _monster: Node3D) -> void:
 		(ward as Node3D).rotation = Vector3.ZERO
 
 
-func _ward_parent(monster: Node3D) -> Node:
+func _ward_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

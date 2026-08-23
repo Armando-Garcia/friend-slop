@@ -8,6 +8,7 @@ extends Node3D
 enum HandSide { RIGHT, LEFT }
 
 const WINDUP_SEC_DEFAULT := 0.55
+const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 
 @export var ability_id: String = ""
 @export var display_name: String = "Ability"
@@ -47,21 +48,22 @@ func can_cast() -> bool:
 	return _cooldown_left <= 0.0 and is_inside_tree()
 
 
-func is_ready_to_cast(monster: Node3D, target: Node3D) -> bool:
+func is_ready_to_cast(monster: Monster, target: Node3D) -> bool:
 	if not can_cast():
 		return false
 	if not requires_target:
 		return true
+	var live := MonsterAIScript.live_node3d(target)
 	if requires_chase_target:
-		return target != null and is_instance_valid(target)
-	return is_target_in_range(monster, target)
+		return live != null
+	return is_target_in_range(monster, live)
 
 
-func is_target_in_range(monster: Node3D, target: Node3D) -> bool:
+func is_target_in_range(monster: Monster, target: Node3D) -> bool:
 	if not requires_target:
 		return true
 	if requires_chase_target:
-		return target != null and is_instance_valid(target)
+		return target != null
 	if monster == null or target == null:
 		return false
 	var dist := flat_distance_to(monster, target)
@@ -72,7 +74,7 @@ func preferred_cast_range() -> float:
 	return (min_cast_range + max_cast_range) * 0.5
 
 
-func flat_distance_to(monster: Node3D, target: Node3D) -> float:
+func flat_distance_to(monster: Monster, target: Node3D) -> float:
 	if monster == null or target == null:
 		return 0.0
 	var flat := Vector3(
@@ -97,19 +99,19 @@ func reset_for_combo() -> void:
 
 
 ## Combo runner: fire immediately without range/cooldown gates.
-func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+func fire_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	fire_instant(monster, target)
 
 
 ## Combo runner: release a held charge regardless of normal gates.
-func release_combo_step(monster: Node3D, target: Node3D) -> void:
+func release_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	release_charge(monster, target)
 
 
 ## Override: attach windup VFX to the correct hand.
-func start_windup_fx(monster: Node3D) -> void:
+func start_windup_fx(monster: Monster) -> void:
 	stop_windup_fx()
 	var hand := resolve_hand(monster)
 	if hand == null:
@@ -125,21 +127,21 @@ func stop_windup_fx() -> void:
 
 
 ## Override to spawn combat projectile. Called after windup completes (legacy cast path).
-func begin_cast(monster: Node3D, target: Node3D) -> void:
+func begin_cast(monster: Monster, target: Node3D) -> void:
 	stop_windup_fx()
 	begin_cooldown()
 	_fire_cast(monster, target)
 
 
 ## Caster combat: release a held charge — fire the spell and start cooldown.
-func release_charge(monster: Node3D, target: Node3D) -> void:
+func release_charge(monster: Monster, target: Node3D) -> void:
 	stop_windup_fx()
 	begin_cooldown()
 	_fire_cast(monster, target)
 
 
 ## Combo / bypass path — no windup, immediate fire + cooldown when off CD.
-func fire_instant(monster: Node3D, target: Node3D) -> void:
+func fire_instant(monster: Monster, target: Node3D) -> void:
 	if not can_cast() or monster == null:
 		return
 	_fire_cast(monster, target)
@@ -173,21 +175,18 @@ func preview_cast() -> void:
 	stop_windup_fx()
 
 
-func resolve_preview_target(_monster: Node3D) -> Node3D:
+func resolve_preview_target(_monster: Monster) -> Node3D:
 	var tree := get_tree()
 	if tree == null:
 		return null
 	for node in tree.get_nodes_in_group("player"):
-		if not (node is Node3D) or not is_instance_valid(node):
-			continue
-		var alive = node.get("is_alive")
-		if alive != null and not bool(alive):
+		if not (node is Node3D) or not Character.is_node_alive(node):
 			continue
 		return node as Node3D
 	return null
 
 
-func resolve_hand(monster: Node3D) -> Node3D:
+func resolve_hand(monster: Monster) -> Node3D:
 	if monster == null:
 		return null
 	var path := "%RightHand" if hand_side == HandSide.RIGHT else "%LeftHand"
@@ -205,7 +204,7 @@ func resolve_hand(monster: Node3D) -> Node3D:
 	return null
 
 
-func resolve_cast_origin(monster: Node3D) -> Vector3:
+func resolve_cast_origin(monster: Monster) -> Vector3:
 	var hand := resolve_hand(monster)
 	if hand != null:
 		return hand.global_position
@@ -214,11 +213,11 @@ func resolve_cast_origin(monster: Node3D) -> Vector3:
 	return global_position
 
 
-func _fire_cast(_monster: Node3D, _target: Node3D) -> void:
+func _fire_cast(_monster: Monster, _target: Node3D) -> void:
 	pass
 
 
-func _spawn_ephemeral_preview_target(monster: Node3D) -> Node3D:
+func _spawn_ephemeral_preview_target(monster: Monster) -> Node3D:
 	var dummy := Node3D.new()
 	var parent: Node = monster.get_parent()
 	if parent == null:
@@ -230,11 +229,11 @@ func _spawn_ephemeral_preview_target(monster: Node3D) -> Node3D:
 	return dummy
 
 
-func _find_monster() -> Node3D:
+func _find_monster() -> Monster:
 	var n: Node = self
 	while n != null:
-		if n.is_in_group("monster") or n.has_method("get_ability_placeholders"):
-			return n as Node3D
+		if n is Monster:
+			return n as Monster
 		n = n.get_parent()
 	return null
 

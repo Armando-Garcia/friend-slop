@@ -18,15 +18,16 @@ static func apply_mask(obj: CollisionObject3D) -> void:
 	obj.collision_mask = COLLISION_MASK
 
 
-static func kind(body: Node, caster: Node = null) -> Kind:
+static func kind(body: Node, caster: Variant = null) -> Kind:
 	if body == null or not is_instance_valid(body):
 		return Kind.IGNORE
-	if _is_caster(body, caster):
+	var caster_node := SpellWardBlockScript.live_node(caster)
+	if _is_caster(body, caster_node):
 		return Kind.IGNORE
 	var ward := SpellWardBlockScript.ward_from_node(body)
 	if ward != null:
-		if caster != null and is_instance_valid(caster) and ward.has_method("is_owned_by"):
-			if bool(ward.call("is_owned_by", caster)):
+		if caster_node != null and ward.has_method("is_owned_by"):
+			if bool(ward.call("is_owned_by", caster_node)):
 				return Kind.IGNORE
 		return Kind.WARD
 	if is_combat_body(body):
@@ -58,6 +59,4 @@ static func is_wall(body: Node) -> bool:
 
 
 static func _is_caster(body: Node, caster: Node) -> bool:
-	if caster == null or not is_instance_valid(caster):
-		return false
-	return body == caster
+	return caster != null and body == caster

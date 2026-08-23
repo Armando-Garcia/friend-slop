@@ -37,8 +37,7 @@ func append_interest_candidates(monster: CharacterBody3D, out: Array) -> void:
 		if not (node is Node3D):
 			continue
 		var player := node as Node3D
-		var alive_value = player.get("is_alive")
-		if alive_value != null and not bool(alive_value):
+		if not Character.is_node_alive(player):
 			continue
 		var flat := Vector3(
 			player.global_position.x - origin.x,

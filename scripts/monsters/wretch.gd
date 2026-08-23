@@ -71,7 +71,7 @@ func get_locked_player_target() -> Node3D:
 	## Live player interest only (no sticky lock).
 	if not _interest_has_player_target(_interest):
 		return null
-	return _interest.get("target") as Node3D
+	return get_chase_target()
 
 
 func is_locked_onto_player() -> bool:
@@ -83,7 +83,7 @@ func _append_default_interest_candidates(_out: Array) -> void:
 	pass
 
 
-func _gather_interest() -> RefCounted:
+func _gather_interest() -> MonsterInterest:
 	if _lookdev_aggro != null and is_instance_valid(_lookdev_aggro):
 		return MonsterInterestScript.from_target(_lookdev_aggro, 2.0, &"lookdev")
 	var candidates: Array = []
@@ -110,7 +110,7 @@ func _gather_interest() -> RefCounted:
 
 func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
-	if not is_alive:
+	if not is_alive():
 		return
 	if Engine.is_editor_hint() and not is_instance_valid(_lookdev_aggro):
 		return
@@ -121,7 +121,7 @@ func _physics_process(delta: float) -> void:
 	_update_ritual_pose()
 
 
-func _prefer_interest(candidates: Array) -> RefCounted:
+func _prefer_interest(candidates: Array) -> MonsterInterest:
 	## Rat vision > rat hearing > ambient host interests (including host hearing).
 	var best_sight := _best_actionable_source(candidates, SUMMON_SIGHT_SOURCE)
 	if best_sight != null:
@@ -134,20 +134,18 @@ func _prefer_interest(candidates: Array) -> RefCounted:
 	return super._prefer_interest(candidates)
 
 
-func _best_actionable_source(candidates: Array, source: StringName) -> RefCounted:
-	var best: RefCounted = null
+func _best_actionable_source(candidates: Array, source: StringName) -> MonsterInterest:
+	var best: MonsterInterest = null
 	var best_u := 0.0
 	for item in candidates:
-		if item == null:
+		var interest := item as MonsterInterest
+		if interest == null or interest.source != source:
 			continue
-		if str(item.get("source")) != String(source):
+		if not interest.is_actionable():
 			continue
-		if not item.has_method("is_actionable") or not bool(item.call("is_actionable")):
-			continue
-		var urgency := float(item.get("urgency"))
-		if best == null or urgency > best_u:
-			best = item
-			best_u = urgency
+		if best == null or interest.urgency > best_u:
+			best = interest
+			best_u = interest.urgency
 	return best
 
 
@@ -392,14 +390,14 @@ func _tick_chase(delta: float) -> void:
 
 	var target: Node3D = null
 	if _is_live_player_detection(_interest):
-		target = _interest.get("target") as Node3D
+		target = get_chase_target()
 
 	if _try_tick_chase_reposition(delta, target):
 		return
 
 	velocity.x = 0.0
 	velocity.z = 0.0
-	if target != null and is_instance_valid(target):
+	if target:
 		var toward := Vector3(
 			target.global_position.x - global_position.x,
 			0.0,
@@ -409,7 +407,7 @@ func _tick_chase(delta: float) -> void:
 		return
 	## Last-known / hearing: face the memory point slowly, stay put (orb windup).
 	if _interest != null and _interest.get("has_goal_position"):
-		var goal: Vector3 = _interest.call("resolved_goal_position", global_position)
+		var goal := get_chase_goal(global_position)
 		var toward_sound := Vector3(
 			goal.x - global_position.x,
 			0.0,
@@ -562,45 +560,41 @@ func _update_ritual_pose() -> void:
 
 func _update_last_known_from_candidates(candidates: Array) -> void:
 	for item in candidates:
-		if item == null:
+		var interest := item as MonsterInterest
+		if interest == null:
 			continue
-		var target: Node3D = item.get("target") as Node3D
-		if target != null and is_instance_valid(target) and target.is_in_group("player"):
+		var target := interest.get_live_target()
+		if target and target.is_in_group("player"):
 			_last_known_player_pos = target.global_position
 			_has_last_known_player = true
 			return
 		## Hearing / investigate positions also refresh last known while chasing.
 		if (
 			is_ai_chasing()
-			and bool(item.get("has_goal_position"))
-			and str(item.get("source")) == String(HEARING_SOURCE)
+			and interest.has_goal_position
+			and interest.source == HEARING_SOURCE
 		):
-			_last_known_player_pos = item.call(
-				"resolved_goal_position", global_position
-			) as Vector3
+			_last_known_player_pos = interest.resolved_goal_position(global_position)
 			_has_last_known_player = true
 
 
-func _is_live_detection(interest: RefCounted) -> bool:
+func _is_live_detection(interest: MonsterInterest) -> bool:
 	return _is_live_player_detection(interest)
 
 
-func _is_live_player_detection(interest: RefCounted) -> bool:
+func _is_live_player_detection(interest: MonsterInterest) -> bool:
 	## Own sight, lookdev dummy, or rat sight of a player — not sticky memory.
 	if not _interest_has_player_target(interest):
 		return false
-	var source := str(interest.get("source"))
 	return (
-		source == "sight"
-		or source == "lookdev"
-		or source == String(SUMMON_SIGHT_SOURCE)
+		interest.source == &"sight"
+		or interest.source == &"lookdev"
+		or interest.source == SUMMON_SIGHT_SOURCE
 	)
 
 
-func _interest_has_player_target(interest: RefCounted) -> bool:
+func _interest_has_player_target(interest: MonsterInterest) -> bool:
 	if interest == null:
 		return false
-	var target: Node3D = interest.get("target") as Node3D
-	if target == null or not is_instance_valid(target):
-		return false
-	return target.is_in_group("player")
+	var target := interest.get_live_target()
+	return target != null and target.is_in_group("player")

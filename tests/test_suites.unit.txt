@@ -10,7 +10,9 @@ res://tests/unit/test_incantation_matcher.gd
 res://tests/unit/test_floating_follow_path.gd
 res://tests/unit/test_world_ground.gd
 res://tests/unit/test_hovering_orb_motion.gd
+res://tests/unit/test_character_health.gd
 res://tests/unit/test_monster_ai.gd
+res://tests/unit/test_monster_interest.gd
 res://tests/unit/test_ember_dash.gd
 res://tests/unit/test_ash_retreat_dash.gd
 res://tests/unit/test_monster_patrol.gd

@@ -19,7 +19,7 @@ interactions:
       the substance of these changes for readers. Group related work.\nIgnore authors
       and tooling attribution.\n\n#42 Add combat HP, ward HoT, and an editor balance
       table.\nMerged: 2026-08-21T12:00:00+00:00\nURL: https://github.com/iamemilio/friend-slop/pull/42\nDescription:\n##
-      Summary\n- Players and monsters now have CombatHealth\n- Wards regen after 1s;
+      Summary\n- Players and monsters now share a Health pool\n- Wards regen after 1s;
       shatter doubles next regen delay\n- Combat Balance dock edits spell and monster
       kit numbers\n\n#43 Post Wand Street Journal digests to Discord\nMerged: 2026-08-21T18:00:00+00:00\nURL:
       https://github.com/iamemilio/friend-slop/pull/43\nDescription:\n## Summary\n-
@@ -122,7 +122,7 @@ interactions:
       PR count: 2\n\nSummarize the substance of these changes for readers. Group related
       work.\nIgnore authors and tooling attribution.\n\n#42 Add combat HP, ward HoT,
       and an editor balance table.\nMerged: 2026-08-21T12:00:00+00:00\nURL: https://github.com/iamemilio/friend-slop/pull/42\nDescription:\n##
-      Summary\n- Players and monsters now have CombatHealth\n- Wards regen after 1s;
+      Summary\n- Players and monsters now share a Health pool\n- Wards regen after 1s;
       shatter doubles next regen delay\n- Combat Balance dock edits spell and monster
       kit numbers\n\n#43 Post Wand Street Journal digests to Discord\nMerged: 2026-08-21T18:00:00+00:00\nURL:
       https://github.com/iamemilio/friend-slop/pull/43\nDescription:\n## Summary\n-
@@ -151,7 +151,7 @@ interactions:
         The FriendSlop ledger closed with two entries, introducing a new vitality
         metric for combatants and automating the distribution of this very digest
         to the Discord commons.\\n\\n=== Combat \\u0026 Balance ===\\nThe arena has
-        acquired a new vital statistic. Players and monsters alike now track CombatHealth,
+        acquired a new vital statistic. Players and monsters alike now track Health,
         replacing previous abstractions with a concrete measure of survivability.
         Defensive wards have also been refined; they regenerate after a one-second
         interval, though shattering a ward doubles the delay for the next regeneration,

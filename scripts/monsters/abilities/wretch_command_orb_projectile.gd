@@ -126,6 +126,8 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if _finished:
 		return
+	if _caster != null and not is_instance_valid(_caster):
+		_caster = null
 	_age += delta
 	if _age >= MAX_LIFE_SEC:
 		_finish_at_aim()

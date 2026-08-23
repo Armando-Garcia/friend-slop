@@ -18,7 +18,6 @@ const CHARGE_SPEED_MAX_MULT := 1.5625
 const FireballExplosionEffectScript := preload("res://scripts/spells/fireball_explosion_effect.gd")
 const FireballSmokeTrailScript := preload("res://scripts/spells/fireball_smoke_trail.gd")
 const FireballParticlesScript := preload("res://scripts/spells/fireball_particles.gd")
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 const FireballLightingScript := preload("res://scripts/spells/fireball_lighting.gd")
 const FireballFlightScript := preload("res://scripts/spells/fireball_flight.gd")
 const SpellEphemeralFxScript := preload("res://scripts/spells/spell_ephemeral_fx.gd")
@@ -737,7 +736,7 @@ func _try_block_ward_overlap() -> bool:
 
 func _exclude_rids() -> Array:
 	var rids: Array = [get_rid()]
-	if _caster is CollisionObject3D:
+	if is_instance_valid(_caster) and _caster is CollisionObject3D:
 		rids.append((_caster as CollisionObject3D).get_rid())
 	return rids
 
@@ -822,7 +821,7 @@ func _apply_splash_to_body(body: Node3D, impact_pos: Vector3) -> void:
 		if apply_local:
 			body.call("apply_fireball_knockback", dir)
 	if hit_damage > 0.0:
-		CombatHealthScript.apply_hit(body, hit_damage, self)
+		Character.apply_hit(body, hit_damage, self)
 
 
 func _find_ward_hit() -> Node:

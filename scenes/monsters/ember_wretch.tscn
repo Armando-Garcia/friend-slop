@@ -24,11 +24,13 @@ body_tint = Color(0.85, 0.38, 0.12, 1)
 eye_glow_color = Color(1, 0.12, 0.08, 1)
 lookdev_pose = 0
 show_combat_ranges = false
-max_health = 50.0
 move_speed = 3.24
 chase_range = 14.0
 attack_range = 1.5
 touch_damage = 9.0
+
+[node name="Health" parent="."]
+max_health = 50.0
 
 [node name="Hands" type="Node3D" parent="Body"]
 editor_description = "Ember-only cast hands. Right = Lob, Left = Halo."

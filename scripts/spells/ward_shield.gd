@@ -157,7 +157,7 @@ func is_owned_by(node: Variant = null) -> bool:
 
 
 func _apply_caster_collision_exception() -> void:
-	if _body == null or _caster == null:
+	if _body == null or not is_instance_valid(_caster):
 		return
 	if _caster is CollisionObject3D:
 		_body.add_collision_exception_with(_caster as CollisionObject3D)
@@ -784,10 +784,8 @@ func notify_spell_blocked(damage: float = 0.0, incoming_from: Variant = null) ->
 
 
 func _notify_owner_blocked(incoming_from: Node) -> void:
-	if _caster == null or not is_instance_valid(_caster):
-		return
-	if _caster.has_method("on_own_ward_blocked"):
-		_caster.call("on_own_ward_blocked", incoming_from)
+	if is_instance_valid(_caster) and _caster is Character:
+		(_caster as Character).on_own_ward_blocked(incoming_from)
 
 
 func _is_broken() -> bool:

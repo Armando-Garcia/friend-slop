@@ -57,7 +57,6 @@ script = ExtResource("1_ward")
 radius = 0.7
 segment_count = 26
 duration_sec = 0.2
-regen_delay_sec = 1.0
 hold_forward = 0.6000000000000001
 beam_diameter = 0.02
 
@@ -69,6 +68,7 @@ mesh = SubResource("ArrayMesh_r7v6c")
 process_mode = 3
 editor_description = "Wand cylinder (not the keep-in sphere). Shader knobs here; width/length on Ward Hold pose."
 transform = Transform3D(0.4, 0, 0, 0, 0.4, 0, 0, 0, 0.68, 0, 0, -0.34)
+visible = false
 script = ExtResource("3_field")
 base_alpha = 0.02
 rim_strength = 0.42

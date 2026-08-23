@@ -11,7 +11,6 @@ const CloudMeshBuilderScript := preload("res://scripts/environment/cloud_mesh_bu
 const SpellWardBlockScript := preload("res://scripts/spells/spell_ward_block.gd")
 const PlayerFrostBreathScript := preload("res://scripts/characters/player_frost_breath.gd")
 const MonsterSpellHitScript := preload("res://scripts/combat/monster_spell_hit.gd")
-const CombatHealthScript := preload("res://scripts/combat/combat_health.gd")
 
 @export_range(0.0, 200.0, 1.0) var hit_damage: float = AshFrostBreathFlightScript.HIT_DAMAGE
 
@@ -165,7 +164,7 @@ func _apply_hit(body: Node3D) -> void:
 	if apply_local:
 		PlayerFrostBreathScript.apply(body, away)
 	if hit_damage > 0.0:
-		CombatHealthScript.apply_hit(body, hit_damage, self)
+		Character.apply_hit(body, hit_damage, self)
 
 
 func _should_apply_local(body: Node) -> bool:

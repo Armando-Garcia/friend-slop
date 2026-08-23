@@ -9,7 +9,7 @@ Merged: 2026-08-21T12:00:00+00:00
 URL: https://github.com/iamemilio/friend-slop/pull/42
 Description:
 ## Summary
-- Players and monsters now have CombatHealth
+- Players and monsters now share a Health pool
 - Wards regen after 1s; shatter doubles next regen delay
 - Combat Balance dock edits spell and monster kit numbers
 

@@ -48,7 +48,6 @@ editor_description = "Shared playable base. Wand = player_wand.tscn (held pose =
 script = ExtResource("2_playable")
 player_index = 0
 gravity = null
-is_alive = true
 move_speed = 4.5
 move_friction = 50.0
 dash_distance = 4.5

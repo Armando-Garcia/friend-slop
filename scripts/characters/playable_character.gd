@@ -18,7 +18,6 @@ const TargetHighlightScript := preload("res://scripts/spells/target_highlight.gd
 const TargetedObjectControlScript := preload("res://scripts/spells/targeted_object_control.gd")
 const FakeWallPlacementScript := preload("res://scripts/headmaster/fake_wall_placement.gd")
 const BroomFlightScript := preload("res://scripts/headmaster/broom_flight.gd")
-const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const SlideSurfaceScript := preload("res://scripts/slide_surface.gd")
 const PlayerDashScript := preload("res://scripts/characters/player_dash.gd")
 const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
@@ -32,7 +31,6 @@ const WardSlotChannelScript := preload("res://scripts/spells/ward_slot_channel.g
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-@export var is_alive: bool = true
 
 @export_group("Movement")
 ## Ground foot speed (WASD on floor). Scaled by spell haste/slow effects.
@@ -100,8 +98,6 @@ var _spell_fire_slot := -1
 var _spell_fire_cancel_token := 0
 var _ward_channel: RefCounted = WardSlotChannelScript.new()
 var _fake_wall_placement: Node
-var _knockback_vel := Vector3.ZERO
-var _knockback_timer := 0.0
 var _broom_active_visual := false
 
 @onready var camera_pivot: Node3D = %CameraPivot
@@ -113,6 +109,7 @@ var _broom_active_visual := false
 
 
 func _ready() -> void:
+	super._ready()
 	if PlayableCharacterPreviewScript.should_use_preview_mode(self):
 		PlayableCharacterPreviewScript.enter_editor_preview_mode(self)
 		return
@@ -1017,12 +1014,3 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_separate_from_players()
 	_update_interaction_prompt()
-
-
-func _apply_knockback_bleed(delta: float) -> void:
-	if _knockback_timer <= 0.0:
-		return
-	_knockback_timer -= delta
-	velocity.x += _knockback_vel.x * 0.35
-	velocity.z += _knockback_vel.z * 0.35
-	_knockback_vel = _knockback_vel.move_toward(Vector3.ZERO, 28.0 * delta)

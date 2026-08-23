@@ -27,7 +27,7 @@ func _ready() -> void:
 	max_cast_range = 20.0
 
 
-func start_windup_fx(monster: Node3D) -> void:
+func start_windup_fx(monster: Monster) -> void:
 	stop_windup_fx()
 	var hand := resolve_hand(monster)
 	if hand == null:
@@ -60,7 +60,7 @@ func start_windup_fx(monster: Node3D) -> void:
 	_windup_fx.add_child(light)
 
 
-func _fire_cast(monster: Node3D, target: Node3D) -> void:
+func _fire_cast(monster: Monster, target: Node3D) -> void:
 	if monster == null:
 		return
 	var parent := _ward_parent(monster)
@@ -90,14 +90,14 @@ func _fire_cast(monster: Node3D, target: Node3D) -> void:
 		ward.call("bind_runtime", _ward_runtime)
 
 
-func fire_instant(monster: Node3D, target: Node3D) -> void:
+func fire_instant(monster: Monster, target: Node3D) -> void:
 	if not can_cast() or monster == null:
 		return
 	_fire_cast(monster, target)
 	begin_cooldown()
 
 
-func fire_combo_step(monster: Node3D, target: Node3D) -> void:
+func fire_combo_step(monster: Monster, target: Node3D) -> void:
 	reset_for_combo()
 	stop_windup_fx()
 	if monster == null:
@@ -106,7 +106,7 @@ func fire_combo_step(monster: Node3D, target: Node3D) -> void:
 	begin_cooldown()
 
 
-func _ward_parent(monster: Node3D) -> Node:
+func _ward_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):

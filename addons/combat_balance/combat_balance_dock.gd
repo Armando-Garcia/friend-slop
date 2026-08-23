@@ -191,7 +191,10 @@ func _build_health_table() -> void:
 		1.0,
 		1000.0,
 		func(next: float) -> void:
-			_commit(WriterScript.apply_player_max_health(next), "Player HP")
+			_commit(
+				WriterScript.apply_max_health(WriterScript.PLAYER_SCENE, next),
+				"Player HP"
+			)
 	)
 	_readonly_cell(grid, "—")
 	for row in CatalogScript.monster_roster():
@@ -206,7 +209,7 @@ func _build_health_table() -> void:
 			1000.0,
 			func(next: float) -> void:
 				_commit(
-					WriterScript.apply_monster(path, node_name, "max_health", next),
+					WriterScript.apply_max_health(path, next),
 					"%s HP" % display
 				)
 		)

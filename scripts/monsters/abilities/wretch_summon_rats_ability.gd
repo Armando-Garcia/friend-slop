@@ -58,7 +58,7 @@ func begin_cooldown() -> void:
 	_cooldown_left = maxf(0.0, cd)
 
 
-func _fire_cast(monster: Node3D, _target: Node3D) -> void:
+func _fire_cast(monster: Monster, _target: Node3D) -> void:
 	if monster == null:
 		return
 	var host := _resolve_summon_host(monster)
@@ -87,7 +87,7 @@ func _fire_cast(monster: Node3D, _target: Node3D) -> void:
 	orb.tree_exiting.connect(release_pending)
 
 
-func _spawn_rat_at(monster: Node3D, host: Node, parent: Node, world_pos: Vector3) -> void:
+func _spawn_rat_at(monster: Monster, host: Node, parent: Node, world_pos: Vector3) -> void:
 	if monster == null or not is_instance_valid(monster):
 		return
 	if host == null or not is_instance_valid(host):
@@ -121,14 +121,14 @@ func _spawn_rat_at(monster: Node3D, host: Node, parent: Node, world_pos: Vector3
 		if tree != null:
 			tree.create_timer(4.0).timeout.connect(
 				func() -> void:
-					if is_instance_valid(rat) and rat.has_method("die"):
-						rat.call("die")
+					if is_instance_valid(rat) and rat is Character:
+						(rat as Character).health.kill()
 					elif is_instance_valid(rat):
 						rat.queue_free()
 			)
 
 
-func _spawn_position(monster: Node3D) -> Vector3:
+func _spawn_position(monster: Monster) -> Vector3:
 	var forward := -monster.global_transform.basis.z
 	forward.y = 0.0
 	if forward.length_squared() < 0.0001:
@@ -147,7 +147,7 @@ func _spawn_position(monster: Node3D) -> Vector3:
 	)
 
 
-func _resolve_summon_host(monster: Node3D) -> Node:
+func _resolve_summon_host(monster: Monster) -> Node:
 	if monster == null:
 		return null
 	if monster.has_method("get_summon_host"):
@@ -155,7 +155,7 @@ func _resolve_summon_host(monster: Node3D) -> Node:
 	return monster.get_node_or_null("SummonHost")
 
 
-func _spawn_parent(monster: Node3D) -> Node:
+func _spawn_parent(monster: Monster) -> Node:
 	if has_meta("lookdev_preview_parent"):
 		var preview_parent = get_meta("lookdev_preview_parent")
 		if preview_parent is Node and is_instance_valid(preview_parent):
