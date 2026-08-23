@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,27 +31,60 @@ def _read_versions_env(key: str) -> str:
 	return ""
 
 
+def _resolve_godot_executable(candidate: Path) -> Path | None:
+	if candidate.is_file():
+		return candidate
+	if candidate.suffix.lower() == ".exe":
+		console = candidate.with_name(f"{candidate.stem}_console{candidate.suffix}")
+		if console.is_file():
+			return console
+	return None
+
+
+def _cached_godot_candidates() -> list[Path]:
+	version = _read_versions_env("GODOT_VERSION")
+	if not version:
+		return []
+	cache_dir = ROOT / ".cache" / "godot"
+	candidates: list[Path] = []
+	if sys.platform == "win32":
+		candidates.extend(
+			[
+				cache_dir / f"Godot_v{version}-stable_win64.exe",
+				cache_dir / f"Godot_v{version}-stable_win64_console.exe",
+			]
+		)
+	else:
+		candidates.append(cache_dir / f"Godot_v{version}-stable_linux.x86_64")
+	return candidates
+
+
 def find_godot_binary() -> Path | None:
 	env_path = os.environ.get("GODOT_PATH", "").strip()
 	if env_path:
-		candidate = Path(env_path)
-		if candidate.exists():
-			return candidate
+		resolved = _resolve_godot_executable(Path(env_path))
+		if resolved is not None:
+			return resolved
 
 	pinned_win = _read_versions_env("GODOT_EDITOR_WIN")
 	if pinned_win:
-		candidate = Path(pinned_win)
-		if candidate.exists():
-			return candidate
+		resolved = _resolve_godot_executable(Path(pinned_win))
+		if resolved is not None:
+			return resolved
 
 	settings_path = ROOT / ".vscode" / "settings.json"
 	if settings_path.exists():
 		data = json.loads(settings_path.read_text(encoding="utf-8"))
 		editor_path = data.get("godotTools.editorPath", "")
 		if editor_path:
-			candidate = Path(str(editor_path))
-			if candidate.exists():
-				return candidate
+			resolved = _resolve_godot_executable(Path(str(editor_path)))
+			if resolved is not None:
+				return resolved
+
+	for candidate in _cached_godot_candidates():
+		resolved = _resolve_godot_executable(candidate)
+		if resolved is not None:
+			return resolved
 
 	which_godot = shutil.which("godot")
 	if which_godot:

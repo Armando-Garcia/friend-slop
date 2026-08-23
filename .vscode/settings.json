@@ -1,5 +1,5 @@
 {
-  "godotTools.editorPath": "C:/Users/iamem/Downloads/win64-g463-s164-gs4191-editor/godotsteam.463.editor.win64.exe",
+  "godotTools.editorPath": "${workspaceFolder}/.cache/godot/Godot_v4.6.3-stable_win64.exe",
   "godotTools.gdscript_lsp_server_protocol": "ws",
   "[gdscript]": {
     "editor.tabSize": 4,

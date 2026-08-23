@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help setup setup-dev setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks discord-test discord-preview discord-groq-vcr discord-groq-record
+.PHONY: help setup setup-dev setup-godot setup-voice setup-steam lint warnings test test-ci release-ci check import verify-pinned-versions verify-voice verify-steam restore-voice ci-container-bootstrap install-hooks discord-test discord-preview discord-groq-vcr discord-groq-record
 
 ifeq ($(OS),Windows_NT)
 PYTHON ?= python
@@ -28,6 +28,7 @@ help:
 	@echo ""
 	@echo "  make setup                 Python tooling + voice + GodotSteam (full local setup)"
 	@echo "  make setup-dev             pip install -r requirements-dev.txt (uses .venv)"
+	@echo "  make setup-godot           Download pinned Godot into .cache/godot/"
 	@echo "  make setup-voice           gdvosk + Vosk model (~500 MB first run)"
 	@echo "  make setup-steam           GodotSteam GDExtension (~27 MB first run)"
 	@echo "  make lint                  gdlint + GDScript analyzer warnings"
@@ -60,6 +61,13 @@ setup-dev:
 	)
 	$(VENV_PY) -m pip install --disable-pip-version-check -U pip
 	$(VENV_PY) -m pip install --disable-pip-version-check -r requirements-dev.txt
+
+setup-godot:
+ifeq ($(OS),Windows_NT)
+	powershell -ExecutionPolicy Bypass -File tools/setup_godot_windows.ps1
+else
+	bash tools/setup_godot_linux.sh
+endif
 
 setup-voice:
 ifeq ($(OS),Windows_NT)
@@ -109,7 +117,7 @@ endif
 
 ifeq ($(OS),Windows_NT)
 test:
-	$(RUN_PYTHON) tools/run_checks.py --tests-only
+	GODOT_PATH="$(GODOT)" $(RUN_PYTHON) tools/run_checks.py --tests-only
 else
 test:
 	GODOT_PATH="$(GODOT)" $(RUN_PYTHON) tools/run_checks.py --tests-only

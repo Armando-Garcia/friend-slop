@@ -119,6 +119,15 @@ static func is_crouching(player: CharacterBody3D) -> bool:
 	return bool(player.get_meta(META_CROUCHING, false))
 
 
+## Force crouch collision state (e.g. maze-hole burrow) without reading input.
+static func apply_crouch_collision(player: CharacterBody3D, crouching: bool) -> void:
+	player.set_meta(META_CROUCHING, crouching)
+	if crouching:
+		return
+	player.set_meta(META_SLIDING, false)
+	_clear_recovery(player)
+
+
 static func is_sliding(player: CharacterBody3D) -> bool:
 	return bool(player.get_meta(META_SLIDING, false))
 

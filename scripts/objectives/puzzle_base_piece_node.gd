@@ -71,9 +71,6 @@ func to_entry() -> PuzzleBasePieceEntry:
 ## --- Visual / collider -----------------------------------------------------
 
 func _rebuild() -> void:
-	if not is_inside_tree() and _built == null:
-		## Called from a setter before _ready(); defer to _ready().
-		return
 	_clear_built()
 	_built = Node3D.new()
 	_built.name = "Built"

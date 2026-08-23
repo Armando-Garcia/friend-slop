@@ -4,7 +4,6 @@ extends RefCounted
 ## Burrow dash through gnome holes for gnomes and crouching (or test-sized) players.
 
 
-const GnomeDigExecutorScript := preload("res://scripts/gnomes/gnome_dig_executor.gd")
 const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
 
 const META_ACTIVE := "_maze_hole_burrow_active"
@@ -131,7 +130,8 @@ static func try_enter_nearby_hole(body: CharacterBody3D) -> bool:
 
 static func _apply_burrow_pose(body: CharacterBody3D, active: bool) -> void:
 	if body.is_in_group("gnome"):
-		GnomeDigExecutorScript.set_crawl_pose(body, active)
+		if body.has_method("set_crawl_pose"):
+			body.call("set_crawl_pose", active)
 		return
 	if not body.is_in_group("player"):
 		return
