@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/player_menu.tscn" id="9_player_menu"]
 [ext_resource type="Script" uid="uid://c3khbmmmkw14b" path="res://scripts/ui/spell_word_banner.gd" id="9_spell_word"]
 [ext_resource type="Script" uid="uid://dnyy0kwsw60ow" path="res://scripts/objectives/delivery_objective.gd" id="10_objective"]
+[ext_resource type="Script" path="res://scripts/objectives/wizard_challenge_height.gd" id="10_wizard_height"]
 [ext_resource type="Script" uid="uid://yf2yi73fbs6o" path="res://scripts/spells/voice_spell_validator.gd" id="10_validator"]
 [ext_resource type="Script" uid="uid://cgo2lkhlxtcky" path="res://scripts/spells/spell_validation_runner.gd" id="11_runner"]
 [ext_resource type="PackedScene" uid="uid://cpausemenu001" path="res://scenes/ui/pause_menu.tscn" id="14_pause"]
@@ -98,6 +99,9 @@ script = ExtResource("11_runner")
 
 [node name="DeliveryObjective" type="Node3D" parent="." unique_id=747476849]
 script = ExtResource("10_objective")
+
+[node name="WizardChallengeHeight" type="Node3D" parent="." unique_id=747476850]
+script = ExtResource("10_wizard_height")
 
 [node name="Players" type="Node3D" parent="." unique_id=1027486205]
 editor_description = "Horror roster spawn slots. ApprenticeSpawn_* index matches team_id — same-team apprentices cluster at one marker."

@@ -14,6 +14,7 @@ const PEAK_SPEED := 0.35
 const PEAK_NUDGE := 2.4
 
 const PlayerCrouchScript := preload("res://scripts/characters/player_crouch.gd")
+const PlayerAirControlScript := preload("res://scripts/characters/player_air_control.gd")
 
 
 static func tag(body: CollisionObject3D) -> void:
@@ -113,6 +114,7 @@ static func apply_ground_move(
 	block_crouch_slide: bool = false
 ) -> void:
 	var on_slide := prepare(player)
+	PlayerAirControlScript.tick_air_time(player, delta, player.is_on_floor() or on_slide)
 	if not player.is_on_floor() or on_slide:
 		player.velocity.y -= gravity * delta
 	if (
@@ -127,6 +129,7 @@ static func apply_ground_move(
 			PlayerCrouchScript.apply_coast_physics(player, head, delta, boost)
 		return
 	if not player.is_on_floor():
+		PlayerAirControlScript.apply(player, head, delta, boost)
 		return
 	var direction := camera_relative_move_direction(head)
 	var speed := PlayerCrouchScript.ground_move_speed(player, boost)

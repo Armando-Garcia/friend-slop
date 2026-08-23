@@ -11,6 +11,7 @@ func run() -> int:
 	failures += _test_slow_defaults()
 	failures += _test_ring_and_center_zones()
 	failures += _test_jump_pad_velocity()
+	failures += _test_jump_pad_velocity_scales_with_strength()
 	failures += _test_travel_and_knockback()
 	return failures
 
@@ -80,6 +81,24 @@ func _test_jump_pad_velocity() -> int:
 	var expected := sqrt(2.0 * gravity * EmberHaloFlightScript.JUMP_PAD_HEIGHT_M)
 	if not is_equal_approx(vel, expected):
 		push_error("Expected jump pad velocity for 2m apex, got %s vs %s" % [vel, expected])
+		return 1
+	return 0
+
+
+func _test_jump_pad_velocity_scales_with_strength() -> int:
+	var gravity := 9.8
+	var baseline := EmberHaloFlightScript.jump_pad_velocity(gravity)
+	var doubled := EmberHaloFlightScript.jump_pad_velocity(gravity, 2.0)
+	var expected_doubled := sqrt(2.0 * gravity * EmberHaloFlightScript.JUMP_PAD_HEIGHT_M * 2.0)
+	if not is_equal_approx(doubled, expected_doubled):
+		push_error("Expected 2x strength to double the apex height, got %s vs %s" % [doubled, expected_doubled])
+		return 1
+	if doubled <= baseline:
+		push_error("Expected a higher strength multiplier to launch faster than baseline")
+		return 1
+	var negative_clamped := EmberHaloFlightScript.jump_pad_velocity(gravity, -1.0)
+	if not is_zero_approx(negative_clamped):
+		push_error("Expected a negative strength multiplier to clamp to zero velocity")
 		return 1
 	return 0
 

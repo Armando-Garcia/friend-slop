@@ -145,7 +145,17 @@ func configure_objective(objective: DeliveryObjective) -> void:
 		objective.phase_changed.connect(_on_objective_phase_changed)
 	if not objective.completed.is_connected(_on_objective_completed):
 		objective.completed.connect(_on_objective_completed)
-	_refresh_objective_lines(objective)
+	_sync_objective_lines_from_scene()
+
+
+func configure_wizard_challenge_height(objective: WizardChallengeHeight) -> void:
+	if objective == null:
+		return
+	if not objective.phase_changed.is_connected(_on_objective_phase_changed):
+		objective.phase_changed.connect(_on_objective_phase_changed)
+	if not objective.completed.is_connected(_on_wizard_challenge_height_completed):
+		objective.completed.connect(_on_wizard_challenge_height_completed)
+	_sync_objective_lines_from_scene()
 
 
 func configure(
@@ -689,15 +699,20 @@ func _on_objective_completed() -> void:
 		_refresh_player_menu_content()
 
 
-func _refresh_objective_lines(objective: DeliveryObjective) -> void:
-	_objective_lines = objective.get_status_lines()
+func _on_wizard_challenge_height_completed(_winner_peer_id: int) -> void:
+	_sync_objective_lines_from_scene()
 	if _player_menu_open:
 		_refresh_player_menu_content()
 
 
 func _sync_objective_lines_from_scene() -> void:
+	var lines := PackedStringArray()
 	var objective := get_tree().get_first_node_in_group("delivery_objective") as DeliveryObjective
 	if objective != null:
-		_objective_lines = objective.get_status_lines()
-	else:
-		_objective_lines = PackedStringArray()
+		lines.append_array(objective.get_status_lines())
+	var wizard_objective := (
+		get_tree().get_first_node_in_group("wizard_challenge_height") as WizardChallengeHeight
+	)
+	if wizard_objective != null:
+		lines.append_array(wizard_objective.get_status_lines())
+	_objective_lines = lines

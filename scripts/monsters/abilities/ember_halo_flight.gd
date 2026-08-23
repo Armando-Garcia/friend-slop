@@ -53,7 +53,12 @@ static func is_in_ring(flat_dist: float, outer_radius: float) -> bool:
 	return flat_dist > inner and flat_dist <= outer_radius
 
 
+## strength_mult scales the apex height (1.0 = the normal JUMP_PAD_HEIGHT_M
+## pop; 2.0 = double the apex height, etc.) — velocity scales with its
+## square root, not linearly, since it's derived from v = sqrt(2 * g * h).
 static func jump_pad_velocity(
-	gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+	gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity"),
+	strength_mult: float = 1.0
 ) -> float:
-	return sqrt(2.0 * maxf(gravity, 0.01) * JUMP_PAD_HEIGHT_M)
+	var height := JUMP_PAD_HEIGHT_M * maxf(strength_mult, 0.0)
+	return sqrt(2.0 * maxf(gravity, 0.01) * height)

@@ -32,6 +32,7 @@ var _editor_rebuild_queued: bool = false
 @onready var voice_validator: VoiceSpellValidator = $VoiceSpellValidator
 @onready var pause_menu: PauseMenu = $PauseMenu
 @onready var delivery_objective: DeliveryObjective = $DeliveryObjective
+@onready var wizard_challenge_height: WizardChallengeHeight = $WizardChallengeHeight
 
 
 func _ready() -> void:
@@ -129,6 +130,9 @@ func _editor_preview_delivery_objective() -> void:
 		Callable(maze_node, "cell_to_world"),
 		EDITOR_MATCH_SEED
 	)
+	var wizard_objective := get_node_or_null("WizardChallengeHeight")
+	if wizard_objective != null and wizard_objective.has_method("setup"):
+		wizard_objective.setup(maze_node, EDITOR_MATCH_SEED)
 
 
 func _configure_sky_for_maze(run_seed: int, start_time_msec: int) -> void:
@@ -324,6 +328,10 @@ func _finish_match_layout() -> void:
 	)
 	game_hud.configure_objective(delivery_objective)
 
+	if wizard_challenge_height != null:
+		wizard_challenge_height.setup(maze)
+		game_hud.configure_wizard_challenge_height(wizard_challenge_height)
+
 	if _discoverables_spawned or discoverable_spawner.run_config == null:
 		return
 
@@ -458,6 +466,11 @@ func _peer_id_for_player_node(player: Node) -> int:
 
 func apply_delivery_objective_network(op: int, payload: Variant = null) -> void:
 	delivery_objective.apply_network_op(op, payload)
+
+
+func apply_wizard_challenge_height_network(op: int, payload: Variant = null) -> void:
+	if wizard_challenge_height != null:
+		wizard_challenge_height.apply_network_op(op, payload)
 
 
 func _get_casting_session() -> SpellCastingSession:

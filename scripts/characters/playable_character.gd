@@ -5,7 +5,7 @@ const DEFAULT_WALK_SPEED := 5.0
 const DEFAULT_MOVE_FRICTION := 50.0
 const WALK_SPEED := DEFAULT_WALK_SPEED
 const SPRINT_SPEED := DEFAULT_WALK_SPEED
-const JUMP_VELOCITY := 2.5
+const JUMP_VELOCITY := 3.5
 const MOUSE_SENSITIVITY := 0.002
 const INTERACT_RANGE_SQ := 9.0
 const PLAYER_MIN_SEPARATION := 0.55
@@ -40,6 +40,14 @@ const WardSlotChannelScript := preload("res://scripts/spells/ward_slot_channel.g
 ## Deceleration when grounded with no WASD (m/s²). Not scaled by haste/slow.
 @export_range(0.1, 200.0, 0.5) var move_friction: float = DEFAULT_MOVE_FRICTION
 
+@export_group("Air Control")
+## Air-steer strength the instant you leave the ground, as a % of move_speed.
+@export_range(0.0, 150.0, 1.0, "suffix:%") var air_control_start_pct: float = 90.0
+## Air-steer strength floor after being airborne a while, as a % of move_speed.
+@export_range(0.0, 150.0, 1.0, "suffix:%") var air_control_min_pct: float = 65.0
+## How many percentage points of air-steer strength are lost per second airborne.
+@export_range(0.0, 50.0, 0.5, "suffix:%/s") var air_control_decay_pct_per_sec: float = 7.5
+
 @export_group("Dash")
 ## Tuning reference only — not applied by code. Match dash_speed × dash_duration for ~this far.
 @export_range(0.5, 24.0, 0.1, "suffix:m") var dash_distance: float = 3.0
@@ -49,6 +57,10 @@ const WardSlotChannelScript := preload("res://scripts/spells/ward_slot_channel.g
 @export_range(0.5, 30.0, 0.1, "suffix:s") var dash_cooldown_sec: float = 3.0
 ## Horizontal speed set instantly on dash (Shift + direction). Works on ground and in air.
 @export_range(1.0, 40.0, 0.5, "suffix:m/s") var dash_speed: float = 20.0
+## Once the dash lock ends, leftover speed quickly bleeds down to this — a %
+## of move_speed. 100% = normal run speed; below 100% settles slower than
+## walking, above 100% keeps some of the burst.
+@export_range(25.0, 200.0, 1.0, "suffix:%") var dash_post_speed_pct: float = 100.0
 
 @export_group("Crouch")
 ## Max foot speed while holding C on the ground. Also caps steering during a crouch slide.
@@ -511,6 +523,10 @@ func _try_interact() -> void:
 	if objective != null and objective.try_interact(self):
 		return
 
+	var wizard_objective := _find_wizard_challenge_height()
+	if wizard_objective != null and wizard_objective.try_interact(self):
+		return
+
 	var interactable: Interactable = _find_nearest_interactable()
 	if interactable != null:
 		interactable.interact(self)
@@ -776,6 +792,13 @@ func _find_delivery_objective() -> DeliveryObjective:
 	return null
 
 
+func _find_wizard_challenge_height() -> WizardChallengeHeight:
+	for node in get_tree().get_nodes_in_group("wizard_challenge_height"):
+		if node is WizardChallengeHeight:
+			return node
+	return null
+
+
 func _update_interaction_prompt() -> void:
 	if _game_hud == null or not _game_hud.has_method("set_interaction_prompt"):
 		return
@@ -813,6 +836,10 @@ func _resolve_interaction_prompt() -> String:
 	if objective != null:
 		prompt = objective.get_interaction_prompt(self)
 	if prompt.is_empty():
+		var wizard_objective := _find_wizard_challenge_height()
+		if wizard_objective != null:
+			prompt = wizard_objective.get_interaction_prompt(self)
+	if prompt.is_empty():
 		var maze: Node = null
 		var match_root: Node = GameWorldScript.find_match_root(get_tree())
 		if match_root != null:
@@ -841,10 +868,13 @@ func apply_fireball_knockback(fireball_dir: Vector3) -> void:
 	velocity += impulse
 
 
-func apply_ember_halo_jump_pad() -> void:
+## strength_mult: 1.0 = the normal ember-halo jump pad pop; higher scales the
+## apex height up (see EmberHaloFlight.jump_pad_velocity). Lets a puzzle
+## Launch Trap's Trap Param tune how hard it launches the player.
+func apply_ember_halo_jump_pad(strength_mult: float = 1.0) -> void:
 	if not is_multiplayer_authority() and GameState.is_multiplayer:
 		return
-	velocity.y = EmberHaloFlightScript.jump_pad_velocity(gravity)
+	velocity.y = EmberHaloFlightScript.jump_pad_velocity(gravity, strength_mult)
 
 
 func apply_ember_halo_hit(hit_dir: Vector3) -> void:
@@ -969,6 +999,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	PlayerDashScript.tick_and_try(self, head, delta)
+	PlayerDashScript.tick_post_decay(self, delta)
 	PlayerCrouchScript.tick(self)
 	var dash_active := PlayerDashScript.is_active(self)
 	var crouch_coasting := PlayerCrouchScript.is_coasting(self)

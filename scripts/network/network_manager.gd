@@ -503,6 +503,37 @@ func _rpc_delivery_objective_ping() -> void:
 	)
 
 
+func relay_wizard_challenge_height(op: int, payload: Variant = null) -> void:
+	if not MatchStateManager.allows_gameplay_actions():
+		return
+	match op:
+		WizardChallengeHeightSync.NetworkOp.REQUEST_WIN:
+			_request_wizard_challenge_height_win.rpc_id(1)
+		WizardChallengeHeightSync.NetworkOp.BROADCAST_STATE:
+			if not multiplayer.is_server():
+				return
+			_rpc_wizard_challenge_height_state.rpc(payload as Dictionary)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_wizard_challenge_height_win() -> void:
+	if not multiplayer.is_server():
+		return
+	var actor_peer_id := multiplayer.get_remote_sender_id()
+	_forward_to_main(
+		"apply_wizard_challenge_height_network",
+		[WizardChallengeHeightSync.NetworkOp.REQUEST_WIN, [actor_peer_id]]
+	)
+
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_wizard_challenge_height_state(data: Dictionary) -> void:
+	_forward_to_main(
+		"apply_wizard_challenge_height_network",
+		[WizardChallengeHeightSync.NetworkOp.BROADCAST_STATE, data]
+	)
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func _request_match_victory(winner_peer_id: int) -> void:
 	if not multiplayer.is_server():

@@ -9,18 +9,18 @@
 [ext_resource type="Script" uid="uid://u8e7vj0h4fwt" path="res://scripts/headmaster/broom_flight.gd" id="7_broom_flight"]
 [ext_resource type="PackedScene" uid="uid://cxhdm10j1ei3m" path="res://scenes/characters/broom.tscn" id="8_broom_scene"]
 [ext_resource type="Script" uid="uid://dd77j25oui52d" path="res://scripts/inventory/player_inventory.gd" id="9_inventory"]
-[ext_resource type="Script" uid="uid://bcqyf4grpegj6" path="res://scripts/characters/player_stun.gd" id="10_stun"]
+[ext_resource type="Script" path="res://scripts/characters/player_stun.gd" id="10_stun"]
 [ext_resource type="PackedScene" uid="uid://7shalb8dn4r4" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
 [ext_resource type="Script" uid="uid://cg3awqqjxne53" path="res://scripts/spells/spell_hotbar.gd" id="12_hotbar"]
-[ext_resource type="Script" uid="uid://bcombathealth1" path="res://scripts/combat/combat_health.gd" id="13_health"]
+[ext_resource type="Script" uid="uid://bvxgyb636rxn5" path="res://scripts/combat/combat_health.gd" id="13_health"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_d8q2a"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jga6s"]
 resource_local_to_scene = true
 albedo_color = Color(0.25, 0.65, 0.95, 1)
 metallic = 0.05
 roughness = 0.62
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jga6s"]
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kol7c"]
 resource_local_to_scene = true
 albedo_color = Color(0.32, 0.7, 0.97, 1)
 metallic = 0.05
@@ -64,7 +64,7 @@ crouch_slide_friction_start = 12.0
 crouch_slide_friction = 35.0
 
 [node name="Body" parent="." index="1" unique_id=73058391]
-surface_material_override/0 = SubResource("StandardMaterial3D_d8q2a")
+surface_material_override/0 = SubResource("StandardMaterial3D_jga6s")
 
 [node name="BroomMount" type="Node3D" parent="Body" index="0" unique_id=1571568894]
 editor_description = "Anchor on Body. Move/rotate the Broom child for the riding pose. Keep this visible — hide the Broom child instead."
@@ -76,7 +76,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.33, 0.07)
 visible = false
 
 [node name="HeadMesh" parent="Head" parent_id_path=PackedInt32Array(1186111743) index="0" unique_id=1294118041]
-surface_material_override/0 = SubResource("StandardMaterial3D_jga6s")
+surface_material_override/0 = SubResource("StandardMaterial3D_kol7c")
 
 [node name="CameraPivot" type="Node3D" parent="Head" parent_id_path=PackedInt32Array(1186111743) index="1" unique_id=1649868741]
 unique_name_in_owner = true
@@ -138,10 +138,9 @@ unique_name_in_owner = true
 script = ExtResource("9_inventory")
 starting_items = Array[String](["", "spellbook"])
 
-[node name="Health" type="Node" parent="." index="9"]
+[node name="Health" type="Node" parent="." index="9" unique_id=1266748581]
 editor_description = "Player HP pool. Monster touch, fireballs, and ember burn spend this."
 script = ExtResource("13_health")
-max_health = 100.0
 
 [node name="Stun" type="Node" parent="." index="10" unique_id=796869350]
 editor_description = "Charger ram stun: locks move/cast, ballistic launch, shared stun stars + camera 'stunned' word."
