@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://clobbyhost001"]
 
 [ext_resource type="PackedScene" uid="uid://cd4v6kvl3kiuq" path="res://scenes/ui/lobby_panel.tscn" id="1_lobby"]
-[ext_resource type="Theme" uid="uid://4wbrfdm3skkg" path="res://resources/ui/serious_wiz_biz_theme.tres" id="2_dl7gb"]
+[ext_resource type="Theme" uid="uid://b0eursallxwjr" path="res://resources/ui/serious_wiz_biz_theme.tres" id="2_dl7gb"]
 [ext_resource type="PackedScene" uid="uid://cswbflare001" path="res://scenes/ui/scaffolding/title_flare.tscn" id="2_ijsr2"]
 [ext_resource type="PackedScene" uid="uid://7qisbktct3lc" path="res://scenes/ui/scaffolding/lobby_player_row.tscn" id="3_nmdwp"]
 

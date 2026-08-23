@@ -97,8 +97,8 @@ func _refresh() -> void:
 	queue_redraw()
 
 
-func _on_toggled(pressed: bool) -> void:
-	var target := 1.0 if pressed else 0.0
+func _on_toggled(is_on: bool) -> void:
+	var target := 1.0 if is_on else 0.0
 	if _thumb_tween != null and _thumb_tween.is_valid():
 		_thumb_tween.kill()
 	if Engine.is_editor_hint():
