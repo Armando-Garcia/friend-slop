@@ -1,0 +1,179 @@
+[gd_scene format=3 uid="uid://b1f0142sp11pc"]
+
+[ext_resource type="Script" uid="uid://bge6p8jng11iq" path="res://scripts/objectives/puzzle_workshop.gd" id="1_workshop"]
+[ext_resource type="Script" uid="uid://bqtinb7x3k0w7" path="res://scripts/objectives/puzzle_step_node.gd" id="2_alwod"]
+[ext_resource type="Script" uid="uid://dhowafc1a5qvv" path="res://scripts/objectives/puzzle_base_piece_node.gd" id="2_sajcs"]
+[ext_resource type="Script" uid="uid://c4aw7kgasoyuc" path="res://scripts/objectives/puzzle_moving_platform_node.gd" id="3_m4kxp"]
+[ext_resource type="Script" uid="uid://cerl5qrb2ilqu" path="res://scripts/objectives/puzzle_platform_path_point_node.gd" id="4_m4kxp"]
+
+[sub_resource type="Environment" id="Environment_studio"]
+background_mode = 1
+background_color = Color(0.02, 0.03, 0.05, 1)
+ambient_light_color = Color(0.28, 0.3, 0.38, 1)
+ambient_light_energy = 0.45
+
+[sub_resource type="StandardMaterial3D" id="Mat_ground"]
+albedo_color = Color(0.15, 0.13, 0.19, 1)
+roughness = 0.9
+
+[sub_resource type="BoxMesh" id="Box_ground"]
+size = Vector3(60, 0.4, 60)
+
+[sub_resource type="BoxShape3D" id="Shape_ground"]
+size = Vector3(60, 0.4, 60)
+
+[node name="PuzzleWorkshop" type="Node3D" unique_id=1841901683]
+process_mode = 3
+editor_description = "Puzzle editor for WizardChallengeHeight jump-puzzle towers. Add steps with the buttons below, drag Step_* nodes under StepsRoot in the 3D view to place them, edit shape/size/trap on each in the Inspector. Save Puzzle writes a PuzzleDefinition .tres; Spawn Test Player (F9) lets you run the scene (F6) and climb it."
+script = ExtResource("1_workshop")
+puzzle_name = "Hole"
+default_step_rise = 1.0
+default_angle_step_turns = 0.1
+object_to_add = 3
+puzzle_path = "res://resources/objectives/puzzles/example_spiral.tres"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=736243190]
+environment = SubResource("Environment_studio")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=942256543]
+transform = Transform3D(0.8762156, -0.24968334, 0.4121877, 0, 0.85528654, 0.5181139, -0.48191854, -0.4539697, 0.7494322, 10, 9, 14)
+current = true
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1305565601]
+transform = Transform3D(0.86601907, -0.3535631, 0.3535593, 0, 0.70710295, 0.7071106, -0.500011, -0.61237127, 0.61236465, 0, 12, 0)
+light_energy = 1.1
+shadow_enabled = true
+
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1293428706]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.9454823, 0)
+collision_mask = 0
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=1138420832]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.21945691, -0.27525228, 0.24648857)
+material_override = SubResource("Mat_ground")
+mesh = SubResource("Box_ground")
+
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=1734964873]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+shape = SubResource("Shape_ground")
+
+[node name="StepsRoot" type="Node3D" parent="." unique_id=1979840646]
+process_mode = 3
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.77148986, 0)
+
+[node name="Step_0" type="StaticBody3D" parent="StepsRoot" unique_id=1776387173]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.0412784, -0.89899397, -0.01803565)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="Step_1" type="StaticBody3D" parent="StepsRoot" unique_id=819509944]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.4683294, -0.44745183, 1.7453201)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="Step_2" type="StaticBody3D" parent="StepsRoot" unique_id=337756930]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.9683294, 0.06998563, 2.8351338)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="Step_3" type="StaticBody3D" parent="StepsRoot" unique_id=900599914]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1142275, 0.6844044, 2.8351338)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="Summit" type="StaticBody3D" parent="StepsRoot" unique_id=975507964]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1371144, 4.0807323, -3.627712)
+collision_mask = 0
+script = ExtResource("2_alwod")
+shape = 1
+size = Vector3(2.4, 0.1, 2.4)
+is_summit = true
+
+[node name="Step_5" type="StaticBody3D" parent="StepsRoot" unique_id=1171145684]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.5795603, -3.7384832, 6.9159546)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 2
+trap_param = 2.8
+
+[node name="Step_6" type="StaticBody3D" parent="StepsRoot" unique_id=559919290]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.728365, -3.7970245, -7.0939336)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 2
+trap_param = 2.8
+
+[node name="Step_7" type="StaticBody3D" parent="StepsRoot" unique_id=1500144627]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.4660566, 1.1784949, 4.4265785)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="Step_8" type="StaticBody3D" parent="StepsRoot" unique_id=966270882]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.17752075, 1.8063374, 4.418659)
+collision_mask = 0
+script = ExtResource("2_alwod")
+trap_type = 1
+
+[node name="PlatformsRoot" type="Node3D" parent="." unique_id=2026835315]
+process_mode = 3
+transform = Transform3D(0.75, 0, 0, 0, 0.75, 0, 0, 0, 0.75, 4.1424427, 0.77148986, 2.8486686)
+
+[node name="Platform_0" type="Node3D" parent="PlatformsRoot" unique_id=633966951]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.4604826, 2.847292, 0)
+script = ExtResource("3_m4kxp")
+
+[node name="Point_0" type="Node3D" parent="PlatformsRoot/Platform_0" unique_id=1575025563]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.027989708, 0, 0)
+script = ExtResource("4_m4kxp")
+stop_seconds = 1.2
+
+[node name="Point_1" type="Node3D" parent="PlatformsRoot/Platform_0" unique_id=718344074]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.867, 0.75, -1.445)
+script = ExtResource("4_m4kxp")
+
+[node name="Point_2" type="Node3D" parent="PlatformsRoot/Platform_0" unique_id=372686661]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.351, 1.5, -5.849)
+script = ExtResource("4_m4kxp")
+
+[node name="Point_3" type="Node3D" parent="PlatformsRoot/Platform_0" unique_id=534454925]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.437, 2.5, -8.774)
+script = ExtResource("4_m4kxp")
+stop_seconds = 1.2
+
+[node name="PendulumsRoot" type="Node3D" parent="." unique_id=890730510]
+process_mode = 3
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.77148986, 0)
+
+[node name="BasePiecesRoot" type="Node3D" parent="." unique_id=846883212]
+process_mode = 3
+
+[node name="BasePiece_0" type="Node3D" parent="BasePiecesRoot" unique_id=2072697603]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.027776241, 0)
+script = ExtResource("2_sajcs")
+shape = 1
+size = Vector3(15, 3, 15)
+
+[node name="BasePiece_1" type="Node3D" parent="BasePiecesRoot" unique_id=1334795275]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9.982105, 0, 0)
+script = ExtResource("2_sajcs")
+size = Vector3(5, 0.2, 25)
+
+[node name="BasePiece_2" type="Node3D" parent="BasePiecesRoot" unique_id=936128850]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.01573, 0, 0)
+script = ExtResource("2_sajcs")
+size = Vector3(5, 0.2, 25)
+
+[node name="BasePiece_3" type="Node3D" parent="BasePiecesRoot" unique_id=679366934]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 10.02251)
+script = ExtResource("2_sajcs")
+size = Vector3(15, 0.2, 5)
+
+[node name="BasePiece_4" type="Node3D" parent="BasePiecesRoot" unique_id=1302514046]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -10.108234)
+script = ExtResource("2_sajcs")
+size = Vector3(15, 0.2, 5)

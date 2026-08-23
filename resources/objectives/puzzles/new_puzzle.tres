@@ -1,0 +1,115 @@
+[gd_resource type="Resource" script_class="PuzzleDefinition" format=3 uid="uid://babdjiri2adjn"]
+
+[ext_resource type="Script" uid="uid://xrn8fbkexgqt" path="res://scripts/objectives/puzzle_pendulum_entry.gd" id="1_u3gdn"]
+[ext_resource type="Script" uid="uid://dnhy7dw2vcwex" path="res://scripts/objectives/puzzle_moving_platform_entry.gd" id="2_xooxg"]
+[ext_resource type="Script" uid="uid://cx48nkgp00g10" path="res://scripts/objectives/puzzle_platform_path_point_entry.gd" id="3_x7drt"]
+[ext_resource type="Script" uid="uid://c75kpphie4oho" path="res://scripts/objectives/puzzle_definition.gd" id="4_d6yl1"]
+[ext_resource type="Script" uid="uid://o4omwejxdt5x" path="res://scripts/objectives/puzzle_step_entry.gd" id="5_crv7o"]
+
+[sub_resource type="Resource" id="Resource_k388r"]
+script = ExtResource("1_u3gdn")
+position = Vector3(2.5, 4.25, 2.75)
+radius = 3.0
+bob_size = 0.3
+
+[sub_resource type="Resource" id="Resource_qdxu6"]
+script = ExtResource("1_u3gdn")
+position = Vector3(1.25, 4.25, 2.75)
+radius = 3.0
+bob_size = 0.3
+
+[sub_resource type="Resource" id="Resource_calsa"]
+script = ExtResource("1_u3gdn")
+position = Vector3(0, 4.25, 2.75)
+radius = 3.0
+bob_size = 0.3
+
+[sub_resource type="Resource" id="Resource_l66w5"]
+script = ExtResource("1_u3gdn")
+position = Vector3(-1.25, 4.25, 2.75)
+radius = 3.0
+bob_size = 0.3
+
+[sub_resource type="Resource" id="Resource_lpekw"]
+script = ExtResource("3_x7drt")
+position = Vector3(-0.05554962, 0, -0.36042047)
+
+[sub_resource type="Resource" id="Resource_aljgv"]
+script = ExtResource("3_x7drt")
+position = Vector3(-10.284925, 0, -0.3445263)
+
+[sub_resource type="Resource" id="Resource_xrgup"]
+script = ExtResource("2_xooxg")
+position = Vector3(0, 0.75, 0.55902624)
+tile_size = Vector3(2.4, 0.3, 1.6)
+path_points = Array[ExtResource("3_x7drt")]([SubResource("Resource_lpekw"), SubResource("Resource_aljgv")])
+
+[sub_resource type="Resource" id="Resource_y4cmb"]
+script = ExtResource("3_x7drt")
+position = Vector3(-0.020411015, -0.3213973, 1.476321)
+
+[sub_resource type="Resource" id="Resource_wimbh"]
+script = ExtResource("3_x7drt")
+position = Vector3(-0.79131436, 5.0680532, 5.3009357)
+
+[sub_resource type="Resource" id="Resource_l2q3i"]
+script = ExtResource("2_xooxg")
+position = Vector3(-9.151419, 5.985202, -6.8938193)
+path_type = 1
+tile_shape = 1
+tile_size = Vector3(1.6, 1.5, 3)
+path_points = Array[ExtResource("3_x7drt")]([SubResource("Resource_y4cmb"), SubResource("Resource_wimbh")])
+
+[sub_resource type="Resource" id="Resource_k8go7"]
+script = ExtResource("3_x7drt")
+position = Vector3(-0.020411015, -0.3213973, 1.476321)
+
+[sub_resource type="Resource" id="Resource_fhocx"]
+script = ExtResource("3_x7drt")
+position = Vector3(-0.79131436, 5.0680532, 5.3009357)
+
+[sub_resource type="Resource" id="Resource_q8s6t"]
+script = ExtResource("2_xooxg")
+position = Vector3(-6.069759, 7.5263786, -6.8938193)
+path_type = 1
+tile_shape = 1
+tile_size = Vector3(1.6, 1.5, 3)
+circle_rotation_degrees = Vector3(0, 0, 90)
+path_points = Array[ExtResource("3_x7drt")]([SubResource("Resource_k8go7"), SubResource("Resource_fhocx")])
+
+[sub_resource type="Resource" id="Resource_g6ewp"]
+script = ExtResource("5_crv7o")
+position = Vector3(4, -0.12934875, -0.3082559)
+shape = 3
+size = Vector3(1.6, 1.5, 2.5)
+
+[sub_resource type="Resource" id="Resource_alp2e"]
+script = ExtResource("5_crv7o")
+position = Vector3(3.9719262, 0.5, 1.4581295)
+
+[sub_resource type="Resource" id="Resource_3vlxo"]
+script = ExtResource("5_crv7o")
+position = Vector3(-4.352943, 0.75, 3.0627885)
+shape = 1
+size = Vector3(1.3, 0.15, 1.3)
+
+[sub_resource type="Resource" id="Resource_hv516"]
+script = ExtResource("5_crv7o")
+position = Vector3(-4.386545, 1, 1.5254995)
+size = Vector3(1.15, 0.3, 1.15)
+trap_type = 2
+trap_param = 2.0
+
+[sub_resource type="Resource" id="Resource_xahx2"]
+script = ExtResource("5_crv7o")
+position = Vector3(3.713417, 8.267841, -1.6503637)
+size = Vector3(2.4, 0.35, 2.4)
+is_summit = true
+
+[resource]
+script = ExtResource("4_d6yl1")
+puzzle_name = "Height Challenge 1"
+steps = Array[ExtResource("5_crv7o")]([SubResource("Resource_g6ewp"), SubResource("Resource_alp2e"), SubResource("Resource_3vlxo"), SubResource("Resource_hv516"), SubResource("Resource_xahx2")])
+pendulums = Array[ExtResource("1_u3gdn")]([SubResource("Resource_k388r"), SubResource("Resource_qdxu6"), SubResource("Resource_calsa"), SubResource("Resource_l66w5")])
+platforms = Array[ExtResource("2_xooxg")]([SubResource("Resource_xrgup"), SubResource("Resource_l2q3i"), SubResource("Resource_q8s6t")])
+base_radius = 6.0

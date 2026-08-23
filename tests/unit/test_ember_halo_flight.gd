@@ -89,9 +89,14 @@ func _test_jump_pad_velocity_scales_with_strength() -> int:
 	var gravity := 9.8
 	var baseline := EmberHaloFlightScript.jump_pad_velocity(gravity)
 	var doubled := EmberHaloFlightScript.jump_pad_velocity(gravity, 2.0)
-	var expected_doubled := sqrt(2.0 * gravity * EmberHaloFlightScript.JUMP_PAD_HEIGHT_M * 2.0)
+	var expected_doubled := sqrt(
+		2.0 * gravity * EmberHaloFlightScript.JUMP_PAD_HEIGHT_M * 2.0
+	)
 	if not is_equal_approx(doubled, expected_doubled):
-		push_error("Expected 2x strength to double the apex height, got %s vs %s" % [doubled, expected_doubled])
+		push_error(
+			"Expected 2x strength to double the apex height, got %s vs %s"
+			% [doubled, expected_doubled]
+		)
 		return 1
 	if doubled <= baseline:
 		push_error("Expected a higher strength multiplier to launch faster than baseline")

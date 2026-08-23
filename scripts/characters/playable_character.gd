@@ -28,6 +28,7 @@ const EmberHaloFlightScript := preload("res://scripts/monsters/abilities/ember_h
 const SpellManaScript := preload("res://scripts/spells/spell_mana.gd")
 const PlayerEmberBurnScript := preload("res://scripts/characters/player_ember_burn.gd")
 const WardSlotChannelScript := preload("res://scripts/spells/ward_slot_channel.gd")
+const PlayerCombatReactionsScript := preload("res://scripts/characters/player_combat_reactions.gd")
 
 @export var player_index: int = 0
 @export var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -853,92 +854,26 @@ func _resolve_interaction_prompt() -> String:
 
 
 func apply_fireball_knockback(fireball_dir: Vector3) -> void:
-	if not is_multiplayer_authority() and GameState.is_multiplayer:
-		return
-	var impulse := BroomLocomotionScript.knockback_impulse(fireball_dir)
-	if broom_active:
-		var flight := _get_broom_flight()
-		if flight != null and flight.has_method("knock_off"):
-			flight.call("knock_off", fireball_dir)
-	_knockback_vel = impulse
-	_knockback_timer = 0.35
-	velocity += impulse
+	PlayerCombatReactionsScript.apply_fireball_knockback(self, fireball_dir)
 
 
 ## strength_mult: 1.0 = the normal ember-halo jump pad pop; higher scales the
 ## apex height up (see EmberHaloFlight.jump_pad_velocity). Lets a puzzle
 ## Launch Trap's Trap Param tune how hard it launches the player.
 func apply_ember_halo_jump_pad(strength_mult: float = 1.0) -> void:
-	if not is_multiplayer_authority() and GameState.is_multiplayer:
-		return
-	velocity.y = EmberHaloFlightScript.jump_pad_velocity(gravity, strength_mult)
+	PlayerCombatReactionsScript.apply_ember_halo_jump_pad(self, strength_mult)
 
 
 func apply_ember_halo_hit(hit_dir: Vector3) -> void:
-	if not is_multiplayer_authority() and GameState.is_multiplayer:
-		return
-	## Rim hit: displacement only — no HP damage.
-	velocity.y = maxf(velocity.y, JUMP_VELOCITY)
-	var flat := Vector3(hit_dir.x, 0.0, hit_dir.z)
-	if flat.length_squared() > 0.0001:
-		flat = flat.normalized()
-		var impulse := flat * EmberHaloFlightScript.HIT_KNOCKBACK_SPEED
-		_knockback_vel = impulse
-		_knockback_timer = 0.25
-		velocity.x += impulse.x
-		velocity.z += impulse.z
-	apply_speed_boost(
-		EmberHaloFlightScript.SLOW_DURATION_SEC,
-		EmberHaloFlightScript.SLOW_MULTIPLIER
-	)
+	PlayerCombatReactionsScript.apply_ember_halo_hit(self, hit_dir)
 
 
 func apply_wretch_command_hit(hit_dir: Vector3) -> void:
-	if not is_multiplayer_authority() and GameState.is_multiplayer:
-		return
-	var dir := hit_dir
-	if dir.length_squared() < 0.0001:
-		dir = -global_transform.basis.z
-	else:
-		dir = dir.normalized()
-	var flat := Vector3(dir.x, 0.0, dir.z)
-	if flat.length_squared() < 0.0001:
-		flat = Vector3.FORWARD
-	else:
-		flat = flat.normalized()
-	var impulse := flat * 6.0 + Vector3.UP * 1.5
-	_knockback_vel = impulse
-	_knockback_timer = 0.28
-	velocity += impulse
-	if broom_active:
-		var flight := _get_broom_flight()
-		if flight != null and flight.has_method("knock_off"):
-			flight.call("knock_off", flat)
-	apply_speed_boost(2.0, 0.1)
+	PlayerCombatReactionsScript.apply_wretch_command_hit(self, hit_dir)
 
 
 func apply_rat_explode_hit(hit_dir: Vector3) -> void:
-	if not is_multiplayer_authority() and GameState.is_multiplayer:
-		return
-	var dir := hit_dir
-	if dir.length_squared() < 0.0001:
-		dir = -global_transform.basis.z
-	else:
-		dir = dir.normalized()
-	var flat := Vector3(dir.x, 0.0, dir.z)
-	if flat.length_squared() < 0.0001:
-		flat = Vector3.FORWARD
-	else:
-		flat = flat.normalized()
-	var impulse := flat * 14.0 + Vector3.UP * 4.0
-	_knockback_vel = impulse
-	_knockback_timer = 0.5
-	velocity += impulse
-	if broom_active:
-		var flight := _get_broom_flight()
-		if flight != null and flight.has_method("knock_off"):
-			flight.call("knock_off", flat)
-	apply_speed_boost(0.75, 0.25)
+	PlayerCombatReactionsScript.apply_rat_explode_hit(self, hit_dir)
 
 
 func _get_broom_flight() -> Node:
@@ -1014,3 +949,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_separate_from_players()
 	_update_interaction_prompt()
+
+
+func _apply_knockback_bleed(delta: float) -> void:
+	PlayerCombatReactionsScript.tick_knockback_bleed(self, delta)

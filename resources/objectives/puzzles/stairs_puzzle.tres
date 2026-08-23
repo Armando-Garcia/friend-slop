@@ -1,0 +1,64 @@
+[gd_resource type="Resource" script_class="PuzzleDefinition" format=3 uid="uid://cdk8xd2b3sk0s"]
+
+[ext_resource type="Script" uid="uid://xrn8fbkexgqt" path="res://scripts/objectives/puzzle_pendulum_entry.gd" id="1_lqq5m"]
+[ext_resource type="Script" uid="uid://dnhy7dw2vcwex" path="res://scripts/objectives/puzzle_moving_platform_entry.gd" id="2_gduuf"]
+[ext_resource type="Script" uid="uid://cx48nkgp00g10" path="res://scripts/objectives/puzzle_platform_path_point_entry.gd" id="3_ein68"]
+[ext_resource type="Script" uid="uid://c75kpphie4oho" path="res://scripts/objectives/puzzle_definition.gd" id="4_m0bb5"]
+[ext_resource type="Script" uid="uid://o4omwejxdt5x" path="res://scripts/objectives/puzzle_step_entry.gd" id="5_a7pgr"]
+
+[sub_resource type="Resource" id="Resource_yunb1"]
+script = ExtResource("3_ein68")
+position = Vector3(-0.039004326, 0.08764585, 0)
+stop_seconds = 1.0
+
+[sub_resource type="Resource" id="Resource_7eiy4"]
+script = ExtResource("3_ein68")
+position = Vector3(-2.1765792, 3, 2.328612)
+
+[sub_resource type="Resource" id="Resource_h67eg"]
+script = ExtResource("3_ein68")
+position = Vector3(-4.9473343, 6.0000005, 3.6549284)
+
+[sub_resource type="Resource" id="Resource_xurmj"]
+script = ExtResource("3_ein68")
+position = Vector3(-7.287958, 9.000001, 2.74)
+
+[sub_resource type="Resource" id="Resource_84tdm"]
+script = ExtResource("3_ein68")
+position = Vector3(-8.297511, 12.000002, 0)
+
+[sub_resource type="Resource" id="Resource_s87fo"]
+script = ExtResource("3_ein68")
+position = Vector3(-6.544892, 15.000003, -2.1580489)
+
+[sub_resource type="Resource" id="Resource_inocw"]
+script = ExtResource("3_ein68")
+position = Vector3(-4.7520003, 18, -3.1292694)
+
+[sub_resource type="Resource" id="Resource_3qjfv"]
+script = ExtResource("3_ein68")
+position = Vector3(-3.3519926, 21, -1.4692187)
+
+[sub_resource type="Resource" id="Resource_gtoga"]
+script = ExtResource("3_ein68")
+position = Vector3(-1.8519936, 21.13211, 0.02517454)
+stop_seconds = 1.0
+
+[sub_resource type="Resource" id="Resource_js5d1"]
+script = ExtResource("2_gduuf")
+position = Vector3(-1.1605005, -1, -3.8133855)
+circle_rotation_degrees = Vector3(0, 90, 360)
+path_points = Array[ExtResource("3_ein68")]([SubResource("Resource_yunb1"), SubResource("Resource_7eiy4"), SubResource("Resource_h67eg"), SubResource("Resource_xurmj"), SubResource("Resource_84tdm"), SubResource("Resource_s87fo"), SubResource("Resource_inocw"), SubResource("Resource_3qjfv"), SubResource("Resource_gtoga")])
+
+[sub_resource type="Resource" id="Resource_cy3kq"]
+script = ExtResource("5_a7pgr")
+position = Vector3(0.022416115, 15.222982, 0)
+size = Vector3(2.4, 0.35, 2.4)
+is_summit = true
+
+[resource]
+script = ExtResource("4_m0bb5")
+puzzle_name = "StairsPuzzle"
+steps = Array[ExtResource("5_a7pgr")]([SubResource("Resource_cy3kq")])
+platforms = Array[ExtResource("2_gduuf")]([SubResource("Resource_js5d1")])
+base_radius = 6.0
