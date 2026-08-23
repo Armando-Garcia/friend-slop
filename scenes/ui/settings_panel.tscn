@@ -1,22 +1,16 @@
-[gd_scene load_steps=8 format=3 uid="uid://csettingspanel001"]
+[gd_scene format=3 uid="uid://bflxbhshbo6x5"]
 
-[ext_resource type="Script" path="res://scripts/ui/settings_panel.gd" id="1_settings"]
-[ext_resource type="Script" path="res://scripts/ui/player_voice_list.gd" id="2_player_voice"]
-[ext_resource type="Script" path="res://scripts/ui/menu_toggle_switch.gd" id="3_toggle"]
-[ext_resource type="Script" path="res://scripts/ui/aim_cursor.gd" id="4_aim"]
-[ext_resource type="Script" path="res://scripts/ui/keybinds/settings_controls_tab.gd" id="5_controls"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.08, 0.06, 0.09, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.82, 0.70, 0.38, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+[ext_resource type="Theme" uid="uid://b0eursallxwjr" path="res://resources/ui/serious_wiz_biz_theme.tres" id="0_theme"]
+[ext_resource type="Script" uid="uid://clghxkxhs6pxb" path="res://scripts/ui/settings_panel.gd" id="1_settings"]
+[ext_resource type="Script" uid="uid://c7xkid6gjah1x" path="res://scripts/ui/player_voice_list.gd" id="2_player_voice"]
+[ext_resource type="Script" uid="uid://cwq8fil4voixo" path="res://scripts/ui/menu_toggle_switch.gd" id="3_toggle"]
+[ext_resource type="Script" uid="uid://bfnrfxnwjg02y" path="res://scripts/ui/aim_cursor.gd" id="4_aim"]
+[ext_resource type="Script" uid="uid://dlhyaksydqf51" path="res://scripts/ui/keybinds/settings_controls_tab.gd" id="5_controls"]
+[ext_resource type="PackedScene" uid="uid://cswbflare001" path="res://scenes/ui/scaffolding/title_flare.tscn" id="6_flare"]
+[ext_resource type="PackedScene" uid="uid://7yixf6ggt3lc" path="res://scenes/ui/scaffolding/toggle_switch.tscn" id="7_toggle_sw"]
+[ext_resource type="PackedScene" uid="uid://bj84xwe4p1k8w" path="res://scenes/ui/scaffolding/color_picker.tscn" id="8_color"]
+[ext_resource type="Script" uid="uid://bntyqsanvc4pn" path="res://scripts/ui/scaffolding/menu_tabs.gd" id="9_tabs"]
+[ext_resource type="PackedScene" uid="uid://0l63liurp0rs" path="res://scenes/ui/scaffolding/value_slider.tscn" id="10_slider"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_crosshair_preview"]
 bg_color = Color(0.06, 0.05, 0.09, 1)
@@ -30,8 +24,143 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
-[node name="SettingsPanel" type="Control"]
-visible = false
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_75ucs"]
+content_margin_left = 14.0
+content_margin_top = 14.0
+content_margin_right = 14.0
+content_margin_bottom = 14.0
+bg_color = Color(0.11764706, 0.1882353, 0.32941177, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hhl7b"]
+content_margin_left = 14.0
+content_margin_top = 14.0
+content_margin_right = 14.0
+content_margin_bottom = 14.0
+bg_color = Color(0.023529412, 0.03137255, 0.05882353, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_kcorf"]
+content_margin_left = 14.0
+content_margin_top = 14.0
+content_margin_right = 14.0
+content_margin_bottom = 14.0
+bg_color = Color(0.16470589, 0.2509804, 0.40784314, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jcm0g"]
+content_margin_left = 14.0
+content_margin_top = 14.0
+content_margin_right = 14.0
+content_margin_bottom = 14.0
+bg_color = Color(0.11764706, 0.1882353, 0.32941177, 0.45)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gqknh"]
+content_margin_left = 14.0
+content_margin_top = 14.0
+content_margin_right = 14.0
+content_margin_bottom = 14.0
+bg_color = Color(0.11764706, 0.1882353, 0.32941177, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_ncvun"]
+
+[sub_resource type="Image" id="Image_78kub"]
+data = {
+"data": PackedByteArray(0, 0, 0, 0),
+"format": "RGBA8",
+"height": 1,
+"mipmaps": false,
+"width": 1
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_qvygn"]
+image = SubResource("Image_78kub")
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_eua7n"]
+
+[sub_resource type="Image" id="Image_qhkq3"]
+data = {
+"data": PackedByteArray(0, 0, 0, 0),
+"format": "RGBA8",
+"height": 1,
+"mipmaps": false,
+"width": 1
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_u1gvm"]
+image = SubResource("Image_qhkq3")
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_7h5ju"]
+
+[sub_resource type="Image" id="Image_jeoeo"]
+data = {
+"data": PackedByteArray(0, 0, 0, 0),
+"format": "RGBA8",
+"height": 1,
+"mipmaps": false,
+"width": 1
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_1oful"]
+image = SubResource("Image_jeoeo")
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_tglx8"]
+
+[sub_resource type="Image" id="Image_ss6yk"]
+data = {
+"data": PackedByteArray(0, 0, 0, 0),
+"format": "RGBA8",
+"height": 1,
+"mipmaps": false,
+"width": 1
+}
+
+[sub_resource type="ImageTexture" id="ImageTexture_pvhr1"]
+image = SubResource("Image_ss6yk")
+
+[node name="SettingsPanel" type="Control" unique_id=597611379]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -39,18 +168,19 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("0_theme")
 script = ExtResource("1_settings")
 
-[node name="Dimmer" type="ColorRect" parent="."]
+[node name="Dimmer" type="ColorRect" parent="." unique_id=1441723527]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.55)
+color = Color(0.024, 0.031, 0.059, 0.62)
 
-[node name="Panel" type="PanelContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="." unique_id=786599226]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -63,36 +193,46 @@ offset_right = 360.0
 offset_bottom = 360.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel" unique_id=151919021]
 layout_mode = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 16
 
-[node name="VBox" type="VBoxContainer" parent="Panel/MarginContainer"]
+[node name="VBox" type="VBoxContainer" parent="Panel/MarginContainer" unique_id=476842162]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBox"]
+[node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBox" unique_id=1797468903]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 28
 text = "Settings"
 horizontal_alignment = 1
 
-[node name="TabContainer" type="TabContainer" parent="Panel/MarginContainer/VBox"]
+[node name="TitleFlare" parent="Panel/MarginContainer/VBox" unique_id=2057286473 instance=ExtResource("6_flare")]
+
+[node name="TabContainer" type="TabContainer" parent="Panel/MarginContainer/VBox" unique_id=1973437201]
 custom_minimum_size = Vector2(0, 460)
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_colors/font_selected_color = Color(0.9647059, 0.9372549, 0.93333334, 1)
+theme_override_colors/font_hovered_color = Color(0.8862745, 0.67058825, 0.2627451, 1)
+theme_override_colors/font_unselected_color = Color(0.9647059, 0.9372549, 0.93333334, 0.72)
+theme_override_colors/font_disabled_color = Color(0.9647059, 0.9372549, 0.93333334, 0.45)
+current_tab = 2
+script = ExtResource("9_tabs")
+tab_titles = PackedStringArray("General", "Graphics", "Audio", "Controls", "Developer")
+editor_tab = 2
 
-[node name="General" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="General" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer" unique_id=930245604]
+visible = false
 layout_mode = 2
 metadata/_tab_index = 0
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/General"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/General" unique_id=1734559557]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
@@ -100,27 +240,27 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer" unique_id=365859348]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="GeneralVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer"]
+[node name="GeneralVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer" unique_id=1807011474]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 14
 
-[node name="CrosshairHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=1196142263]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Crosshair"
 
-[node name="CrosshairPreviewFrame" type="PanelContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairPreviewFrame" type="PanelContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=1101245085]
 custom_minimum_size = Vector2(0, 96)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_crosshair_preview")
 
-[node name="CrosshairPreview" type="Control" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairPreviewFrame"]
+[node name="CrosshairPreview" type="Control" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairPreviewFrame" unique_id=1289040969]
 custom_minimum_size = Vector2(0, 88)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -129,94 +269,117 @@ mouse_filter = 2
 script = ExtResource("4_aim")
 fill_parent = false
 
-[node name="CrosshairOpacityRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairOpacityRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=357853749]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrosshairOpacityCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOpacityRow"]
+[node name="CrosshairOpacityCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOpacityRow" unique_id=234600030]
 custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "Opacity"
 
-[node name="CrosshairOpacitySlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOpacityRow"]
+[node name="CrosshairOpacitySlider" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOpacityRow" unique_id=1150360654 instance=ExtResource("10_slider")]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
+value = 0.9
+tick_divisions = 0
 
-[node name="CrosshairOpacityLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOpacityRow"]
-custom_minimum_size = Vector2(48, 0)
-layout_mode = 2
-text = "92%"
-horizontal_alignment = 2
-
-[node name="CrosshairThicknessRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairThicknessRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=1307815040]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrosshairThicknessCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairThicknessRow"]
+[node name="CrosshairThicknessCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairThicknessRow" unique_id=1370020964]
 custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "Thickness"
 
-[node name="CrosshairThicknessSlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairThicknessRow"]
+[node name="CrosshairThicknessSlider" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairThicknessRow" unique_id=788629697 instance=ExtResource("10_slider")]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 4
+min_value = 0.5
+max_value = 5.0
+value = 1.8
+tick_divisions = 0
+show_as_percent = false
+step_size = 0.05
 
-[node name="CrosshairThicknessLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairThicknessRow"]
-custom_minimum_size = Vector2(48, 0)
-layout_mode = 2
-text = "1.8"
-horizontal_alignment = 2
-
-[node name="CrosshairColorRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairColorRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=191053862]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrosshairColorCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairColorRow"]
+[node name="CrosshairColorCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairColorRow" unique_id=1870677056]
 custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "Color"
 
-[node name="CrosshairColorPicker" type="ColorPickerButton" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairColorRow"]
-custom_minimum_size = Vector2(120, 32)
+[node name="CrosshairColorPicker" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairColorRow" unique_id=1458804286 instance=ExtResource("8_color")]
 layout_mode = 2
-edit_alpha = false
-text = "Pick"
+theme_override_styles/normal = SubResource("StyleBoxFlat_75ucs")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_hhl7b")
+theme_override_styles/hover = SubResource("StyleBoxFlat_kcorf")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_jcm0g")
+theme_override_styles/focus = SubResource("StyleBoxFlat_gqknh")
 
-[node name="CrosshairOuterRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairOuterRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=738797345]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrosshairOuterLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOuterRow"]
+[node name="CrosshairOuterLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOuterRow" unique_id=1535494135]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Outer circle"
 
-[node name="CrosshairOuterSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOuterRow"]
+[node name="CrosshairOuterSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairOuterRow" unique_id=2045973239]
+custom_minimum_size = Vector2(40, 20)
 layout_mode = 2
+theme_override_constants/h_separation = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_ncvun")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_ncvun")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_ncvun")
+theme_override_styles/hover_pressed = SubResource("StyleBoxEmpty_ncvun")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_ncvun")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_ncvun")
+theme_override_icons/checked = SubResource("ImageTexture_qvygn")
+theme_override_icons/unchecked = SubResource("ImageTexture_qvygn")
+theme_override_icons/checked_disabled = SubResource("ImageTexture_qvygn")
+theme_override_icons/unchecked_disabled = SubResource("ImageTexture_qvygn")
 button_pressed = true
+flat = true
 script = ExtResource("3_toggle")
 
-[node name="CrosshairDotRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox"]
+[node name="CrosshairDotRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox" unique_id=513137618]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="CrosshairDotLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairDotRow"]
+[node name="CrosshairDotLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairDotRow" unique_id=193262870]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Center dot"
 
-[node name="CrosshairDotSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairDotRow"]
+[node name="CrosshairDotSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/General/MarginContainer/ScrollContainer/GeneralVBox/CrosshairDotRow" unique_id=1829284376]
+custom_minimum_size = Vector2(40, 20)
 layout_mode = 2
+theme_override_constants/h_separation = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_eua7n")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_eua7n")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_eua7n")
+theme_override_styles/hover_pressed = SubResource("StyleBoxEmpty_eua7n")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_eua7n")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_eua7n")
+theme_override_icons/checked = SubResource("ImageTexture_u1gvm")
+theme_override_icons/unchecked = SubResource("ImageTexture_u1gvm")
+theme_override_icons/checked_disabled = SubResource("ImageTexture_u1gvm")
+theme_override_icons/unchecked_disabled = SubResource("ImageTexture_u1gvm")
 button_pressed = true
+flat = true
 script = ExtResource("3_toggle")
 
-[node name="Graphics" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="Graphics" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer" unique_id=631093943]
+visible = false
 layout_mode = 2
 metadata/_tab_index = 1
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics" unique_id=163634880]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
@@ -224,46 +387,46 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer" unique_id=230025179]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="GraphicsVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer"]
+[node name="GraphicsVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer" unique_id=1008904539]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 14
 
-[node name="DisplayModeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
+[node name="DisplayModeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox" unique_id=1548533360]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Display Mode"
 
-[node name="DisplayModeOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
+[node name="DisplayModeOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox" unique_id=325756326]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 
-[node name="ResolutionLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
+[node name="ResolutionLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox" unique_id=471918950]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Resolution"
 
-[node name="ResolutionOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
+[node name="ResolutionOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox" unique_id=1887530496]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 
-[node name="ResolutionHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox"]
+[node name="ResolutionHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Graphics/MarginContainer/ScrollContainer/GraphicsVBox" unique_id=1951227201]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.50, 0.42, 1)
+theme_override_colors/font_color = Color(0.55, 0.5, 0.42, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "In fullscreen, resolution sets render scale while filling your monitor. In windowed mode, it sets the window size."
+autowrap_mode = 2
 
-[node name="Audio" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="Audio" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer" unique_id=415453743]
 layout_mode = 2
 metadata/_tab_index = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio" unique_id=540417034]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
@@ -271,177 +434,178 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer" unique_id=763765834]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="AudioVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer"]
+[node name="AudioVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer" unique_id=1262551805]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 12
 
-[node name="GeneralHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="GeneralHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=1911874043]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_override_colors/font_color = Color(0.95, 0.9, 0.72, 1)
 theme_override_font_sizes/font_size = 18
 text = "General"
 
-[node name="OutputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="OutputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=1664853230]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Output Device"
 
-[node name="OutputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="OutputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=2093203747]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 
-[node name="InputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="InputDeviceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=582069175]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Input Device (Microphone)"
 
-[node name="InputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="InputDeviceOption" type="OptionButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=99568607]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 
-[node name="MasterVolumeRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MasterVolumeRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=110494703]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="MasterVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
+[node name="MasterVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow" unique_id=1028851935]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Master Volume"
 
-[node name="MasterVolumeSlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
+[node name="MasterVolumeSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow" unique_id=915611237 instance=ExtResource("10_slider")]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 1
-value = 1.0
+tick_divisions = 0
 
-[node name="MasterVolumeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MasterVolumeRow"]
-custom_minimum_size = Vector2(48, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
-text = "100%"
-horizontal_alignment = 2
-
-[node name="MicVolumeRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MicVolumeRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=1993390626]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="MicVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
+[node name="MicVolumeCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow" unique_id=1318436931]
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Mic Volume"
 
-[node name="MicVolumeSlider" type="HSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
+[node name="MicVolumeSlider" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow" unique_id=1510014840 instance=ExtResource("10_slider")]
 layout_mode = 2
 size_flags_horizontal = 3
-size_flags_vertical = 1
-value = 1.0
+max_value = 2.0
+tick_divisions = 1
 
-[node name="MicVolumeLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/MicVolumeRow"]
-custom_minimum_size = Vector2(48, 0)
-layout_mode = 2
-theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
-text = "100%"
-horizontal_alignment = 2
-
-[node name="HearMyselfRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="HearMyselfRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=888117720]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="HearMyselfLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow"]
+[node name="HearMyselfLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow" unique_id=1314806158]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Hear Myself"
 
-[node name="HearMyselfSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow"]
-custom_minimum_size = Vector2(48, 28)
+[node name="HearMyselfSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/HearMyselfRow" unique_id=1838882108]
+custom_minimum_size = Vector2(40, 20)
 layout_mode = 2
-scale = Vector2(1.5, 1.5)
 tooltip_text = "Play your own mic in your headset during voice chat (software sidetone). Does not change what others hear."
-text = ""
+theme_override_constants/h_separation = 0
+theme_override_styles/normal = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_styles/hover_pressed = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_7h5ju")
+theme_override_icons/checked = SubResource("ImageTexture_1oful")
+theme_override_icons/unchecked = SubResource("ImageTexture_1oful")
+theme_override_icons/checked_disabled = SubResource("ImageTexture_1oful")
+theme_override_icons/unchecked_disabled = SubResource("ImageTexture_1oful")
+flat = true
 script = ExtResource("3_toggle")
 
-[node name="MicTestLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MicTestLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=1911067021]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Microphone Test"
 
-[node name="MicTestButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MicTestButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=314934609]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "Test Microphone"
 
-[node name="MicLevelBar" type="ProgressBar" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MicLevelBar" type="ProgressBar" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=1881580505]
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 show_percentage = false
 
-[node name="MicStatusLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="MicStatusLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=332886184]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "Press Test Microphone to check input."
+autowrap_mode = 2
 
-[node name="AudioSectionSeparator" type="HSeparator" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="AudioSectionSeparator" type="HSeparator" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=813882270]
 layout_mode = 2
 
-[node name="GameHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="GameHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=628354809]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_override_colors/font_color = Color(0.95, 0.9, 0.72, 1)
 theme_override_font_sizes/font_size = 18
 text = "Game"
 
-[node name="LobbyVoiceRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="LobbyVoiceRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=57004922]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow"]
+[node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow" unique_id=2013884301]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Lobby Voice Chat"
 
-[node name="LobbyVoiceSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow"]
-custom_minimum_size = Vector2(48, 28)
+[node name="LobbyVoiceSwitch" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox/LobbyVoiceRow" unique_id=1917625048 instance=ExtResource("7_toggle_sw")]
 layout_mode = 2
-scale = Vector2(1.5, 1.5)
 tooltip_text = "Talk with others in this lobby before the match."
-text = ""
-script = ExtResource("3_toggle")
+theme_override_styles/normal = SubResource("StyleBoxEmpty_tglx8")
+theme_override_styles/pressed = SubResource("StyleBoxEmpty_tglx8")
+theme_override_styles/hover = SubResource("StyleBoxEmpty_tglx8")
+theme_override_styles/hover_pressed = SubResource("StyleBoxEmpty_tglx8")
+theme_override_styles/disabled = SubResource("StyleBoxEmpty_tglx8")
+theme_override_styles/focus = SubResource("StyleBoxEmpty_tglx8")
+theme_override_icons/checked = SubResource("ImageTexture_pvhr1")
+theme_override_icons/unchecked = SubResource("ImageTexture_pvhr1")
+theme_override_icons/checked_disabled = SubResource("ImageTexture_pvhr1")
+theme_override_icons/unchecked_disabled = SubResource("ImageTexture_pvhr1")
 
-[node name="LobbyVoiceHint" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="LobbyVoiceHint" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=839405714]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "When you are hosting a lobby, this matches the lobby menu switch. Otherwise it sets your default for the next lobby."
+autowrap_mode = 2
 
-[node name="PlayerVoiceList" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox"]
+[node name="PlayerVoiceList" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Audio/MarginContainer/ScrollContainer/AudioVBox" unique_id=505114144]
 layout_mode = 2
 size_flags_horizontal = 3
 script = ExtResource("2_player_voice")
 
-[node name="Controls" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="Controls" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer" unique_id=561192420]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 3
 
-[node name="SettingsControlsTab" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls"]
+[node name="SettingsControlsTab" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls" unique_id=1686644341]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 8
 script = ExtResource("5_controls")
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab" unique_id=1342906612]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
@@ -449,39 +613,39 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 4
 
-[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer"]
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer" unique_id=1259973357]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="List" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer/ScrollContainer"]
+[node name="List" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/MarginContainer/ScrollContainer" unique_id=1194128653]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 14
 
-[node name="FooterRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab"]
+[node name="FooterRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab" unique_id=682504496]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow"]
+[node name="HintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow" unique_id=1115224454]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "Click a bind to remap it."
+autowrap_mode = 2
 
-[node name="RestoreDefaultsButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow"]
+[node name="RestoreDefaultsButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Controls/SettingsControlsTab/FooterRow" unique_id=467426768]
 custom_minimum_size = Vector2(0, 36)
 layout_mode = 2
 text = "Restore Defaults"
 
-[node name="Developer" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer"]
+[node name="Developer" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer" unique_id=676452537]
 visible = false
 layout_mode = 2
 metadata/_tab_index = 4
 
-[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer"]
+[node name="MarginContainer" type="MarginContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer" unique_id=1019625680]
 layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/margin_left = 8
@@ -489,89 +653,89 @@ theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="DevVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer"]
+[node name="DevVBox" type="VBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer" unique_id=915284546]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="DevHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevHeaderLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=205329937]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Developer Options"
 
-[node name="DevSoloLoadoutLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevSoloLoadoutLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=1478846966]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Solo test loadout"
 
-[node name="DevSoloHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevSoloHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=909696457]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "Pick a default role when you Play alone. Lobby role buttons can still change it."
+autowrap_mode = 2
 
-[node name="DevRoleSection" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevRoleSection" type="HBoxContainer" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=640953544]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="DevRoleCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection"]
+[node name="DevRoleCaption" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection" unique_id=1638797411]
 custom_minimum_size = Vector2(40, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_override_colors/font_color = Color(0.9, 0.84, 0.68, 1)
 text = "Role"
 
-[node name="DevApprenticeButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection"]
+[node name="DevApprenticeButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection" unique_id=1085492009]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Apprentice"
 
-[node name="DevHeadmasterButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection"]
+[node name="DevHeadmasterButton" type="Button" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox/DevRoleSection" unique_id=283072857]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Headmaster"
 
-[node name="VoiceStubCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="VoiceStubCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=71931397]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
+theme_override_colors/font_color = Color(0.85, 0.8, 0.7, 1)
 text = "Stub voice validation (always succeed)"
 
-[node name="DevSpawnRelicNearSpawnCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevSpawnRelicNearSpawnCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=1013896808]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
+theme_override_colors/font_color = Color(0.85, 0.8, 0.7, 1)
 text = "Spawn relic near player start (testing)"
 
-[node name="DevAllowAnyLobbySizeCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevAllowAnyLobbySizeCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=2056457425]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.85, 0.80, 0.70, 1)
+theme_override_colors/font_color = Color(0.85, 0.8, 0.7, 1)
 text = "Allow any lobby size in multiplayer (testing)"
 
-[node name="DevHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox"]
+[node name="DevHintLabel" type="Label" parent="Panel/MarginContainer/VBox/TabContainer/Developer/MarginContainer/DevVBox" unique_id=819156244]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.50, 0.42, 1)
+theme_override_colors/font_color = Color(0.55, 0.5, 0.42, 1)
 theme_override_font_sizes/font_size = 13
-autowrap_mode = 2
 text = "Saved locally. Default role applies when you Play alone; lobby size override softens 3-player start rules."
+autowrap_mode = 2
 
-[node name="Footer" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+[node name="Footer" type="HBoxContainer" parent="Panel/MarginContainer/VBox" unique_id=416638249]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="RevertButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
+[node name="RevertButton" type="Button" parent="Panel/MarginContainer/VBox/Footer" unique_id=1421109864]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Revert"
 
-[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
+[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBox/Footer" unique_id=624161032]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 size_flags_horizontal = 3
+theme_type_variation = &"PrimaryButton"
 text = "Save"
 
-[node name="ExitButton" type="Button" parent="Panel/MarginContainer/VBox/Footer"]
+[node name="ExitButton" type="Button" parent="Panel/MarginContainer/VBox/Footer" unique_id=1904651510]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 size_flags_horizontal = 3
-clip_text = true
-alignment = 1
 text = "Exit"
+clip_text = true

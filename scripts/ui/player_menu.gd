@@ -1,3 +1,4 @@
+@tool
 class_name PlayerMenu
 extends PanelContainer
 
@@ -15,6 +16,12 @@ const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory
 const InventorySlotButtonScript := preload("res://scripts/ui/inventory_slot_button.gd")
 const SpellHotbarScript := preload("res://scripts/spells/spell_hotbar.gd")
 const SpellSlotButtonScript := preload("res://scripts/ui/spell_slot_button.gd")
+
+@export var editor_tab: Tab = Tab.GUIDE:
+	set(value):
+		editor_tab = value
+		if Engine.is_editor_hint() and is_node_ready():
+			_show_tab(value)
 
 var _inventory: Node
 var _spell_hotbar: Node
@@ -38,10 +45,14 @@ var _spell_buttons: Array[Button] = []
 
 
 func _ready() -> void:
+	if not _tab_bar.tab_changed.is_connected(_on_tab_changed):
+		_tab_bar.tab_changed.connect(_on_tab_changed)
+	_bind_inventory_slots()
+	_bind_spell_slots()
+	if Engine.is_editor_hint():
+		_show_tab(editor_tab)
+		return
 	visible = false
-	_tab_bar.tab_changed.connect(_on_tab_changed)
-	_build_inventory_slots()
-	_build_spell_slots()
 	_show_tab(Tab.GUIDE)
 
 
@@ -131,16 +142,24 @@ func _apply_main_view(objective_lines: PackedStringArray) -> void:
 	_objective_label.text = str(view.get("objectives", ""))
 
 
-func _build_inventory_slots() -> void:
-	for child in _inventory_grid.get_children():
-		child.queue_free()
+func _bind_inventory_slots() -> void:
 	_inv_buttons.clear()
-	for i in PlayerInventoryScript.SLOT_COUNT:
+	var i := 0
+	for child in _inventory_grid.get_children():
+		var button := child as Button
+		if button == null:
+			continue
+		if button.has_method("setup"):
+			button.call("setup", _inventory, i)
+		_inv_buttons.append(button)
+		i += 1
+	while i < PlayerInventoryScript.SLOT_COUNT:
 		var button: Button = InventorySlotButtonScript.new()
 		_inventory_grid.add_child(button)
 		if button.has_method("setup"):
 			button.call("setup", _inventory, i)
 		_inv_buttons.append(button)
+		i += 1
 	if _inventory_hint != null:
 		_inventory_hint.text = "Drag items between slots. Slots 1–4 are the hotbar (keys 1–4)."
 
@@ -154,16 +173,24 @@ func _refresh_inventory() -> void:
 			button.call("refresh")
 
 
-func _build_spell_slots() -> void:
-	for child in _spells_grid.get_children():
-		child.queue_free()
+func _bind_spell_slots() -> void:
 	_spell_buttons.clear()
-	for i in SpellHotbarScript.SLOT_COUNT:
+	var i := 0
+	for child in _spells_grid.get_children():
+		var button := child as Button
+		if button == null:
+			continue
+		if button.has_method("setup"):
+			button.call("setup", _spell_hotbar, i)
+		_spell_buttons.append(button)
+		i += 1
+	while i < SpellHotbarScript.SLOT_COUNT:
 		var button: Button = SpellSlotButtonScript.new()
 		_spells_grid.add_child(button)
 		if button.has_method("setup"):
 			button.call("setup", _spell_hotbar, i)
 		_spell_buttons.append(button)
+		i += 1
 	if _spells_hint != null:
 		_spells_hint.text = (
 			"Drag spells to swap slots. After a voice confirm, press LMB / RMB / Q / E to assign."

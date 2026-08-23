@@ -1,34 +1,13 @@
-[gd_scene load_steps=7 format=3 uid="uid://cmenu001"]
+[gd_scene load_steps=8 format=3 uid="uid://cmenu001"]
 
-[ext_resource type="Script" path="res://scripts/menu.gd" id="1_menu"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconhost01" path="res://assets/ui/icons/menu/host.png" id="2_icon_host"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconjoin01" path="res://assets/ui/icons/menu/join.png" id="3_icon_join"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconsetng01" path="res://assets/ui/icons/menu/settings.png" id="4_icon_settings"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconexit01" path="res://assets/ui/icons/menu/exit.png" id="5_icon_exit"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
-bg_color = Color(0.078, 0.129, 0.239, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.886, 0.671, 0.263, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
-bg_color = Color(0.149, 0.075, 0.259, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.925, 0.737, 0.4, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
+[ext_resource type="Theme" path="res://resources/ui/serious_wiz_biz_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/menu.gd" id="2_menu"]
+[ext_resource type="PackedScene" uid="uid://cswbflare001" path="res://scenes/ui/scaffolding/title_flare.tscn" id="3_flare"]
+[ext_resource type="PackedScene" uid="uid://cswbmenubtn001" path="res://scenes/ui/scaffolding/menu_button.tscn" id="4_menu_button"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconhost01" path="res://assets/ui/icons/menu/host.png" id="5_icon_host"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconjoin01" path="res://assets/ui/icons/menu/join.png" id="6_icon_join"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconsetng01" path="res://assets/ui/icons/menu/settings.png" id="7_icon_settings"]
+[ext_resource type="Texture2D" uid="uid://bmenuiconexit01" path="res://assets/ui/icons/menu/exit.png" id="8_icon_exit"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -37,7 +16,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_menu")
+theme = ExtResource("1_theme")
+script = ExtResource("2_menu")
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1
@@ -46,7 +26,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.024, 0.031, 0.059, 1)
+color = Color(0.0235294, 0.0313726, 0.0588235, 1)
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
@@ -62,59 +42,30 @@ theme_override_constants/separation = 18
 
 [node name="TitleLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.886, 0.671, 0.263, 1)
+theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 48
 text = "Serious Wiz Biz"
 horizontal_alignment = 1
 
-[node name="PlayButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(280, 64)
+[node name="TitleFlare" parent="CenterContainer/VBoxContainer" instance=ExtResource("3_flare")]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
+
+[node name="PlayButton" parent="CenterContainer/VBoxContainer" instance=ExtResource("4_menu_button")]
+layout_mode = 2
 text = "Host"
-icon = ExtResource("2_icon_host")
-expand_icon = true
+icon = ExtResource("5_icon_host")
 
-[node name="JoinButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(280, 64)
+[node name="JoinButton" parent="CenterContainer/VBoxContainer" instance=ExtResource("4_menu_button")]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Join"
-icon = ExtResource("3_icon_join")
-expand_icon = true
+icon = ExtResource("6_icon_join")
 
-[node name="SettingsButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(280, 64)
+[node name="SettingsButton" parent="CenterContainer/VBoxContainer" instance=ExtResource("4_menu_button")]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Settings"
-icon = ExtResource("4_icon_settings")
-expand_icon = true
+icon = ExtResource("7_icon_settings")
 
-[node name="ExitButton" type="Button" parent="CenterContainer/VBoxContainer"]
-custom_minimum_size = Vector2(280, 64)
+[node name="ExitButton" parent="CenterContainer/VBoxContainer" instance=ExtResource("4_menu_button")]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_colors/font_color = Color(0.965, 0.937, 0.933, 1)
-theme_override_font_sizes/font_size = 20
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_button_hover")
 text = "Exit"
-icon = ExtResource("5_icon_exit")
-expand_icon = true
+icon = ExtResource("8_icon_exit")

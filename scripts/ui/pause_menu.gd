@@ -8,15 +8,17 @@ var _spellbook_was_open := false
 
 @onready var _menu_panel: Control = $MenuPanel
 @onready var _settings_panel: SettingsPanel = $SettingsPanel
-@onready var _resume_button: Button = $MenuPanel/CenterContainer/VBox/ResumeButton
-@onready var _settings_button: Button = $MenuPanel/CenterContainer/VBox/SettingsButton
-@onready var _end_game_button: Button = $MenuPanel/CenterContainer/VBox/EndGameButton
+@onready var _resume_button: Button = %ResumeButton
+@onready var _settings_button: Button = %SettingsButton
+@onready var _end_game_button: Button = %EndGameButton
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	visible = false
+	if not Engine.is_editor_hint():
+		visible = false
 	_menu_panel.visible = true
+	$Dimmer.color = UiPalette.SCRIM
 	_resume_button.pressed.connect(_on_resume_pressed)
 	_settings_button.pressed.connect(_on_settings_pressed)
 	_end_game_button.pressed.connect(_on_end_game_pressed)

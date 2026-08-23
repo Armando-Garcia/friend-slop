@@ -1,19 +1,11 @@
-[gd_scene format=3 uid="uid://cd4v6kvl3kiuq"]
+[gd_scene load_steps=7 format=3 uid="uid://cd4v6kvl3kiuq"]
 
+[ext_resource type="Theme" path="res://resources/ui/serious_wiz_biz_theme.tres" id="1_theme"]
 [ext_resource type="Script" path="res://scripts/ui/lobby_panel.gd" id="1_lobby"]
-[ext_resource type="Script" path="res://scripts/ui/menu_toggle_switch.gd" id="2_toggle"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-bg_color = Color(0.08, 0.06, 0.09, 0.96)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.82, 0.70, 0.38, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+[ext_resource type="PackedScene" uid="uid://cswbtogglesw001" path="res://scenes/ui/scaffolding/toggle_switch.tscn" id="2_toggle"]
+[ext_resource type="PackedScene" uid="uid://cswbflare001" path="res://scenes/ui/scaffolding/title_flare.tscn" id="3_flare"]
+[ext_resource type="PackedScene" uid="uid://cswblobbyrow001" path="res://scenes/ui/scaffolding/lobby_player_row.tscn" id="4_row"]
+[ext_resource type="PackedScene" uid="uid://cswbtogglesl001" path="res://scenes/ui/scaffolding/toggle_slider.tscn" id="5_slider"]
 
 [node name="LobbyPanel" type="Control"]
 layout_mode = 3
@@ -23,6 +15,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("1_theme")
 script = ExtResource("1_lobby")
 
 [node name="Dimmer" type="ColorRect" parent="."]
@@ -32,7 +25,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.55)
+color = Color(0.0235294, 0.0313726, 0.0588235, 0.62)
 
 [node name="Panel" type="PanelContainer" parent="."]
 layout_mode = 1
@@ -47,7 +40,6 @@ offset_right = 280.0
 offset_bottom = 340.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
 [node name="MarginContainer" type="MarginContainer" parent="Panel"]
 layout_mode = 2
@@ -62,10 +54,13 @@ theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="Panel/MarginContainer/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.95, 0.90, 0.72, 1)
+theme_type_variation = &"TitleLabel"
 theme_override_font_sizes/font_size = 28
 text = "Host"
 horizontal_alignment = 1
+
+[node name="TitleFlare" parent="Panel/MarginContainer/VBox" instance=ExtResource("3_flare")]
+layout_mode = 2
 
 [node name="RoomCodeHostRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
 layout_mode = 2
@@ -74,13 +69,14 @@ theme_override_constants/separation = 8
 [node name="RoomCodeCaption" type="Label" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
 custom_minimum_size = Vector2(88, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_type_variation = &"MutedLabel"
 text = "Lobby ID"
 
 [node name="RoomCodeDisplay" type="LineEdit" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 18
+text = "12345"
 placeholder_text = "Connecting…"
 editable = false
 selecting_enabled = true
@@ -90,13 +86,11 @@ alignment = 1
 [node name="CopyRoomCodeButton" type="Button" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
 custom_minimum_size = Vector2(72, 0)
 layout_mode = 2
-disabled = true
 text = "Copy"
 
 [node name="InviteFriendsButton" type="Button" parent="Panel/MarginContainer/VBox/RoomCodeHostRow"]
 custom_minimum_size = Vector2(72, 0)
 layout_mode = 2
-disabled = true
 text = "Invite"
 
 [node name="RoomCodeEdit" type="LineEdit" parent="Panel/MarginContainer/VBox"]
@@ -104,33 +98,43 @@ visible = false
 layout_mode = 2
 placeholder_text = "Paste Steam lobby ID"
 
+[node name="HostTransportRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HostTransportLabel" type="Label" parent="Panel/MarginContainer/VBox/HostTransportRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "Network"
+
+[node name="HostTransportSlider" parent="Panel/MarginContainer/VBox/HostTransportRow" instance=ExtResource("5_slider")]
+layout_mode = 2
+left_text = "Steam"
+right_text = "LAN"
+
 [node name="LobbyVoiceRow" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
-visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="LobbyVoiceLabel" type="Label" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_type_variation = &"MutedLabel"
 text = "Lobby Voice"
 
-[node name="LobbyVoiceSwitch" type="CheckButton" parent="Panel/MarginContainer/VBox/LobbyVoiceRow"]
-custom_minimum_size = Vector2(48, 28)
+[node name="LobbyVoiceSwitch" parent="Panel/MarginContainer/VBox/LobbyVoiceRow" instance=ExtResource("2_toggle")]
 layout_mode = 2
-scale = Vector2(1.5, 1.5)
 tooltip_text = "Talk with others in this lobby before the match."
-text = ""
-script = ExtResource("2_toggle")
 
 [node name="PlayersSection" type="VBoxContainer" parent="Panel/MarginContainer/VBox"]
-visible = false
 layout_mode = 2
+size_flags_vertical = 3
 theme_override_constants/separation = 6
 
 [node name="PlayersCaption" type="Label" parent="Panel/MarginContainer/VBox/PlayersSection"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.90, 0.84, 0.68, 1)
+theme_type_variation = &"MutedLabel"
 theme_override_font_sizes/font_size = 16
 text = "Players"
 
@@ -144,25 +148,45 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 6
 
-[node name="StatusLabel" type="Label" parent="Panel/MarginContainer/VBox"]
+[node name="HostPlayer" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox" instance=ExtResource("4_row")]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
-theme_override_font_sizes/font_size = 14
-autowrap_mode = 2
-text = "Enter the host's Steam lobby ID or accept a Steam invite."
 
-[node name="PrimaryButton" type="Button" parent="Panel/MarginContainer/VBox"]
+[node name="NameLabel" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox/HostPlayer/NameColumn" index="0"]
+text = "You"
+
+[node name="RoleLabel" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox/HostPlayer" index="1"]
+text = "Headmaster"
+
+[node name="GuestPlayer" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox" instance=ExtResource("4_row")]
+layout_mode = 2
+
+[node name="NameLabel" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox/GuestPlayer/NameColumn" index="0"]
+text = "Apprentice A"
+
+[node name="GuestPlayer2" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox" instance=ExtResource("4_row")]
+layout_mode = 2
+
+[node name="NameLabel" parent="Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox/GuestPlayer2/NameColumn" index="0"]
+text = "Apprentice B"
+
+[node name="FooterButtons" type="HBoxContainer" parent="Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SettingsButton" type="Button" parent="Panel/MarginContainer/VBox/FooterButtons"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Start Game"
-
-[node name="SettingsButton" type="Button" parent="Panel/MarginContainer/VBox"]
-visible = false
-custom_minimum_size = Vector2(0, 40)
-layout_mode = 2
+size_flags_horizontal = 3
 text = "Settings"
 
-[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBox"]
-custom_minimum_size = Vector2(0, 40)
+[node name="BackButton" type="Button" parent="Panel/MarginContainer/VBox/FooterButtons"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "Back"
+
+[node name="PrimaryButton" type="Button" parent="Panel/MarginContainer/VBox/FooterButtons"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Start Game"

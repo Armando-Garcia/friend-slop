@@ -26,6 +26,7 @@ const BUTTON_ICON_MAX_WIDTH_BASE := 40.0
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	$Background.color = UiPalette.BACKGROUND_DEEP
 	_play_button.pressed.connect(func() -> void: host_pressed.emit())
 	_join_button.pressed.connect(func() -> void: join_pressed.emit())
 	_settings_button.pressed.connect(func() -> void: settings_pressed.emit())

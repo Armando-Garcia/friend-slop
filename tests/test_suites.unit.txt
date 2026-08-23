@@ -84,4 +84,5 @@ res://tests/unit/test_mic_capture_pipeline.gd
 res://tests/unit/test_audio_device_settings.gd
 res://tests/unit/test_gdvosk_extension_config.gd
 res://tests/unit/test_spell_stt_config.gd
+res://tests/unit/test_ui_palette_pipeline.gd
 res://tests/integration/test_gdvosk_runtime.gd

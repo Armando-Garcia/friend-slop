@@ -28,8 +28,8 @@ var _spell_hotbar: Node
 var _spell_bar: HudSpellBarScript
 var _item_bar: HudItemBarScript
 var _conjure_tip: HudConjureTipScript
-var _mana_root: Control
-var _mana_fill: ColorRect
+var _health_root: Control
+var _health_pool: Health
 ## Typed as Control: the panel is duck-typed (open_book/close_book/is_open).
 var _spellbook_panel: Control
 
@@ -46,6 +46,7 @@ var _spellbook_panel: Control
 @onready var casting_feedback: Label = $CastingPanel/MarginContainer/VBox/FeedbackLabel
 @onready var casting_detail: Label = $CastingPanel/MarginContainer/VBox/DetailLabel
 @onready var spell_word_banner: Control = $SpellWordBanner
+@onready var _health_bar: UiStatusBar = get_node_or_null("HealthBar") as UiStatusBar
 
 
 func _ready() -> void:
@@ -59,7 +60,7 @@ func _ready() -> void:
 	mic_level_bar.value = 0.0
 	_setup_spellbook_panel()
 	_setup_bottom_hud()
-	_setup_mana_bar()
+	_bind_health_bar()
 	_update_aim_cursor_visibility()
 
 
@@ -151,7 +152,8 @@ func configure_objective(objective: DeliveryObjective) -> void:
 func configure(
 	loadout: Node,
 	casting_session: Node = null,
-	spell_hotbar: Node = null
+	spell_hotbar: Node = null,
+	health: Health = null
 ) -> void:
 	_loadout = loadout
 	if _loadout != null and _loadout.has_signal("spell_learned"):
@@ -165,6 +167,7 @@ func configure(
 	if casting_session != null and casting_session.has_signal("tome_retry_tick"):
 		casting_session.tome_retry_tick.connect(update_tome_coaching_countdown)
 	_bind_spell_hotbar(spell_hotbar)
+	_bind_health_pool(health)
 
 
 func configure_inventory(inventory: Node) -> void:
@@ -283,83 +286,57 @@ func clear_spell_word() -> void:
 		spell_word_banner.call("clear")
 
 
+func _bind_health_pool(pool: Health) -> void:
+	if (
+		_health_pool != null
+		and _health_pool.changed.is_connected(_on_health_changed)
+	):
+		_health_pool.changed.disconnect(_on_health_changed)
+	_health_pool = pool
+	if _health_pool == null:
+		return
+	if not _health_pool.changed.is_connected(_on_health_changed):
+		_health_pool.changed.connect(_on_health_changed)
+	_apply_health_bar(_health_pool.current_health, _health_pool.max_health)
+
+
 func show_mana(
 	current: float,
 	maximum: float = 100.0,
-	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+	_fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
 ) -> void:
-	if _mana_root == null:
-		return
-	_mana_root.visible = true
-	set_mana(current, maximum, fill_color)
+	if _health_root != null:
+		_health_root.visible = true
+	_apply_health_bar(current, maximum)
 
 
 func set_mana(
 	current: float,
 	maximum: float = 100.0,
-	fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
+	_fill_color: Color = Color(0.35, 0.14, 0.32, 1.0)
 ) -> void:
-	if _mana_fill == null:
-		return
-	_mana_fill.color = fill_color
-	var max_v := maxf(maximum, 0.001)
-	var ratio := clampf(current / max_v, 0.0, 1.0)
-	## Fill stays on the left; empty grows from the right.
-	_mana_fill.anchor_left = 0.0
-	_mana_fill.anchor_right = ratio
-	_mana_fill.offset_left = 0.0
-	_mana_fill.offset_right = 0.0
+	_apply_health_bar(current, maximum)
 
 
 func hide_mana() -> void:
-	if _mana_root != null:
-		_mana_root.visible = false
+	## Mana chrome is gone; keep the HP bar (v11). Callers still invoke this.
+	pass
 
 
-func _setup_mana_bar() -> void:
-	## Thin strip above the combined bottom hotbar row.
-	var bottom := BOTTOM_HUD_MARGIN_PX + BOTTOM_HUD_ROW_HEIGHT_PX + 12.0
-	var anchor := MarginContainer.new()
-	anchor.name = "ManaBarMargin"
-	anchor.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	anchor.offset_left = -160.0
-	anchor.offset_top = -(bottom + 20.0)
-	anchor.offset_right = 160.0
-	anchor.offset_bottom = -bottom
-	anchor.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	anchor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	anchor.visible = false
-	add_child(anchor)
-	_mana_root = anchor
+func _on_health_changed(current: float, maximum: float) -> void:
+	_apply_health_bar(current, maximum)
 
-	var track := PanelContainer.new()
-	track.name = "ManaTrack"
-	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var track_style := StyleBoxFlat.new()
-	track_style.bg_color = Color(0.08, 0.06, 0.12, 0.92)
-	track_style.set_border_width_all(1)
-	track_style.border_color = Color(0.18, 0.12, 0.22, 0.9)
-	track_style.set_corner_radius_all(4)
-	track_style.content_margin_left = 2.0
-	track_style.content_margin_top = 2.0
-	track_style.content_margin_right = 2.0
-	track_style.content_margin_bottom = 2.0
-	track.add_theme_stylebox_override("panel", track_style)
-	anchor.add_child(track)
 
-	var fill_host := Control.new()
-	fill_host.name = "ManaFillHost"
-	fill_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fill_host.custom_minimum_size = Vector2(0.0, 12.0)
-	track.add_child(fill_host)
+func _apply_health_bar(current: float, maximum: float) -> void:
+	if _health_bar == null:
+		return
+	_health_bar.tween_amount(current, maximum, 0.15)
 
-	_mana_fill = ColorRect.new()
-	_mana_fill.name = "ManaFill"
-	_mana_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_mana_fill.color = Color(0.35, 0.14, 0.32, 1.0)
-	_mana_fill.set_anchors_preset(Control.PRESET_FULL_RECT)
-	fill_host.add_child(_mana_fill)
-	set_mana(100.0, 100.0)
+
+func _bind_health_bar() -> void:
+	if _health_bar == null:
+		return
+	_health_root = _health_bar
 
 
 func _bottom_hud_half_width() -> float:

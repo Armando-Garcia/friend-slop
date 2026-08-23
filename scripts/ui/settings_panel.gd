@@ -6,16 +6,15 @@ signal closed
 const DisplayResolutionPresetsScript := preload("res://scripts/ui/display_resolution_presets.gd")
 const SettingsEditSessionScript := preload("res://scripts/ui/settings_edit_session.gd")
 const SettingsControlsTabScript := preload("res://scripts/ui/keybinds/settings_controls_tab.gd")
+const ValueSliderScript := preload("res://scripts/ui/scaffolding/value_slider.gd")
 const EXIT_LABEL := "Exit"
 
 var _mic_test_active := false
 var _mic_peak: float = 0.0
 var _output_device_option: OptionButton
 var _input_device_option: OptionButton
-var _master_volume_slider: HSlider
-var _master_volume_label: Label
-var _mic_volume_slider: HSlider
-var _mic_volume_label: Label
+var _master_volume_slider: ValueSliderScript
+var _mic_volume_slider: ValueSliderScript
 var _mic_test_button: Button
 var _hear_myself_switch: CheckButton
 var _mic_level_bar: ProgressBar
@@ -26,10 +25,8 @@ var _player_voice_list: VBoxContainer
 var _display_mode_option: OptionButton
 var _resolution_option: OptionButton
 var _resolution_hint_label: Label
-var _crosshair_opacity_slider: HSlider
-var _crosshair_opacity_label: Label
-var _crosshair_thickness_slider: HSlider
-var _crosshair_thickness_label: Label
+var _crosshair_opacity_slider: ValueSliderScript
+var _crosshair_thickness_slider: ValueSliderScript
 var _crosshair_color_picker: ColorPickerButton
 var _crosshair_outer_switch: CheckButton
 var _crosshair_dot_switch: CheckButton
@@ -67,21 +64,10 @@ var _exit_wobble: Tween
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	visible = false
+	if not Engine.is_editor_hint():
+		visible = false
+	$Dimmer.color = UiPalette.SCRIM
 	_cache_node_refs()
-	_tint_settings_tabs()
-	_master_volume_slider.min_value = 0.0
-	_master_volume_slider.max_value = 1.0
-	_master_volume_slider.step = 0.01
-	_mic_volume_slider.min_value = 0.0
-	_mic_volume_slider.max_value = 1.0
-	_mic_volume_slider.step = 0.01
-	_crosshair_opacity_slider.min_value = 0.0
-	_crosshair_opacity_slider.max_value = 1.0
-	_crosshair_opacity_slider.step = 0.01
-	_crosshair_thickness_slider.min_value = 0.5
-	_crosshair_thickness_slider.max_value = 5.0
-	_crosshair_thickness_slider.step = 0.05
 	_mic_level_bar.min_value = 0.0
 	_mic_level_bar.max_value = 1.0
 	_mic_level_bar.value = 0.0
@@ -163,14 +149,6 @@ func _process(_delta: float) -> void:
 		_mic_status_label.text = "Listening… no input yet. Check device selection."
 
 
-func _tint_settings_tabs() -> void:
-	var tabs: TabContainer = $Panel/MarginContainer/VBox/TabContainer
-	tabs.add_theme_color_override("font_selected_color", Color(0.95, 0.90, 0.72, 1))
-	tabs.add_theme_color_override("font_hovered_color", Color(0.98, 0.94, 0.80, 1))
-	tabs.add_theme_color_override("font_unselected_color", Color(0.78, 0.74, 0.62, 1))
-	tabs.add_theme_color_override("font_disabled_color", Color(0.55, 0.50, 0.42, 1))
-
-
 func _cache_node_refs() -> void:
 	_display_mode_option = _graphics_vbox.get_node("DisplayModeOption")
 	_resolution_option = _graphics_vbox.get_node("ResolutionOption")
@@ -178,14 +156,8 @@ func _cache_node_refs() -> void:
 	_crosshair_opacity_slider = _general_vbox.get_node(
 		"CrosshairOpacityRow/CrosshairOpacitySlider"
 	)
-	_crosshair_opacity_label = _general_vbox.get_node(
-		"CrosshairOpacityRow/CrosshairOpacityLabel"
-	)
 	_crosshair_thickness_slider = _general_vbox.get_node(
 		"CrosshairThicknessRow/CrosshairThicknessSlider"
-	)
-	_crosshair_thickness_label = _general_vbox.get_node(
-		"CrosshairThicknessRow/CrosshairThicknessLabel"
 	)
 	_crosshair_color_picker = _general_vbox.get_node(
 		"CrosshairColorRow/CrosshairColorPicker"
@@ -198,9 +170,7 @@ func _cache_node_refs() -> void:
 	_output_device_option = _audio_vbox.get_node("OutputDeviceOption")
 	_input_device_option = _audio_vbox.get_node("InputDeviceOption")
 	_master_volume_slider = _audio_vbox.get_node("MasterVolumeRow/MasterVolumeSlider")
-	_master_volume_label = _audio_vbox.get_node("MasterVolumeRow/MasterVolumeLabel")
 	_mic_volume_slider = _audio_vbox.get_node("MicVolumeRow/MicVolumeSlider")
-	_mic_volume_label = _audio_vbox.get_node("MicVolumeRow/MicVolumeLabel")
 	_mic_test_button = _audio_vbox.get_node("MicTestButton")
 	_hear_myself_switch = _audio_vbox.get_node("HearMyselfRow/HearMyselfSwitch")
 	_mic_level_bar = _audio_vbox.get_node("MicLevelBar")
@@ -236,15 +206,11 @@ func _populate_from_settings() -> void:
 	_select_device(_input_device_option, SettingsManager.input_device)
 	_output_device_option.set_block_signals(false)
 	_input_device_option.set_block_signals(false)
-	_master_volume_slider.value = SettingsManager.master_volume
-	_update_master_volume_label(SettingsManager.master_volume)
-	_mic_volume_slider.value = SettingsManager.mic_volume
-	_update_mic_volume_label(SettingsManager.mic_volume)
+	_master_volume_slider.set_value_no_signal(SettingsManager.master_volume)
+	_mic_volume_slider.set_value_no_signal(SettingsManager.mic_volume)
 	_hear_myself_switch.set_pressed_no_signal(SettingsManager.hear_myself)
-	_crosshair_opacity_slider.value = SettingsManager.crosshair_opacity
-	_update_crosshair_opacity_label(SettingsManager.crosshair_opacity)
-	_crosshair_thickness_slider.value = SettingsManager.crosshair_thickness
-	_update_crosshair_thickness_label(SettingsManager.crosshair_thickness)
+	_crosshair_opacity_slider.set_value_no_signal(SettingsManager.crosshair_opacity)
+	_crosshair_thickness_slider.set_value_no_signal(SettingsManager.crosshair_thickness)
 	_crosshair_color_picker.set_block_signals(true)
 	_crosshair_color_picker.color = SettingsManager.crosshair_color
 	_crosshair_color_picker.set_block_signals(false)
@@ -345,7 +311,9 @@ func _apply_to_manager() -> void:
 	SettingsManager.fullscreen = _display_mode_option.selected == 1
 	SettingsManager.set_window_resolution_preset_index(_resolution_option.selected)
 	SettingsManager.master_volume = _master_volume_slider.value
-	SettingsManager.mic_volume = _mic_volume_slider.value
+	SettingsManager.mic_volume = clampf(
+		_mic_volume_slider.value, 0.0, SettingsManager.MIC_VOLUME_MAX
+	)
 	SettingsManager.hear_myself = _hear_myself_switch.button_pressed
 	SettingsManager.output_device = _read_device_selection(_output_device_option)
 	SettingsManager.input_device = _read_device_selection(_input_device_option)
@@ -418,16 +386,12 @@ func _refresh_footer() -> void:
 
 
 func _build_exit_styles() -> void:
-	_exit_style_normal = _make_exit_style(Color(0.82, 0.70, 0.38, 1))
-	_exit_style_dirty = _make_exit_style(Color(0.92, 0.22, 0.22, 1))
+	_exit_style_normal = _make_exit_style(UiPalette.BORDER_DEFAULT)
+	_exit_style_dirty = _make_exit_style(Color("eb3838"))
 
 
 func _make_exit_style(border: Color) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = Color(0.10, 0.08, 0.10, 1)
-	box.border_color = border
-	box.set_border_width_all(2)
-	box.set_corner_radius_all(6)
+	var box := UiPalette.button_style(UiPalette.BUTTON_FILL, border)
 	box.content_margin_left = 8
 	box.content_margin_right = 8
 	box.content_margin_top = 6
@@ -499,28 +463,24 @@ func _on_dev_flags_changed(_on: bool) -> void:
 
 
 func _on_master_volume_changed(value: float) -> void:
-	_update_master_volume_label(value)
 	SettingsManager.master_volume = value
 	SettingsManager.apply_audio_settings()
 	_refresh_footer()
 
 
 func _on_mic_volume_changed(value: float) -> void:
-	_update_mic_volume_label(value)
-	SettingsManager.mic_volume = value
+	SettingsManager.mic_volume = clampf(value, 0.0, SettingsManager.MIC_VOLUME_MAX)
 	SettingsManager.apply_audio_settings()
 	_refresh_footer()
 
 
 func _on_crosshair_opacity_changed(value: float) -> void:
-	_update_crosshair_opacity_label(value)
 	SettingsManager.crosshair_opacity = value
 	_refresh_crosshair_preview()
 	_refresh_footer()
 
 
 func _on_crosshair_thickness_changed(value: float) -> void:
-	_update_crosshair_thickness_label(value)
 	SettingsManager.crosshair_thickness = value
 	_refresh_crosshair_preview()
 	_refresh_footer()
@@ -623,22 +583,6 @@ func _set_lobby_voice_enabled(enabled: bool) -> void:
 		SteamProximityVoiceHub.set_mode(SteamProximityVoiceHub.Mode.OFF)
 		SettingsManager.lobby_voice_default = false
 		_lobby_voice_switch.set_pressed_no_signal(false)
-
-
-func _update_master_volume_label(value: float) -> void:
-	_master_volume_label.text = "%d%%" % int(round(value * 100.0))
-
-
-func _update_mic_volume_label(value: float) -> void:
-	_mic_volume_label.text = "%d%%" % int(round(value * 100.0))
-
-
-func _update_crosshair_opacity_label(value: float) -> void:
-	_crosshair_opacity_label.text = "%d%%" % int(round(value * 100.0))
-
-
-func _update_crosshair_thickness_label(value: float) -> void:
-	_crosshair_thickness_label.text = "%.1f" % value
 
 
 func _refresh_crosshair_preview() -> void:

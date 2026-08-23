@@ -95,7 +95,11 @@ func _apply_manager(data: Dictionary) -> void:
 	SettingsManager.window_height = int(data.get("window_height", SettingsManager.window_height))
 	SettingsManager.fullscreen = bool(data.get("fullscreen", SettingsManager.fullscreen))
 	SettingsManager.master_volume = float(data.get("master_volume", SettingsManager.master_volume))
-	SettingsManager.mic_volume = float(data.get("mic_volume", SettingsManager.mic_volume))
+	SettingsManager.mic_volume = clampf(
+		float(data.get("mic_volume", SettingsManager.mic_volume)),
+		0.0,
+		SettingsManager.MIC_VOLUME_MAX
+	)
 	SettingsManager.mic_muted = bool(data.get("mic_muted", SettingsManager.mic_muted))
 	SettingsManager.input_device = str(data.get("input_device", SettingsManager.input_device))
 	SettingsManager.output_device = str(data.get("output_device", SettingsManager.output_device))

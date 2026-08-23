@@ -16,6 +16,8 @@ const INPUT_KEY_MIGRATE := {
 
 const SETTINGS_PATH := "user://settings.cfg"
 const MIC_BUS_NAME := "MicCapture"
+## Linear gain: 1.0 = unity (slider midpoint), up to 2× boost.
+const MIC_VOLUME_MAX := 2.0
 const CAPTURE_DEVICE_RETRY_MAX := 20
 const CAPTURE_DEVICE_RETRY_SEC := 0.25
 
@@ -257,7 +259,11 @@ func load_settings() -> void:
 	window_height = resolved_size.y
 	var persist_display := resolved_size != loaded_size
 	master_volume = config.get_value("audio", "master_volume", master_volume)
-	mic_volume = float(config.get_value("audio", "mic_volume", mic_volume))
+	mic_volume = clampf(
+		float(config.get_value("audio", "mic_volume", mic_volume)),
+		0.0,
+		MIC_VOLUME_MAX
+	)
 	mic_muted = bool(config.get_value("audio", "mic_muted", mic_muted))
 	input_device = config.get_value("audio", "input_device", input_device)
 	output_device = config.get_value("audio", "output_device", output_device)
@@ -383,7 +389,7 @@ func apply_audio_settings() -> void:
 		AudioServer.set_bus_volume_db(master_idx, linear_to_db(maxf(volume, 0.0001)))
 
 	## MicCapture must stay at 0 dB so STT sees full-scale PCM. Apply mic_volume
-	## only as software gain on the VoIP encode path and UI meters.
+	## only as software gain on VoIP / meters (1.0 = unity, up to MIC_VOLUME_MAX).
 	_ensure_mic_bus()
 	var mic_idx: int = AudioServer.get_bus_index(MIC_BUS_NAME)
 	if mic_idx >= 0:
@@ -579,8 +585,8 @@ func poll_mic_level() -> float:
 		return 0.0
 	if not bool(broker.call("is_capturing")):
 		return 0.0
-	## Same PCM path as Match voice/STT — slider only scales the UI meter.
-	return float(broker.call("get_last_rms")) * clampf(mic_volume, 0.0, 1.0)
+	## Same PCM path as Match voice/STT — slider scales the UI meter (cut or boost).
+	return float(broker.call("get_last_rms")) * clampf(mic_volume, 0.0, MIC_VOLUME_MAX)
 
 
 func _subscribe_meter() -> bool:

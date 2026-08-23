@@ -248,7 +248,7 @@ func _process(_delta: float) -> void:
 func _on_broker_pcm(mono: PackedFloat32Array, mix_rate: int) -> void:
 	if not is_active or mono.is_empty():
 		return
-	var gain := clampf(SettingsManager.mic_volume, 0.0, 1.0)
+	var gain := clampf(SettingsManager.mic_volume, 0.0, SettingsManager.MIC_VOLUME_MAX)
 	var target_rate := float(sample_rate)
 	var decim_every := (
 		maxi(1, int(round(float(mix_rate) / target_rate))) if target_rate > 0.0 else 1

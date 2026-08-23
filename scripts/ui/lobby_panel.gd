@@ -1,3 +1,4 @@
+@tool
 class_name LobbyPanel
 extends Control
 
@@ -5,7 +6,16 @@ signal closed
 signal start_requested
 signal settings_requested
 
+enum EditorLayout { HOST, JOIN }
+
 const PlayerVoiceChromeScript := preload("res://scripts/ui/player_voice_chrome.gd")
+const ToggleSliderScript := preload("res://scripts/ui/scaffolding/toggle_slider.gd")
+
+@export var editor_layout: EditorLayout = EditorLayout.HOST:
+	set(value):
+		editor_layout = value
+		if Engine.is_editor_hint() and is_node_ready():
+			apply_editor_layout()
 
 var _host_mode: bool = false
 var _busy: bool = false
@@ -28,6 +38,12 @@ var _speaker_controls: Dictionary = {}
 	$Panel/MarginContainer/VBox/RoomCodeHostRow/InviteFriendsButton
 )
 @onready var _room_code_edit: LineEdit = $Panel/MarginContainer/VBox/RoomCodeEdit
+@onready var _host_transport_row: HBoxContainer = (
+	$Panel/MarginContainer/VBox/HostTransportRow
+)
+@onready var _host_transport_slider: ToggleSliderScript = (
+	$Panel/MarginContainer/VBox/HostTransportRow/HostTransportSlider
+)
 @onready var _players_section: VBoxContainer = $Panel/MarginContainer/VBox/PlayersSection
 @onready var _player_list_vbox: VBoxContainer = (
 	$Panel/MarginContainer/VBox/PlayersSection/PlayerListScroll/PlayerListVBox
@@ -36,13 +52,19 @@ var _speaker_controls: Dictionary = {}
 @onready var _lobby_voice_switch: CheckButton = (
 	$Panel/MarginContainer/VBox/LobbyVoiceRow/LobbyVoiceSwitch
 )
-@onready var _status_label: Label = $Panel/MarginContainer/VBox/StatusLabel
-@onready var _primary_button: Button = $Panel/MarginContainer/VBox/PrimaryButton
-@onready var _settings_button: Button = $Panel/MarginContainer/VBox/SettingsButton
-@onready var _back_button: Button = $Panel/MarginContainer/VBox/BackButton
+@onready var _settings_button: Button = (
+	$Panel/MarginContainer/VBox/FooterButtons/SettingsButton
+)
+@onready var _back_button: Button = $Panel/MarginContainer/VBox/FooterButtons/BackButton
+@onready var _primary_button: Button = (
+	$Panel/MarginContainer/VBox/FooterButtons/PrimaryButton
+)
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		apply_editor_layout()
+		return
 	## Inherit GameApp Lobby state's process_mode (disabled while Match/MainMenu).
 	process_mode = Node.PROCESS_MODE_INHERIT
 	visible = false
@@ -75,7 +97,40 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+func apply_editor_layout() -> void:
+	if editor_layout == EditorLayout.JOIN:
+		_title_label.text = "Join"
+		_room_code_host_row.visible = false
+		_room_code_edit.visible = true
+		_players_section.visible = false
+		_host_transport_row.visible = false
+		_lobby_voice_row.visible = false
+		_settings_button.visible = false
+		_primary_button.visible = true
+		_primary_button.text = "Connect"
+		_primary_button.disabled = false
+		_back_button.text = "Back"
+		return
+	_title_label.text = "Host"
+	_room_code_host_row.visible = true
+	_room_code_edit.visible = false
+	_room_code_display.text = "12345"
+	_room_code_display.placeholder_text = ""
+	_copy_room_code_button.disabled = false
+	_invite_friends_button.disabled = false
+	_players_section.visible = true
+	_host_transport_row.visible = true
+	_lobby_voice_row.visible = true
+	_settings_button.visible = true
+	_primary_button.visible = true
+	_primary_button.text = "Start Game"
+	_primary_button.disabled = false
+	_back_button.text = "Back"
+
+
 func _process(_delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
 	if not _in_lobby or not visible:
 		return
 	_update_speaker_button_visuals()
@@ -93,22 +148,13 @@ func open_host() -> void:
 	_room_code_display.placeholder_text = "Connecting…"
 	_copy_room_code_button.disabled = true
 	_invite_friends_button.disabled = true
-	_status_label.text = "Starting lobby…"
-	_primary_button.text = "Start Game"
+	_host_transport_row.visible = true
+	_host_transport_slider.disabled = false
+	_primary_button.text = "Create Lobby"
 	_primary_button.visible = true
-	_primary_button.disabled = true
+	_primary_button.disabled = false
 	_back_button.text = "Back"
 	_back_button.disabled = false
-	_set_busy(true)
-	var err := await NetworkManager.host_session({})
-	_set_busy(false)
-	if err != OK:
-		if _status_label.text == "Starting lobby…":
-			_status_label.text = _host_failure_message()
-		_primary_button.disabled = true
-		return
-	_enter_lobby_ui()
-	_update_start_button_state()
 
 
 func open_join() -> void:
@@ -119,12 +165,28 @@ func open_join() -> void:
 	_room_code_host_row.visible = false
 	_room_code_edit.visible = true
 	_room_code_edit.text = ""
-	_status_label.text = _join_prompt_message()
+	_host_transport_row.visible = false
 	_primary_button.text = "Connect"
 	_primary_button.visible = true
 	_primary_button.disabled = false
 	_back_button.text = "Back"
 	_back_button.disabled = false
+
+
+func _create_hosted_session() -> void:
+	if _busy:
+		return
+	_set_busy(true)
+	var options := {}
+	if _host_transport_slider != null and _host_transport_slider.get_selected() == 1:
+		options["mode"] = "lan"
+	var err: Error = await NetworkManager.host_session(options)
+	_set_busy(false)
+	if err != OK:
+		_primary_button.disabled = false
+		return
+	_enter_lobby_ui()
+	_update_start_button_state()
 
 
 func close_panel() -> void:
@@ -135,29 +197,34 @@ func close_panel() -> void:
 
 func _on_primary_pressed() -> void:
 	if _host_mode:
-		if not NetworkManager.is_host():
-			_status_label.text = "Host session is not ready."
-			return
-		var peer_ids := NetworkManager.get_lobby_peer_ids()
-		if not NetworkManager.lobby.can_start(peer_ids):
-			_status_label.text = NetworkManager.lobby.get_start_block_reason(peer_ids)
-			return
-		NetworkManager.start_game()
-		start_requested.emit()
+		_on_host_primary_pressed()
 		return
+	_try_join_from_primary()
 
+
+func _on_host_primary_pressed() -> void:
+	if not _in_lobby:
+		_create_hosted_session()
+		return
+	if not NetworkManager.is_host():
+		return
+	var peer_ids := NetworkManager.get_lobby_peer_ids()
+	if not NetworkManager.lobby.can_start(peer_ids):
+		return
+	NetworkManager.start_game()
+	start_requested.emit()
+
+
+func _try_join_from_primary() -> void:
 	if _busy or _in_lobby:
 		return
 	var room_code := _room_code_edit.text.strip_edges()
 	if room_code.is_empty():
-		_status_label.text = _join_prompt_message()
 		return
 	_set_busy(true)
-	_status_label.text = "Connecting…"
 	var err := await NetworkManager.join_session(room_code, {})
 	_set_busy(false)
 	if err != OK:
-		_status_label.text = "Could not join. Check the lobby ID and try again."
 		return
 	_enter_lobby_ui()
 
@@ -172,13 +239,11 @@ func _on_settings_pressed() -> void:
 	settings_requested.emit()
 
 
-func _on_network_status(message: String) -> void:
-	if not _in_lobby:
-		_status_label.text = message
+func _on_network_status(_message: String) -> void:
+	pass
 
 
-func _on_connection_failed(message: String) -> void:
-	_status_label.text = message
+func _on_connection_failed(_message: String) -> void:
 	_set_busy(false)
 	if _host_mode:
 		_primary_button.disabled = true
@@ -190,12 +255,14 @@ func _on_became_host(room_code: String) -> void:
 	_room_code_display.text = room_code
 	_room_code_display.placeholder_text = ""
 	var is_local := room_code.is_empty() or room_code == "local"
+	var is_lan: bool = (
+		_host_transport_slider != null and _host_transport_slider.get_selected() == 1
+	)
 	_copy_room_code_button.disabled = is_local
-	_invite_friends_button.disabled = is_local
+	_invite_friends_button.disabled = is_local or is_lan
 	if not is_local:
 		_room_code_display.grab_focus()
 		_room_code_display.select_all()
-	_status_label.text = _host_ready_message()
 
 
 func _on_copy_room_code_pressed() -> void:
@@ -203,12 +270,10 @@ func _on_copy_room_code_pressed() -> void:
 	if room_code.is_empty():
 		return
 	DisplayServer.clipboard_set(room_code)
-	_status_label.text = "Lobby ID copied to clipboard."
 
 
 func _on_invite_friends_pressed() -> void:
 	NetworkManager.invite_friends()
-	_status_label.text = "Steam invite overlay opened."
 
 
 func _on_joined_host() -> void:
@@ -216,10 +281,9 @@ func _on_joined_host() -> void:
 		_refresh_player_list()
 
 
-func _on_session_ended(reason: String) -> void:
+func _on_session_ended(_reason: String) -> void:
 	if not visible or _host_mode:
 		return
-	_status_label.text = reason
 	_leave_to_menu()
 
 
@@ -227,7 +291,6 @@ func _on_steam_lobby_invite_received(lobby_id: int) -> void:
 	if not visible or _host_mode or _in_lobby or _busy:
 		return
 	_room_code_edit.text = str(lobby_id)
-	_status_label.text = "Steam invite received — press Connect to join."
 	_primary_button.grab_focus()
 
 
@@ -237,18 +300,19 @@ func _enter_lobby_ui() -> void:
 	_players_section.visible = true
 	_settings_button.visible = true
 	_lobby_voice_row.visible = _host_mode
+	_host_transport_row.visible = _host_mode
+	if _host_transport_slider != null:
+		_host_transport_slider.disabled = true
 	_lobby_voice_switch.disabled = not SteamService.is_ready()
 	if _host_mode:
 		_room_code_host_row.visible = true
 		_primary_button.visible = true
 		_update_start_button_state()
 		_back_button.text = "Back"
-		_status_label.text = _host_ready_message()
 	else:
 		_room_code_host_row.visible = false
 		_primary_button.visible = false
 		_back_button.text = "Leave"
-		_status_label.text = "Waiting for the host to start…"
 	_refresh_player_list()
 	_apply_lobby_voice_preference()
 
@@ -404,10 +468,6 @@ func _update_start_button_state() -> void:
 	var peer_ids := NetworkManager.get_lobby_peer_ids()
 	var can_start := NetworkManager.lobby.can_start(peer_ids)
 	_primary_button.disabled = not can_start
-	if can_start:
-		_status_label.text = _host_ready_message()
-	else:
-		_status_label.text = NetworkManager.lobby.get_start_block_reason(peer_ids)
 	_refresh_lobby_voice_switch()
 
 
@@ -427,6 +487,9 @@ func _reset_panel_state() -> void:
 	_players_section.visible = false
 	_settings_button.visible = false
 	_lobby_voice_row.visible = false
+	_host_transport_row.visible = false
+	if _host_transport_slider != null:
+		_host_transport_slider.disabled = false
 	_lobby_voice_switch.disabled = false
 	_lobby_panel_root.visible = true
 	for child in _player_list_vbox.get_children():
@@ -441,29 +504,5 @@ func _reset_panel_state() -> void:
 func _set_busy(busy: bool) -> void:
 	_busy = busy
 	_back_button.disabled = busy
-	if not _host_mode and not _in_lobby:
+	if not _in_lobby:
 		_primary_button.disabled = busy
-
-
-func _host_ready_message() -> String:
-	if SettingsManager.dev_allow_any_lobby_size:
-		return "Invite friends with Steam or share the lobby ID."
-	return (
-		"Start alone to preview, or invite friends. "
-		+ "Full matches need 3 players (1 Headmaster, 2 Apprentices)."
-	)
-
-
-func _host_failure_message() -> String:
-	if not SteamService.is_api_available() or not ClassDB.class_exists("SteamMultiplayerPeer"):
-		return (
-			"GodotSteam is not loaded. Open the project with the GodotSteam editor "
-			+ "(see tools/versions.env) or run make setup-steam for stock Godot."
-		)
-	if not SteamService.is_ready():
-		return "Steam is not running. Launch the Steam client and try again."
-	return "Hosting failed. Check the Output log for details."
-
-
-func _join_prompt_message() -> String:
-	return "Enter the host's Steam lobby ID or accept a Steam invite."

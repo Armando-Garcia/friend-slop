@@ -8,6 +8,9 @@ const PlayerInventoryScript := preload("res://scripts/inventory/player_inventory
 const _SLOT_NORMAL := Color(0.14, 0.12, 0.22, 0.95)
 const _SLOT_HOTBAR := Color(0.18, 0.16, 0.28, 0.95)
 
+@export var show_outline: bool = true
+@export var outline_swatch: UiPalette.Swatch = UiPalette.Swatch.BRONZE
+
 var slot_index := 0
 var inventory: Node
 
@@ -32,9 +35,8 @@ func refresh() -> void:
 	style.bg_color = (
 		_SLOT_HOTBAR if slot_index < PlayerInventoryScript.HOTBAR_COUNT else _SLOT_NORMAL
 	)
-	style.set_border_width_all(1)
-	style.border_color = Color(0.82, 0.70, 0.38, 0.35)
 	style.set_corner_radius_all(8)
+	UiPalette.apply_outline(style, show_outline, outline_swatch, 1)
 	add_theme_stylebox_override("normal", style)
 	add_theme_stylebox_override("hover", style)
 	add_theme_stylebox_override("pressed", style)

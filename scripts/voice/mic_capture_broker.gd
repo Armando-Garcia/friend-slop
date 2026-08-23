@@ -520,7 +520,7 @@ func _push_hearback(mono: PackedFloat32Array, mix_rate: int) -> void:
 	_ensure_hearback_player(mix_rate)
 	if _hearback_playback == null:
 		return
-	var gain := clampf(SettingsManager.mic_volume, 0.0, 1.0)
+	var gain := clampf(SettingsManager.mic_volume, 0.0, SettingsManager.MIC_VOLUME_MAX)
 	var frames := PackedVector2Array()
 	frames.resize(mono.size())
 	for i in mono.size():

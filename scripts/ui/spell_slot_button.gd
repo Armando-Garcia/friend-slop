@@ -9,6 +9,9 @@ const InputPromptScript := preload("res://scripts/ui/input_prompt.gd")
 const _SLOT_EMPTY := Color(0.14, 0.12, 0.22, 0.95)
 const _SLOT_FILLED := Color(0.18, 0.16, 0.30, 0.95)
 
+@export var show_outline: bool = true
+@export var outline_swatch: UiPalette.Swatch = UiPalette.Swatch.BRONZE
+
 var slot_index := 0
 var hotbar: Node
 
@@ -35,9 +38,8 @@ func refresh() -> void:
 		text = "%s\n%s" % [key, spell_name]
 	var style := StyleBoxFlat.new()
 	style.bg_color = _SLOT_FILLED if not spell_id.is_empty() else _SLOT_EMPTY
-	style.set_border_width_all(1)
-	style.border_color = Color(0.55, 0.46, 0.32, 0.75)
 	style.set_corner_radius_all(6)
+	UiPalette.apply_outline(style, show_outline, outline_swatch, 1)
 	add_theme_stylebox_override("normal", style)
 	add_theme_stylebox_override("hover", style)
 	add_theme_stylebox_override("pressed", style)
