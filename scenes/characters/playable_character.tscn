@@ -12,7 +12,7 @@
 [ext_resource type="Script" path="res://scripts/characters/player_stun.gd" id="10_stun"]
 [ext_resource type="PackedScene" uid="uid://7shalb8dn4r4" path="res://scenes/fx/stun_stars.tscn" id="11_stars"]
 [ext_resource type="Script" uid="uid://cg3awqqjxne53" path="res://scripts/spells/spell_hotbar.gd" id="12_hotbar"]
-[ext_resource type="Script" uid="uid://bvxgyb636rxn5" path="res://scripts/combat/combat_health.gd" id="13_health"]
+[ext_resource type="Script" uid="uid://bhealthpool001" path="res://scripts/combat/health.gd" id="13_health"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jga6s"]
 resource_local_to_scene = true

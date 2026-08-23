@@ -13,6 +13,7 @@ extends CharacterBody3D
 
 const BroomLocomotionScript := preload("res://scripts/headmaster/broom_locomotion.gd")
 const WorldVisualLayersScript := preload("res://scripts/world_visual_layers.gd")
+const HealthScript := preload("res://scripts/combat/health.gd")
 
 const KNOCKBACK_TIMER_SEC := 0.35
 const HURT_UP_IMPULSE := 5.0
@@ -36,12 +37,12 @@ const DEFAULT_EYE_GLOW := Color(0.2, 0.55, 1.0, 1.0)
 
 ## This character's own HP pool, resolved from the authored Health child.
 ## Reading it binds the lifecycle, so it works on a scene that is not in the tree yet.
-var health: Health:
+var health: HealthScript:
 	get:
 		_bind_health()
 		return _health
 
-var _health: Health = null
+var _health: HealthScript = null
 var _character_color: Color = Color.WHITE
 var _knockback_vel: Vector3 = Vector3.ZERO
 var _knockback_timer: float = 0.0
@@ -66,7 +67,7 @@ func _ready() -> void:
 func _bind_health() -> void:
 	if _health != null and is_instance_valid(_health):
 		return
-	_health = get_node_or_null("Health") as Health
+	_health = get_node_or_null("Health") as HealthScript
 	if _health == null:
 		return
 	if not _health.damaged.is_connected(_on_damaged):

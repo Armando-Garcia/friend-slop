@@ -69,7 +69,7 @@ static func player_max_health() -> float:
 
 ## Every character scene authors one Health child — players and monsters alike.
 static func _authored_max_health(character: Node) -> float:
-	var health := character.get_node_or_null("Health") as Health
+	var health := character.get_node_or_null("Health") as HealthScript
 	if health == null:
 		return HealthScript.DEFAULT_MAX_HEALTH
 	return health.max_health

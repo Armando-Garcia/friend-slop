@@ -6,6 +6,7 @@ const MonsterAIScript := preload("res://scripts/monsters/monster_ai.gd")
 const MonsterInterestScript := preload("res://scripts/monsters/monster_interest.gd")
 const SummonHostScript := preload("res://scripts/monsters/summon_host.gd")
 const SummonScript := preload("res://scripts/monsters/summon.gd")
+const HealthScript := preload("res://scripts/combat/health.gd")
 
 
 func run() -> int:
@@ -28,7 +29,7 @@ class FakeSummon extends Character:
 	var relay_hearing: RefCounted = null
 
 	func _init() -> void:
-		var pool := Health.new()
+		var pool := HealthScript.new()
 		pool.name = "Health"
 		add_child(pool)
 
