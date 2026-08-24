@@ -7,7 +7,5 @@
 custom_minimum_size = Vector2(280, 64)
 size_flags_horizontal = 4
 theme = ExtResource("1_theme")
-theme_override_constants/icon_max_width = 40
-expand_icon = true
 alignment = 0
 script = ExtResource("2_script")

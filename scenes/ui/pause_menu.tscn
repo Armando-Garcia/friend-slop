@@ -1,12 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://cpausemenu001"]
+[gd_scene load_steps=5 format=3 uid="uid://cpausemenu001"]
 
 [ext_resource type="Theme" path="res://resources/ui/serious_wiz_biz_theme.tres" id="1_theme"]
 [ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="2_pause"]
 [ext_resource type="PackedScene" uid="uid://csettingspanel001" path="res://scenes/ui/settings_panel.tscn" id="3_settings"]
 [ext_resource type="PackedScene" uid="uid://cswbflare001" path="res://scenes/ui/scaffolding/title_flare.tscn" id="4_flare"]
 [ext_resource type="PackedScene" uid="uid://cswbmenubtn001" path="res://scenes/ui/scaffolding/menu_button.tscn" id="5_menu_button"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconsetng01" path="res://assets/ui/icons/menu/settings.png" id="6_icon_settings"]
-[ext_resource type="Texture2D" uid="uid://bmenuiconexit01" path="res://assets/ui/icons/menu/exit.png" id="7_icon_exit"]
 
 [node name="PauseMenu" type="CanvasLayer"]
 layer = 20
@@ -71,13 +69,11 @@ text = "Resume"
 unique_name_in_owner = true
 layout_mode = 2
 text = "Settings"
-icon = ExtResource("6_icon_settings")
 
 [node name="EndGameButton" parent="MenuPanel/CenterContainer/Panel/Margin/VBox" instance=ExtResource("5_menu_button")]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Leave"
-icon = ExtResource("7_icon_exit")
 
 [node name="SettingsPanel" parent="." instance=ExtResource("3_settings")]
 visible = false

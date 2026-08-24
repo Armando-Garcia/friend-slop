@@ -1,14 +1,7 @@
 # Menu icons (runtime)
 
-Final cuts live in Godot as:
+Final cuts live in mockups as `docs/design/mockups/iconography/*-icon-final.png`.
 
-```
-assets/ui/icons/menu/host.png
-assets/ui/icons/menu/join.png
-assets/ui/icons/menu/settings.png
-assets/ui/icons/menu/exit.png
-```
+Runtime wiring into `scenes/menu.tscn` and `scenes/ui/pause_menu.tscn` is **not** active yet — menu buttons use text-only `menu_button` chrome like other panels.
 
-Wired into `scenes/menu.tscn` (Host / Join / Settings / Exit) and `scenes/ui/pause_menu.tscn` (Settings / End Game).
-
-Source finals: `docs/design/mockups/iconography/*-icon-final.png`.
+When re-adding, place assets under `assets/ui/icons/menu/` and assign on the menu button instances.
