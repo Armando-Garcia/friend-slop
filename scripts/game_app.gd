@@ -473,6 +473,34 @@ func _editor_sync_preview_from_selection() -> void:
 		_editor_apply_preview_state(next)
 	if settings_node is CanvasItem:
 		(settings_node as CanvasItem).visible = show_settings
+	if next == AppState.MATCH or _editor_preview_state == AppState.MATCH:
+		_editor_apply_match_overlay_preview(node)
+
+
+func _editor_apply_match_overlay_preview(selected: Node) -> void:
+	var world := get_node_or_null("States/Match/Match")
+	if world == null or selected == null:
+		return
+	var pause := world.get_node_or_null("PauseMenu") as CanvasLayer
+	var hud := world.get_node_or_null("GameHUD")
+	var player_menu: CanvasItem = null
+	if hud != null:
+		player_menu = hud.get_node_or_null("PlayerMenu") as CanvasItem
+	var under_pause := pause != null and (selected == pause or pause.is_ancestor_of(selected))
+	var under_player := (
+		player_menu != null
+		and (selected == player_menu or player_menu.is_ancestor_of(selected))
+	)
+	if pause != null:
+		pause.visible = under_pause
+		var pause_settings := pause.get_node_or_null("SettingsPanel") as CanvasItem
+		if pause_settings != null:
+			pause_settings.visible = (
+				under_pause
+				and (selected == pause_settings or pause_settings.is_ancestor_of(selected))
+			)
+	if player_menu != null:
+		player_menu.visible = under_player
 
 
 func _editor_is_under_match_world(node: Node) -> bool:

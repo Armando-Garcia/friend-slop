@@ -78,3 +78,4 @@ service = 1
 proximity = SubResource("Resource_080rt")
 
 [node name="SettingsPanel" parent="." unique_id=410753542 instance=ExtResource("4_settings")]
+visible = false

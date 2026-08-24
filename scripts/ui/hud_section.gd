@@ -1,7 +1,9 @@
 class_name HudSection
 extends VBoxContainer
 
-## Titled HUD cluster: label, rule, then the slotted row.
+## Titled HUD cluster: label, flare, then the slotted row.
+
+const TitleFlareScene := preload("res://scenes/ui/scaffolding/title_flare.tscn")
 
 
 func setup(title: String, body: Control) -> void:
@@ -11,13 +13,11 @@ func setup(title: String, body: Control) -> void:
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	header.text = title
 	header.add_theme_font_size_override("font_size", 12)
-	header.add_theme_color_override("font_color", Color(0.90, 0.84, 0.68, 1))
+	header.theme_type_variation = "TitleLabel"
 	add_child(header)
-	var rule := HSeparator.new()
-	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	rule.modulate = Color(0.82, 0.70, 0.38, 0.75)
-	add_child(rule)
+	var flare: Control = TitleFlareScene.instantiate()
+	flare.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(flare)
 	if body.get_parent() != null:
 		body.get_parent().remove_child(body)
 	add_child(body)

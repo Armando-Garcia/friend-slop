@@ -85,7 +85,7 @@ func _add_slot() -> void:
 	key.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	key.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	key.add_theme_font_size_override("font_size", 10)
-	key.add_theme_color_override("font_color", Color(0.93, 0.90, 0.82, 1))
+	key.add_theme_color_override("font_color", UiPalette.TEXT_PRIMARY)
 	stack.add_child(key)
 	var name_label := Label.new()
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -97,7 +97,7 @@ func _add_slot() -> void:
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	name_label.add_theme_font_size_override("font_size", 11)
-	name_label.add_theme_color_override("font_color", Color(0.93, 0.90, 0.82, 1))
+	name_label.add_theme_color_override("font_color", UiPalette.TEXT_PRIMARY)
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	stack.add_child(name_label)
 	cell.add_child(stack)
@@ -109,9 +109,4 @@ func _add_slot() -> void:
 
 
 func _apply_slot_style(cell: PanelContainer, empty: bool) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.05, 0.07, 0.94) if empty else Color(0.08, 0.06, 0.09, 0.94)
-	style.set_corner_radius_all(6)
-	style.set_border_width_all(1)
-	style.border_color = Color(0.42, 0.36, 0.28, 0.7)
-	cell.add_theme_stylebox_override("panel", style)
+	cell.add_theme_stylebox_override("panel", UiPalette.hud_slot_style(false, empty))

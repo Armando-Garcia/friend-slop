@@ -6,6 +6,7 @@ signal settings_applied
 
 const DisplayResolutionPresetsScript := preload("res://scripts/ui/display_resolution_presets.gd")
 const MicCaptureBrokerScript := preload("res://scripts/voice/mic_capture_broker.gd")
+const MicGainUtilScript := preload("res://scripts/voice/mic_gain_util.gd")
 const InputRebindCatalogScript := preload("res://scripts/ui/keybinds/input_rebind_catalog.gd")
 const InputRebindStoreScript := preload("res://scripts/ui/keybinds/input_rebind_store.gd")
 
@@ -16,6 +17,11 @@ const INPUT_KEY_MIGRATE := {
 
 const SETTINGS_PATH := "user://settings.cfg"
 const MIC_BUS_NAME := "MicCapture"
+## Slider range: 0 = mute, 1.0 = unity (midpoint), MIC_VOLUME_MAX = max dial.
+const MIC_VOLUME_MAX := 2.0
+## Actual linear gain at the right end of the dial (midpoint stays 1×).
+## 2× was too subtle in mic-test hearback; ~5× (~14 dB) is clearly audible.
+const MIC_BOOST_CEILING := 5.0
 const CAPTURE_DEVICE_RETRY_MAX := 20
 const CAPTURE_DEVICE_RETRY_SEC := 0.25
 
@@ -257,7 +263,11 @@ func load_settings() -> void:
 	window_height = resolved_size.y
 	var persist_display := resolved_size != loaded_size
 	master_volume = config.get_value("audio", "master_volume", master_volume)
-	mic_volume = float(config.get_value("audio", "mic_volume", mic_volume))
+	mic_volume = clampf(
+		float(config.get_value("audio", "mic_volume", mic_volume)),
+		0.0,
+		MIC_VOLUME_MAX
+	)
 	mic_muted = bool(config.get_value("audio", "mic_muted", mic_muted))
 	input_device = config.get_value("audio", "input_device", input_device)
 	output_device = config.get_value("audio", "output_device", output_device)
@@ -382,8 +392,8 @@ func apply_audio_settings() -> void:
 		var volume: float = clampf(master_volume, 0.0, 1.0)
 		AudioServer.set_bus_volume_db(master_idx, linear_to_db(maxf(volume, 0.0001)))
 
-	## MicCapture must stay at 0 dB so STT sees full-scale PCM. Apply mic_volume
-	## only as software gain on the VoIP encode path and UI meters.
+	## MicCapture must stay at 0 dB so STT sees full-scale PCM. Apply mic gain
+	## only as software gain on VoIP / hearback / meters (see mic_gain()).
 	_ensure_mic_bus()
 	var mic_idx: int = AudioServer.get_bus_index(MIC_BUS_NAME)
 	if mic_idx >= 0:
@@ -579,8 +589,8 @@ func poll_mic_level() -> float:
 		return 0.0
 	if not bool(broker.call("is_capturing")):
 		return 0.0
-	## Same PCM path as Match voice/STT — slider only scales the UI meter.
-	return float(broker.call("get_last_rms")) * clampf(mic_volume, 0.0, 1.0)
+	## Same PCM path as Match voice/STT — meter follows effective mic gain.
+	return float(broker.call("get_last_rms")) * MicGainUtilScript.from_settings()
 
 
 func _subscribe_meter() -> bool:

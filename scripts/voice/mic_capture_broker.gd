@@ -17,6 +17,7 @@ enum FanoutPolicy { CHAT_ONLY, MATCH_FANOUT }
 
 const LOG_PREFIX := "[friend-slop-mic-broker]"
 const MIC_BUS_NAME := "MicCapture"
+const MicGainUtilScript := preload("res://scripts/voice/mic_gain_util.gd")
 const HEARTBEAT_MSEC := 2000
 const DRAIN_CHUNK := 256
 const SUB_CHAT := &"chat"
@@ -518,13 +519,16 @@ func _push_hearback(mono: PackedFloat32Array, mix_rate: int) -> void:
 	if mono.is_empty():
 		return
 	_ensure_hearback_player(mix_rate)
-	if _hearback_playback == null:
+	if _hearback_playback == null or _hearback_player == null:
 		return
-	var gain := clampf(SettingsManager.mic_volume, 0.0, 1.0)
+	## Drive loudness with player volume so boost uses mixer gain (audible in
+	## mic test). Leave PCM near full-scale; baking 5× into samples just clips.
+	var gain: float = MicGainUtilScript.from_settings()
+	_hearback_player.volume_db = linear_to_db(maxf(gain, 0.0001))
 	var frames := PackedVector2Array()
 	frames.resize(mono.size())
 	for i in mono.size():
-		var sample := mono[i] * gain
+		var sample := mono[i]
 		frames[i] = Vector2(sample, sample)
 	var available := _hearback_playback.get_frames_available()
 	if available <= 0:

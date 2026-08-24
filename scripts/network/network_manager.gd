@@ -19,6 +19,7 @@ const APPRENTICE_SCENE := preload("res://scenes/characters/apprentice.tscn")
 const HEADMASTER_SCENE := preload("res://scenes/characters/headmaster.tscn")
 const DEFAULT_HORROR_CONFIG := preload("res://resources/match/default_horror_config.tres")
 
+const LAN_HOST_PORT := 7777
 const SteamTransportScript := preload("res://scripts/network/steam_transport.gd")
 const SpellEffectSyncScript := preload("res://scripts/spells/spell_effect_sync.gd")
 const GameWorldScript := preload("res://scripts/game_world.gd")
@@ -144,6 +145,9 @@ func host_session(options: Dictionary = {}) -> Error:
 		return ERR_UNCONFIGURED
 	disconnect_session()
 
+	if str(options.get("mode", "steam")) == "lan":
+		return _host_lan_session(options)
+
 	@warning_ignore("redundant_await")
 	var err: Error = await transport.host(options)
 	if err != OK:
@@ -160,6 +164,24 @@ func host_session(options: Dictionary = {}) -> Error:
 	_broadcast_lobby_state()
 	became_host.emit(get_room_code())
 	_notify_lobby_roster_changed()
+	return OK
+
+
+func _host_lan_session(options: Dictionary) -> Error:
+	var port := int(options.get("port", LAN_HOST_PORT))
+	var peer := ENetMultiplayerPeer.new()
+	var err := peer.create_server(port, 3)
+	if err != OK:
+		connection_failed.emit("LAN host failed on port %d." % port)
+		return err
+	multiplayer.multiplayer_peer = peer
+	is_session_active = true
+	lobby.reset()
+	lobby.set_default_roles([1])
+	_broadcast_lobby_state()
+	became_host.emit(str(port))
+	_notify_lobby_roster_changed()
+	status_changed.emit("LAN lobby listening on port %d." % port)
 	return OK
 
 

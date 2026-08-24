@@ -125,7 +125,7 @@ func _make_overlay_label(
 	label.horizontal_alignment = h_align
 	label.vertical_alignment = v_align
 	label.add_theme_font_size_override("font_size", font_px)
-	label.add_theme_color_override("font_color", Color(0.93, 0.90, 0.82, 1))
+	label.add_theme_color_override("font_color", UiPalette.TEXT_PRIMARY)
 	return label
 
 
@@ -179,7 +179,7 @@ func _refresh_slot(index: int, pending: bool, selected: bool) -> void:
 		_meta_labels[index].text = "%.1f" % remaining
 	else:
 		_meta_labels[index].text = ""
-	var ink := Color(0.55, 0.52, 0.48, 1) if cooling else Color(0.93, 0.90, 0.82, 1)
+	var ink := UiPalette.TEXT_MUTED if cooling else UiPalette.TEXT_PRIMARY
 	_name_labels[index].add_theme_color_override("font_color", ink)
 	_meta_labels[index].add_theme_color_override("font_color", ink)
 	_washes[index].color = (
@@ -201,20 +201,7 @@ func _apply_slot_style(
 	cooling: bool,
 	empty: bool
 ) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.05, 0.07, 0.94) if empty else Color(0.08, 0.06, 0.09, 0.94)
-	if cooling:
-		style.bg_color = Color(0.05, 0.04, 0.06, 0.94)
-	style.set_corner_radius_all(6)
-	if pending:
-		style.set_border_width_all(2)
-		style.border_color = Color(0.90, 0.74, 0.32, 0.95)
-	elif selected:
-		style.set_border_width_all(2)
-		style.border_color = Color(0.86, 0.72, 0.34, 0.95)
-	else:
-		style.set_border_width_all(1)
-		style.border_color = Color(0.42, 0.36, 0.28, 0.7)
+	var style := UiPalette.hud_slot_style(pending or selected, empty or cooling)
 	cell.add_theme_stylebox_override("panel", style)
 
 

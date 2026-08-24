@@ -141,6 +141,9 @@ func _setup_view_camera() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	else:
 		_view_camera.queue_free()
+	var local_peer := 0
+	if _multiplayer_peer_active():
+		local_peer = multiplayer.get_unique_id()
 	TomeDebug.log(
 		"PlayableCharacter",
 		"'%s' view=%s authority=%d local_peer=%d"
@@ -148,15 +151,23 @@ func _setup_view_camera() -> void:
 			name,
 			"local" if local_view else "remote",
 			get_multiplayer_authority(),
-			multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 0,
+			local_peer,
 		]
 	)
 
 
 func _uses_local_view() -> bool:
-	if not multiplayer.has_multiplayer_peer():
+	## has_multiplayer_peer() is true for a closed ENet peer; get_unique_id() then errors.
+	if not _multiplayer_peer_active():
 		return true
 	return is_multiplayer_authority()
+
+
+func _multiplayer_peer_active() -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return false
+	var peer := multiplayer.multiplayer_peer
+	return peer != null and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED
 
 
 func initialize_player(index: int) -> void:

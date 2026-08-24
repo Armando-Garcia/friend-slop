@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 from check_gdscript_warnings import run_warning_probe  # noqa: E402
 from restore_extensions import find_godot_binary, sync_extensions  # noqa: E402
 LINT_PATHS = ("scripts", "tests")
+## Calls that write a theme override, and so re-emit NOTIFICATION_THEME_CHANGED.
+UI_OVERRIDE_WRITE_MARKERS = ("add_theme_", "remove_theme_", "UiPalette.paint_")
 TEST_LOG = ROOT / ".cache" / "godot-tests.log"
 GDVOSK_GDEXTENSION = ROOT / "addons" / "gdvosk" / "gdvosk.gdextension"
 GDVOSK_GDEXTENSION_DISABLED = ROOT / "addons" / "gdvosk" / "gdvosk.gdextension.disabled"
@@ -183,6 +186,68 @@ def run_lint() -> tuple[int, str]:
     return 0, "\n".join(line for line in output_lines if line)
 
 
+def _reaches_override_write(bodies: dict[str, str], body: str, depth: int) -> bool:
+    if any(marker in body for marker in UI_OVERRIDE_WRITE_MARKERS):
+        return True
+    if depth <= 0:
+        return False
+    callees = set(re.findall(r"\b(_[a-z][a-z0-9_]*)\s*\(", body))
+    return any(
+        _reaches_override_write(bodies, bodies[callee], depth - 1)
+        for callee in callees
+        if callee in bodies
+    )
+
+
+def _function_bodies(source: str) -> dict[str, str]:
+    bodies: dict[str, str] = {}
+    current: str | None = None
+    for line in source.splitlines():
+        if line.strip().startswith("#"):
+            continue
+        header = re.match(r"(?:static )?func ([A-Za-z_][A-Za-z0-9_]*)\s*\(", line)
+        if header is not None:
+            current = header.group(1)
+            bodies[current] = ""
+            continue
+        if current is None:
+            continue
+        if line and not line[0].isspace():
+            current = None
+            continue
+        bodies[current] += line + "\n"
+    return bodies
+
+
+def run_ui_repaint_guard() -> tuple[int, str]:
+    """Fail fast on UI scripts that repaint theme overrides from a theme-changed notify.
+
+    Writing an override re-emits NOTIFICATION_THEME_CHANGED, so such a handler recurses
+    until GDScript aborts it at 1024 frames. Every abort prints a full backtrace, which
+    makes the Godot suite crawl instead of failing, so this has to block before Godot
+    starts rather than being caught at runtime.
+    """
+    output_lines = ["Checking UI repaint-loop hazards..."]
+    hazards: list[str] = []
+    for path in sorted((ROOT / "scripts" / "ui").rglob("*.gd")):
+        bodies = _function_bodies(path.read_text(encoding="utf-8"))
+        handler = bodies.get("_notification", "")
+        if "NOTIFICATION_THEME_CHANGED" not in handler:
+            continue
+        if _reaches_override_write(bodies, handler, 3):
+            hazards.append(str(path.relative_to(ROOT)).replace("\\", "/"))
+    if not hazards:
+        output_lines.append("Success: no UI repaint-loop hazards.")
+        return 0, "\n".join(output_lines)
+    for hazard in hazards:
+        output_lines.append(
+            f"  {hazard}: repaints theme overrides from NOTIFICATION_THEME_CHANGED. "
+            "The override re-emits that notification, so this recurses until the stack "
+            "blows. Repaint from _ready and from export setters instead."
+        )
+    return 1, "\n".join(output_lines)
+
+
 def run_gdscript_warnings(*, require_godot: bool = False) -> tuple[int, str]:
     """Fail on Godot GDScript analyzer WARNINGs for owned project paths."""
     output_lines: list[str] = ["Checking GDScript analyzer warnings..."]
@@ -343,6 +408,11 @@ def run_checks(
         output_lines.append(lint_output)
         if lint_code != 0:
             return lint_code, "\n".join(line for line in output_lines if line)
+
+        guard_code, guard_output = run_ui_repaint_guard()
+        output_lines.append(guard_output)
+        if guard_code != 0:
+            return guard_code, "\n".join(line for line in output_lines if line)
 
     if warnings:
         warn_code, warn_output = run_gdscript_warnings(

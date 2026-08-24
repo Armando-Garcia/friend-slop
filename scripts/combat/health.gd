@@ -5,6 +5,7 @@ extends Node
 
 signal damaged(amount: float, from: Variant)
 signal died(from: Variant)
+signal changed(current: float, maximum: float)
 
 const DEFAULT_MAX_HEALTH := 100.0
 
@@ -13,6 +14,7 @@ const DEFAULT_MAX_HEALTH := 100.0
 		max_health = maxf(value, 1.0)
 		if current_health > max_health:
 			current_health = max_health
+		_emit_changed()
 
 var current_health: float = DEFAULT_MAX_HEALTH
 
@@ -39,6 +41,7 @@ func take_damage(amount: float, from: Variant = null) -> void:
 		return
 	current_health = maxf(0.0, current_health - hit)
 	damaged.emit(hit, from)
+	_emit_changed()
 	if is_dead():
 		died.emit(from)
 
@@ -59,3 +62,10 @@ func heal(amount: float) -> void:
 	if is_dead():
 		return
 	current_health = clampf(current_health + maxf(amount, 0.0), 0.0, max_health)
+	_emit_changed()
+
+
+func _emit_changed() -> void:
+	if not is_inside_tree():
+		return
+	changed.emit(current_health, max_health)

@@ -245,7 +245,8 @@ func _wire_spell_system(player: CharacterBody3D) -> void:
 	var spell_hotbar := player.get_node_or_null("%SpellHotbar")
 	if spell_hotbar == null:
 		spell_hotbar = player.get_node_or_null("SpellHotbar")
-	game_hud.configure(loadout, casting_session, spell_hotbar)
+	var health := player.get_node_or_null("Health") as Health
+	game_hud.configure(loadout, casting_session, spell_hotbar, health)
 	var inventory := player.get_node_or_null("%PlayerInventory")
 	if inventory == null:
 		inventory = player.get_node_or_null("PlayerInventory")

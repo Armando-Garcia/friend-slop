@@ -20,6 +20,7 @@
 [ext_resource type="Script" uid="uid://yf2yi73fbs6o" path="res://scripts/spells/voice_spell_validator.gd" id="10_validator"]
 [ext_resource type="Script" uid="uid://cgo2lkhlxtcky" path="res://scripts/spells/spell_validation_runner.gd" id="11_runner"]
 [ext_resource type="PackedScene" uid="uid://cpausemenu001" path="res://scenes/ui/pause_menu.tscn" id="14_pause"]
+[ext_resource type="PackedScene" uid="uid://cswbhealth001" path="res://scenes/ui/scaffolding/health_bar.tscn" id="14_health"]
 [ext_resource type="Resource" uid="uid://dud80ue7p23rt" path="res://scenes/spells/fireball/fireball.tres" id="15_fireball"]
 [ext_resource type="Resource" uid="uid://djvkxthosghuf" path="res://scenes/spells/fake_wall/fake_wall.tres" id="24_fake_wall"]
 [ext_resource type="Resource" uid="uid://dqc3frk775rdr" path="res://scenes/spells/light/light.tres" id="25_light"]
@@ -135,6 +136,19 @@ spawn_slot_index = 2
 [node name="GameHUD" type="CanvasLayer" parent="." unique_id=1905588477]
 script = ExtResource("9_hud")
 
+[node name="HealthBar" parent="GameHUD" instance=ExtResource("14_health")]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_top = -156.0
+offset_right = 160.0
+offset_bottom = -136.0
+grow_horizontal = 2
+grow_vertical = 0
+
 [node name="AimCursor" type="Control" parent="GameHUD" unique_id=881728474]
 layout_mode = 3
 anchors_preset = 15
@@ -146,6 +160,7 @@ mouse_filter = 2
 script = ExtResource("9_aim")
 
 [node name="PlayerMenu" parent="GameHUD" unique_id=1872042120 instance=ExtResource("9_player_menu")]
+visible = false
 
 [node name="MarginContainer" type="MarginContainer" parent="GameHUD" unique_id=271343968]
 anchors_preset = 10
@@ -250,3 +265,4 @@ theme_override_font_sizes/font_size = 13
 autowrap_mode = 2
 
 [node name="PauseMenu" parent="." unique_id=1606684371 instance=ExtResource("14_pause")]
+visible = false

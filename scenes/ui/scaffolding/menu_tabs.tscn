@@ -1,0 +1,33 @@
+[gd_scene format=3 uid="uid://7q75ufbxp3lc"]
+
+[ext_resource type="Theme" path="res://resources/ui/serious_wiz_biz_theme.tres" id="1_theme"]
+[ext_resource type="Script" path="res://scripts/ui/scaffolding/menu_tabs.gd" id="2_script"]
+
+[node name="MenuTabs" type="TabContainer"]
+theme = ExtResource("1_theme")
+current_tab = 0
+script = ExtResource("2_script")
+tab_titles = PackedStringArray("General", "Graphics")
+
+[node name="General" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Placeholder" type="Label" parent="General"]
+layout_mode = 2
+text = "General page — replace with content"
+
+[node name="Graphics" type="MarginContainer" parent="."]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="Placeholder" type="Label" parent="Graphics"]
+layout_mode = 2
+text = "Graphics page — replace with content"

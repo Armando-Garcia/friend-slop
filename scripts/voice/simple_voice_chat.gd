@@ -21,6 +21,7 @@ signal log_message(event: String, detail: String)
 const SteamP2PVoiceTransportScript := preload(
 	"res://scripts/voice/steam_p2p_voice_transport.gd"
 )
+const MicGainUtilScript := preload("res://scripts/voice/mic_gain_util.gd")
 
 const LOG_PREFIX := "[friend-slop-voice]"
 ## Packet magic "FSVC"
@@ -248,21 +249,28 @@ func _process(_delta: float) -> void:
 func _on_broker_pcm(mono: PackedFloat32Array, mix_rate: int) -> void:
 	if not is_active or mono.is_empty():
 		return
-	var gain := clampf(SettingsManager.mic_volume, 0.0, 1.0)
+	var gain: float = MicGainUtilScript.from_settings()
 	var target_rate := float(sample_rate)
 	var decim_every := (
 		maxi(1, int(round(float(mix_rate) / target_rate))) if target_rate > 0.0 else 1
 	)
 	var sum_sq := 0.0
+	var sum_sq_linear := 0.0
 	for sample in mono:
-		var scaled: float = sample * gain
+		var linear: float = sample * gain
+		sum_sq_linear += linear * linear
+		var scaled: float = MicGainUtilScript.apply_sample(sample)
 		sum_sq += scaled * scaled
 		_decim_counter += 1
 		if _decim_counter >= decim_every:
 			_decim_counter = 0
 			_pcm_accum.append(scaled)
 	_debug_last_rms = sqrt(sum_sq / float(mono.size()))
-	if _debug_last_rms >= RMS_SPEAK_THRESHOLD and not transmit_muted:
+	## VAD uses linear (pre-soft-clip) level so boost does not permanently trip speak.
+	if (
+		sqrt(sum_sq_linear / float(mono.size())) >= RMS_SPEAK_THRESHOLD
+		and not transmit_muted
+	):
 		_last_local_speak_msec = Time.get_ticks_msec()
 	if transmit_muted:
 		_pcm_accum.clear()

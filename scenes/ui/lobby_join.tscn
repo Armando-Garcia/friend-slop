@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://clobbyjoin001"]
+
+[ext_resource type="PackedScene" uid="uid://cd4v6kvl3kiuq" path="res://scenes/ui/lobby_panel.tscn" id="1_lobby"]
+
+[node name="LobbyJoin" instance=ExtResource("1_lobby")]
+editor_layout = 1

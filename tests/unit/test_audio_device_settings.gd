@@ -6,6 +6,7 @@ extends RefCounted
 ## Headless-safe — no real AudioStreamMicrophone / WASAPI required.
 
 const MicCaptureBrokerScript := preload("res://scripts/voice/mic_capture_broker.gd")
+const MicGainUtilScript := preload("res://scripts/voice/mic_gain_util.gd")
 const SETTINGS_PATH := "user://settings.cfg"
 const SETTINGS_BACKUP := "user://settings.cfg.friendslop_audio_test_bak"
 
@@ -14,6 +15,7 @@ func run() -> int:
 	var failures := 0
 	var snap := _snapshot_audio()
 	var had_cfg := _backup_settings_file()
+	failures += _test_mic_gain_curve()
 	failures += _test_devices_round_trip_config()
 	failures += _test_legacy_mic_test_monitor_migrates()
 	failures += _test_resolve_never_remaps_missing_device()
@@ -56,6 +58,36 @@ func _restore_audio(snap: Dictionary) -> void:
 	SettingsManager._capture_device_retry_scheduled = bool(
 		snap.get("retry_scheduled", false)
 	)
+
+
+func _test_mic_gain_curve() -> int:
+	var prior := SettingsManager.mic_volume
+	var problem := ""
+	SettingsManager.mic_volume = 0.0
+	if not is_equal_approx(MicGainUtilScript.from_settings(), 0.0):
+		problem = "mic gain at dial 0 should be mute"
+	else:
+		SettingsManager.mic_volume = 1.0
+		if not is_equal_approx(MicGainUtilScript.from_settings(), 1.0):
+			problem = "mic gain at dial midpoint should be unity"
+		else:
+			SettingsManager.mic_volume = 1.5
+			var mid_boost: float = MicGainUtilScript.from_settings()
+			if mid_boost <= 2.0:
+				problem = "mic gain at 150%% dial should exceed 2×, got %s" % mid_boost
+			else:
+				SettingsManager.mic_volume = 2.0
+				if not is_equal_approx(
+					MicGainUtilScript.from_settings(), SettingsManager.MIC_BOOST_CEILING
+				):
+					problem = "mic gain at max dial should hit MIC_BOOST_CEILING"
+				elif absf(MicGainUtilScript.apply_sample(0.5)) <= 0.5:
+					problem = "apply_sample under boost should raise mid samples"
+	SettingsManager.mic_volume = prior
+	if problem.is_empty():
+		return 0
+	push_error(problem)
+	return 1
 
 
 func _backup_settings_file() -> bool:

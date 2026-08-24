@@ -10,8 +10,8 @@ const UiScaleScript := preload("res://scripts/ui/ui_scale.gd")
 
 const TITLE_FONT_BASE := 48
 const BUTTON_FONT_BASE := 20
-const BUTTON_WIDTH_BASE := 240.0
-const BUTTON_HEIGHT_BASE := 48.0
+const BUTTON_WIDTH_BASE := 280.0
+const BUTTON_HEIGHT_BASE := 64.0
 const VBOX_SEPARATION_BASE := 18
 
 @onready var _center_container: CenterContainer = $CenterContainer
@@ -25,6 +25,7 @@ const VBOX_SEPARATION_BASE := 18
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	$Background.color = UiPalette.BACKGROUND_DEEP
 	_play_button.pressed.connect(func() -> void: host_pressed.emit())
 	_join_button.pressed.connect(func() -> void: join_pressed.emit())
 	_settings_button.pressed.connect(func() -> void: settings_pressed.emit())
